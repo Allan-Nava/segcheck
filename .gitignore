@@ -1,0 +1,17 @@
+# Build output
+/segcheck
+/dist/
+*.exe
+
+# Coverage
+cover.out
+coverage.*
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
+
+# Local scratch: reports produced by running the tool in-tree
+*.report.md
+*.report.json

@@ -1,0 +1,62 @@
+version: 2
+
+project_name: segcheck
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: segcheck
+    main: ./cmd/segcheck
+    binary: segcheck
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - README.md
+      - LICENSE*
+      - CHANGELOG.md
+
+checksum:
+  name_template: "checksums.txt"
+
+# SC-32: the tap upload stays off until HOMEBREW_TAP_TOKEN exists on this repo.
+# Everything else about the formula is ready, so enabling it is a one-line change.
+brews:
+  - name: segcheck
+    repository:
+      owner: Allan-Nava
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    skip_upload: true
+    homepage: "https://github.com/Allan-Nava/segcheck"
+    description: "Check what HLS/DASH segments really contain, not just what the manifest says"
+    license: "PolyForm-Noncommercial-1.0.0"
+    test: |
+      system "#{bin}/segcheck", "version"
+
+changelog:
+  # CHANGELOG.md is written by hand and is the source of truth; the release notes
+  # should not compete with it.
+  disable: true
+
+release:
+  draft: false
+  prerelease: auto
+  footer: |
+    ---
+    Full notes: [CHANGELOG.md](https://github.com/Allan-Nava/segcheck/blob/main/CHANGELOG.md)

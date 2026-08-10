@@ -1,0 +1,561 @@
+package manifest
+
+import (
+	"encoding/xml"
+	"fmt"
+	"math"
+	"net/url"
+	"strconv"
+	"strings"
+	"time"
+)
+
+// maxExpandedSegments bounds how many segment URLs one representation expands
+// to. A multi-hour VOD with 2s segments would otherwise build tens of thousands
+// of strings that the sampler immediately throws away.
+const maxExpandedSegments = 20000
+
+// ---------- MPD document ----------
+
+type mpdDoc struct {
+	Type                      string      `xml:"type,attr"`
+	AvailabilityStartTime     string      `xml:"availabilityStartTime,attr"`
+	PublishTime               string      `xml:"publishTime,attr"`
+	MediaPresentationDuration string      `xml:"mediaPresentationDuration,attr"`
+	MinimumUpdatePeriod       string      `xml:"minimumUpdatePeriod,attr"`
+	BaseURL                   []string    `xml:"BaseURL"`
+	Periods                   []mpdPeriod `xml:"Period"`
+}
+
+type mpdPeriod struct {
+	ID              string          `xml:"id,attr"`
+	Start           string          `xml:"start,attr"`
+	Duration        string          `xml:"duration,attr"`
+	BaseURL         []string        `xml:"BaseURL"`
+	AdaptationSets  []mpdAdaptation `xml:"AdaptationSet"`
+	SegmentTemplate *mpdSegTemplate `xml:"SegmentTemplate"`
+}
+
+type mpdAdaptation struct {
+	MimeType          string              `xml:"mimeType,attr"`
+	ContentType       string              `xml:"contentType,attr"`
+	Lang              string              `xml:"lang,attr"`
+	Codecs            string              `xml:"codecs,attr"`
+	Width             int                 `xml:"width,attr"`
+	Height            int                 `xml:"height,attr"`
+	FrameRate         string              `xml:"frameRate,attr"`
+	BaseURL           []string            `xml:"BaseURL"`
+	SegmentTemplate   *mpdSegTemplate     `xml:"SegmentTemplate"`
+	Representations   []mpdRepresentation `xml:"Representation"`
+	ContentProtection []struct {
+		SchemeIDURI string `xml:"schemeIdUri,attr"`
+	} `xml:"ContentProtection"`
+}
+
+type mpdRepresentation struct {
+	ID              string          `xml:"id,attr"`
+	Bandwidth       int             `xml:"bandwidth,attr"`
+	Width           int             `xml:"width,attr"`
+	Height          int             `xml:"height,attr"`
+	Codecs          string          `xml:"codecs,attr"`
+	MimeType        string          `xml:"mimeType,attr"`
+	FrameRate       string          `xml:"frameRate,attr"`
+	BaseURL         []string        `xml:"BaseURL"`
+	SegmentTemplate *mpdSegTemplate `xml:"SegmentTemplate"`
+	SegmentBase     *struct{}       `xml:"SegmentBase"`
+	SegmentList     *struct {
+		Duration       int `xml:"duration,attr"`
+		Timescale      int `xml:"timescale,attr"`
+		Initialization struct {
+			SourceURL string `xml:"sourceURL,attr"`
+		} `xml:"Initialization"`
+		SegmentURLs []struct {
+			Media string `xml:"media,attr"`
+		} `xml:"SegmentURL"`
+	} `xml:"SegmentList"`
+}
+
+type mpdSegTemplate struct {
+	Media                  string          `xml:"media,attr"`
+	Initialization         string          `xml:"initialization,attr"`
+	Timescale              int             `xml:"timescale,attr"`
+	Duration               int64           `xml:"duration,attr"`
+	StartNumber            *int            `xml:"startNumber,attr"`
+	PresentationTimeOffset int64           `xml:"presentationTimeOffset,attr"`
+	SegmentTimeline        *mpdSegTimeline `xml:"SegmentTimeline"`
+}
+
+type mpdSegTimeline struct {
+	S []struct {
+		T *int64 `xml:"t,attr"`
+		D int64  `xml:"d,attr"`
+		R int    `xml:"r,attr"`
+	} `xml:"S"`
+}
+
+// ParseDASH parses an MPD into the shared model, expanding every
+// representation's SegmentTemplate or SegmentTimeline into concrete segment
+// URLs. now fixes the clock used to locate the live edge of a dynamic MPD; pass
+// time.Now for real use.
+func ParseDASH(body []byte, baseURL string, now time.Time) (Playlist, error) {
+	var doc mpdDoc
+	if err := xml.Unmarshal(body, &doc); err != nil {
+		return Playlist{Kind: KindDASH, URL: baseURL}, fmt.Errorf("invalid MPD: %w", err)
+	}
+	pl := Playlist{Kind: KindDASH, URL: baseURL, Master: true, Live: doc.Type == "dynamic"}
+
+	base, _ := url.Parse(baseURL)
+	base = applyBaseURLs(base, doc.BaseURL)
+
+	var ast time.Time
+	if doc.AvailabilityStartTime != "" {
+		if t, err := parsePDT(doc.AvailabilityStartTime); err == nil {
+			ast = t
+		}
+	}
+	mpdDur, _ := parseISODuration(doc.MediaPresentationDuration)
+
+	for pi, period := range doc.Periods {
+		pbase := applyBaseURLs(base, period.BaseURL)
+		periodStart, _ := parseISODuration(period.Start)
+		periodDur, _ := parseISODuration(period.Duration)
+		if periodDur == 0 {
+			periodDur = mpdDur
+		}
+
+		for ai, as := range period.AdaptationSets {
+			abase := applyBaseURLs(pbase, as.BaseURL)
+			kind := dashKind(as, ai)
+			protected := len(as.ContentProtection) > 0
+
+			for ri, rep := range as.Representations {
+				rbase := applyBaseURLs(abase, rep.BaseURL)
+				tmpl := firstTemplate(rep.SegmentTemplate, as.SegmentTemplate, period.SegmentTemplate)
+
+				r := Rendition{
+					Name:      dashName(rep, as, kind, pi, ai, ri),
+					Kind:      kind,
+					Language:  as.Lang,
+					Bandwidth: rep.Bandwidth,
+					Width:     firstNonZero(rep.Width, as.Width),
+					Height:    firstNonZero(rep.Height, as.Height),
+					Codecs:    firstNonEmpty(rep.Codecs, as.Codecs),
+					FrameRate: parseFrameRate(firstNonEmpty(rep.FrameRate, as.FrameRate)),
+				}
+
+				switch {
+				case tmpl != nil:
+					init, segs, err := expandTemplate(tmpl, rep, rbase, ast, now, periodStart, periodDur, pl.Live, protected)
+					if err != nil {
+						r.Unsupported = err.Error()
+					}
+					r.InitURI = init
+					r.Segments = segs
+				case rep.SegmentList != nil:
+					ts := rep.SegmentList.Timescale
+					if ts == 0 {
+						ts = 1
+					}
+					dur := float64(rep.SegmentList.Duration) / float64(ts)
+					if src := rep.SegmentList.Initialization.SourceURL; src != "" {
+						r.InitURI = Resolve(rbase, src)
+					}
+					for i, su := range rep.SegmentList.SegmentURLs {
+						r.Segments = append(r.Segments, Segment{
+							URI:       Resolve(rbase, su.Media),
+							Duration:  dur,
+							InitURI:   r.InitURI,
+							Sequence:  i + 1,
+							KeyMethod: dashKeyMethod(protected),
+						})
+					}
+				case rep.SegmentBase != nil:
+					r.Unsupported = "SegmentBase (single-file representation indexed by sidx) not supported yet"
+				default:
+					r.Unsupported = "representation has no SegmentTemplate, SegmentList or SegmentBase"
+				}
+				pl.Renditions = append(pl.Renditions, r)
+			}
+		}
+	}
+	if len(pl.Renditions) == 0 {
+		return pl, fmt.Errorf("MPD declares no Representation")
+	}
+	return pl, nil
+}
+
+// expandTemplate turns a SegmentTemplate into concrete segment URLs — from its
+// SegmentTimeline when it has one, else from @duration plus the wall clock.
+func expandTemplate(t *mpdSegTemplate, rep mpdRepresentation, base *url.URL, ast, now time.Time, periodStart, periodDur float64, live, protected bool) (string, []Segment, error) {
+	timescale := t.Timescale
+	if timescale == 0 {
+		timescale = 1
+	}
+	startNumber := 1
+	if t.StartNumber != nil {
+		startNumber = *t.StartNumber
+	}
+	var initURI string
+	if t.Initialization != "" {
+		initURI = Resolve(base, substituteTemplate(t.Initialization, rep, 0, 0))
+	}
+	if t.Media == "" {
+		return initURI, nil, fmt.Errorf("SegmentTemplate without @media")
+	}
+
+	var segs []Segment
+	key := dashKeyMethod(protected)
+
+	if tl := t.SegmentTimeline; tl != nil {
+		// The timeline states every segment's start and duration outright: the
+		// most reliable case, and the one where a declared start can be checked
+		// against the tfdt in the segment itself.
+		var current int64
+		haveCurrent := false
+		number := startNumber
+		for _, s := range tl.S {
+			if s.T != nil {
+				current, haveCurrent = *s.T, true
+			}
+			if !haveCurrent {
+				current, haveCurrent = 0, true
+			}
+			if s.D <= 0 {
+				continue
+			}
+			repeat := s.R
+			if repeat < 0 {
+				// r="-1" means "repeat until the end of the period"; derive how
+				// many that is from the period duration when it is known.
+				if periodDur > 0 {
+					end := int64(periodDur * float64(timescale))
+					repeat = int((end-current)/s.D) - 1
+					if repeat < 0 {
+						repeat = 0
+					}
+				} else {
+					repeat = 0
+				}
+			}
+			for i := 0; i <= repeat; i++ {
+				if len(segs) >= maxExpandedSegments {
+					return initURI, segs, nil
+				}
+				segs = append(segs, Segment{
+					URI:      Resolve(base, substituteTemplate(t.Media, rep, number, current)),
+					Duration: float64(s.D) / float64(timescale),
+					InitURI:  initURI,
+					Sequence: number,
+					// @t is on the media timeline, the same one tfdt counts on,
+					// so this value is directly comparable with the segment's
+					// baseMediaDecodeTime. presentationTimeOffset is deliberately
+					// not applied: that would move it to the presentation
+					// timeline and break the comparison.
+					DeclaredStart:    float64(current) / float64(timescale),
+					HasDeclaredStart: true,
+					KeyMethod:        key,
+				})
+				current += s.D
+				number++
+			}
+		}
+		return initURI, segs, nil
+	}
+
+	if t.Duration <= 0 {
+		return initURI, nil, fmt.Errorf("SegmentTemplate has neither SegmentTimeline nor @duration")
+	}
+	segDur := float64(t.Duration) / float64(timescale)
+
+	// Without a timeline the segment list is implied: index i covers
+	// [i*segDur, (i+1)*segDur) from the start of the period.
+	var count int
+	var firstIndex int
+	switch {
+	case live && !ast.IsZero():
+		// Only segments whose whole duration has elapsed are published.
+		elapsed := now.Sub(ast).Seconds() - periodStart
+		available := int(math.Floor(elapsed / segDur))
+		if available <= 0 {
+			return initURI, nil, fmt.Errorf("no segment available yet: availabilityStartTime is %s in the future", ast.Sub(now).Truncate(time.Second))
+		}
+		// Sample the tail: the live edge is what matters, and the head of a
+		// long-running live window may have fallen out of the CDN already.
+		const window = 12
+		firstIndex = available - window
+		if firstIndex < 0 {
+			firstIndex = 0
+		}
+		count = available - firstIndex
+	case periodDur > 0:
+		count = int(math.Ceil(periodDur / segDur))
+	default:
+		return initURI, nil, fmt.Errorf("static MPD without mediaPresentationDuration: cannot tell how many segments exist")
+	}
+	if count > maxExpandedSegments {
+		count = maxExpandedSegments
+	}
+
+	for i := 0; i < count; i++ {
+		idx := firstIndex + i
+		number := startNumber + idx
+		tickTime := int64(float64(idx) * float64(t.Duration))
+		segs = append(segs, Segment{
+			URI:      Resolve(base, substituteTemplate(t.Media, rep, number, tickTime)),
+			Duration: segDur,
+			InitURI:  initURI,
+			Sequence: number,
+			// HasDeclaredStart stays false here: with @duration instead of a
+			// SegmentTimeline the media-timeline origin depends on
+			// presentationTimeOffset, so an index-derived start is not
+			// comparable with the segment's tfdt and would report phantom drift.
+			KeyMethod: key,
+		})
+	}
+	return initURI, segs, nil
+}
+
+// substituteTemplate resolves the $Identifier$ placeholders, honouring the
+// optional printf width ($Number%05d$).
+func substituteTemplate(tmpl string, rep mpdRepresentation, number int, tick int64) string {
+	var b strings.Builder
+	for i := 0; i < len(tmpl); {
+		if tmpl[i] != '$' {
+			b.WriteByte(tmpl[i])
+			i++
+			continue
+		}
+		end := strings.IndexByte(tmpl[i+1:], '$')
+		if end < 0 {
+			b.WriteString(tmpl[i:])
+			break
+		}
+		token := tmpl[i+1 : i+1+end]
+		i += end + 2
+		if token == "" { // "$$" is a literal dollar
+			b.WriteByte('$')
+			continue
+		}
+		name, format, hasFormat := strings.Cut(token, "%")
+		if hasFormat {
+			format = "%" + format
+		}
+		switch name {
+		case "RepresentationID":
+			b.WriteString(rep.ID)
+		case "Bandwidth":
+			b.WriteString(formatOrDecimal(format, hasFormat, int64(rep.Bandwidth)))
+		case "Number":
+			b.WriteString(formatOrDecimal(format, hasFormat, int64(number)))
+		case "Time":
+			b.WriteString(formatOrDecimal(format, hasFormat, tick))
+		default:
+			// Unknown identifier: leave it in place so the resulting 404 points
+			// at the template rather than at a silently wrong URL.
+			b.WriteString("$" + token + "$")
+		}
+	}
+	return b.String()
+}
+
+func formatOrDecimal(format string, hasFormat bool, v int64) string {
+	if hasFormat {
+		return fmt.Sprintf(format, v)
+	}
+	return strconv.FormatInt(v, 10)
+}
+
+func firstTemplate(ts ...*mpdSegTemplate) *mpdSegTemplate {
+	// A Representation-level template overrides the AdaptationSet's, which
+	// overrides the Period's; merge so an inherited @timescale/@initialization
+	// is not lost when the child only overrides @media.
+	var out *mpdSegTemplate
+	for i := len(ts) - 1; i >= 0; i-- {
+		t := ts[i]
+		if t == nil {
+			continue
+		}
+		if out == nil {
+			cp := *t
+			out = &cp
+			continue
+		}
+		if t.Media != "" {
+			out.Media = t.Media
+		}
+		if t.Initialization != "" {
+			out.Initialization = t.Initialization
+		}
+		if t.Timescale != 0 {
+			out.Timescale = t.Timescale
+		}
+		if t.Duration != 0 {
+			out.Duration = t.Duration
+		}
+		if t.StartNumber != nil {
+			out.StartNumber = t.StartNumber
+		}
+		if t.PresentationTimeOffset != 0 {
+			out.PresentationTimeOffset = t.PresentationTimeOffset
+		}
+		if t.SegmentTimeline != nil {
+			out.SegmentTimeline = t.SegmentTimeline
+		}
+	}
+	return out
+}
+
+func dashKind(as mpdAdaptation, idx int) StreamKind {
+	mime := strings.ToLower(as.MimeType)
+	ct := strings.ToLower(as.ContentType)
+	switch {
+	case strings.HasPrefix(mime, "video") || ct == "video":
+		return Video
+	case strings.HasPrefix(mime, "audio") || ct == "audio":
+		return Audio
+	case strings.HasPrefix(mime, "text") || ct == "text" || ct == "subtitle":
+		return Text
+	}
+	// No mimeType and no contentType: infer from the codecs string.
+	codecs := strings.ToLower(as.Codecs)
+	switch {
+	case strings.HasPrefix(codecs, "avc"), strings.HasPrefix(codecs, "hev"), strings.HasPrefix(codecs, "hvc"), strings.HasPrefix(codecs, "vp0"), strings.HasPrefix(codecs, "av01"):
+		return Video
+	case strings.HasPrefix(codecs, "mp4a"), strings.HasPrefix(codecs, "ac-3"), strings.HasPrefix(codecs, "ec-3"), strings.HasPrefix(codecs, "opus"):
+		return Audio
+	}
+	if as.Height > 0 {
+		return Video
+	}
+	return Audio
+}
+
+func dashName(rep mpdRepresentation, as mpdAdaptation, kind StreamKind, pi, ai, ri int) string {
+	if h := firstNonZero(rep.Height, as.Height); h > 0 {
+		return fmt.Sprintf("%dp", h)
+	}
+	if kind == Audio {
+		if as.Lang != "" {
+			return "audio-" + as.Lang
+		}
+		if rep.Bandwidth > 0 {
+			return fmt.Sprintf("audio-%dkbps", rep.Bandwidth/1000)
+		}
+	}
+	if rep.ID != "" {
+		return rep.ID
+	}
+	return fmt.Sprintf("p%d-as%d-r%d", pi, ai, ri)
+}
+
+func dashKeyMethod(protected bool) string {
+	if protected {
+		return "CENC"
+	}
+	return ""
+}
+
+// applyBaseURLs resolves the BaseURL elements at one level against the current
+// base, in document order.
+func applyBaseURLs(base *url.URL, urls []string) *url.URL {
+	out := base
+	for _, raw := range urls {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		u, err := url.Parse(raw)
+		if err != nil {
+			continue
+		}
+		if out == nil {
+			out = u
+			continue
+		}
+		out = out.ResolveReference(u)
+	}
+	return out
+}
+
+// parseISODuration parses the xs:duration subset MPDs use: PnYnMnDTnHnMnS.
+func parseISODuration(s string) (float64, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, nil
+	}
+	neg := strings.HasPrefix(s, "-")
+	s = strings.TrimPrefix(s, "-")
+	if !strings.HasPrefix(s, "P") {
+		return 0, fmt.Errorf("not an xs:duration: %q", s)
+	}
+	datePart, timePart, _ := strings.Cut(strings.TrimPrefix(s, "P"), "T")
+
+	var total float64
+	consume := func(part string, units map[byte]float64) error {
+		num := strings.Builder{}
+		for i := 0; i < len(part); i++ {
+			c := part[i]
+			if (c >= '0' && c <= '9') || c == '.' {
+				num.WriteByte(c)
+				continue
+			}
+			mult, ok := units[c]
+			if !ok {
+				return fmt.Errorf("unexpected unit %q in duration %q", string(c), s)
+			}
+			v, err := strconv.ParseFloat(num.String(), 64)
+			if err != nil {
+				return fmt.Errorf("bad number before %q in duration %q", string(c), s)
+			}
+			total += v * mult
+			num.Reset()
+		}
+		return nil
+	}
+	if err := consume(datePart, map[byte]float64{'Y': 365 * 24 * 3600, 'M': 30 * 24 * 3600, 'W': 7 * 24 * 3600, 'D': 24 * 3600}); err != nil {
+		return 0, err
+	}
+	if err := consume(timePart, map[byte]float64{'H': 3600, 'M': 60, 'S': 1}); err != nil {
+		return 0, err
+	}
+	if neg {
+		total = -total
+	}
+	return total, nil
+}
+
+// parseFrameRate accepts both "25" and the "30000/1001" ratio form.
+func parseFrameRate(s string) float64 {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0
+	}
+	if num, den, ok := strings.Cut(s, "/"); ok {
+		n, err1 := strconv.ParseFloat(num, 64)
+		d, err2 := strconv.ParseFloat(den, 64)
+		if err1 == nil && err2 == nil && d != 0 {
+			return n / d
+		}
+		return 0
+	}
+	f, _ := strconv.ParseFloat(s, 64)
+	return f
+}
+
+func firstNonZero(vs ...int) int {
+	for _, v := range vs {
+		if v != 0 {
+			return v
+		}
+	}
+	return 0
+}
+
+func firstNonEmpty(vs ...string) string {
+	for _, v := range vs {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}

@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l ./cmd ./internal)
+          if [ -n "$unformatted" ]; then
+            echo "::error::these files are not gofmt'd:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - run: go vet ./...
+
+      # The parsers are the whole product, and the concurrency around the
+      # segment fan-out writes into a shared slice, so both matter.
+      - name: Test with coverage
+        run: |
+          go test -coverprofile=cover.out ./...
+          echo "### Coverage" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          go tool cover -func=cover.out | tail -1 >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          go tool cover -func=cover.out | tail -1
+
+      - name: Test with the race detector
+        run: go test -race ./...
+
+      - run: go build ./...
+
+      # No dependencies is a property worth defending: it is why the binary is
+      # static, small and auditable. A stray require would end that quietly.
+      - name: Still zero dependencies
+        run: |
+          if [ -f go.sum ] && [ -s go.sum ]; then
+            echo "::error::go.sum is non-empty — segcheck is meant to have no dependencies"
+            cat go.sum
+            exit 1
+          fi
+          if grep -qE '^\s*(require|replace)\b' go.mod; then
+            echo "::error::go.mod declares requirements — segcheck is meant to have no dependencies"
+            cat go.mod
+            exit 1
+          fi
+
+  govulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
+      - run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - run: govulncheck ./...
+
+  build-matrix:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux, darwin, windows]
+        goarch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: go build -trimpath -o /dev/null ./cmd/segcheck
