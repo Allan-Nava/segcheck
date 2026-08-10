@@ -375,14 +375,14 @@ checks roadmap and blocks nothing.
   after the URL — verified by mutation, since a regression there silently
   ignores every flag after the URL while the run still succeeds.
   <!-- sc: prio=high size=M labels=tests,cli ver=0.1.1 -->
-- [ ] **SC-47 — SBOM and signed artefacts**: goreleaser `sboms` and keyless
-  cosign signing for the checksums and the image manifest are configured, and
-  the release workflow installs syft and cosign with the `id-token: write`
-  permission the keyless flow needs. **Not verified**: neither step can run
-  without a real tag, and syft is not installed locally. It lives here rather
-  than in M8 because it is a release-process chore that only a published release
-  can close — `cosign verify` against the published image is the acceptance
-  test. <!-- sc: prio=med size=M labels=release -->
+- [x] **SC-47 — SBOM and signed artefacts**: v0.1.1 published an SBOM beside
+  every archive plus `checksums.txt.sig`/`.pem`, and signed the image manifest.
+  Both halves of the acceptance test pass against the published release:
+  `cosign verify-blob` on the checksums returns `Verified OK`, and
+  `cosign verify` on `ghcr.io/allan-nava/segcheck:0.1.1` validates the claims
+  against the transparency log with the certificate identity resolving to
+  `release.yml@refs/tags/v0.1.1`. Keyless throughout — nobody holds a private
+  key. <!-- sc: prio=med size=M labels=release ver=0.1.1 -->
 - [ ] **SC-65 — The published cask actually installs**: two questions SC-32
   could not answer before a cask existed. (1) The binary is unsigned and
   unnotarized — if Gatekeeper quarantines it, `brew install --cask` succeeds and

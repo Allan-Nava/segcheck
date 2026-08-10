@@ -64,8 +64,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Smoke-test the published image
+        # goreleaser tags images with {{ .Version }}, which is the git tag
+        # *without* its leading v — ghcr.io/…:0.1.1, never :v0.1.1. Using
+        # github.ref_name verbatim asks for an image that was never published,
+        # and the job fails with "manifest unknown" on a release that is fine.
         env:
-          SEGCHECK_IMAGE: ghcr.io/allan-nava/segcheck:${{ github.ref_name }}
+          TAG: ${{ github.ref_name }}
         run: |
+          export SEGCHECK_IMAGE="ghcr.io/allan-nava/segcheck:${TAG#v}"
+          echo "verifying $SEGCHECK_IMAGE"
           docker pull "$SEGCHECK_IMAGE"
           go test -tags docker -run TestDockerImage ./internal/analyze/ -v

@@ -5,6 +5,18 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- The release workflow's `verify-image` job pulled
+  `ghcr.io/…/segcheck:v0.1.1`, which never exists: goreleaser tags images with
+  `{{ .Version }}`, the git tag *without* its leading `v`. The job now strips
+  it. This failed the v0.1.1 run on a release that was otherwise complete —
+  archives, SBOMs, signatures, the image and the Homebrew cask were all
+  published correctly, and the published image passes the same contract test
+  when it is asked for by its real name.
+
 ## [0.1.1] - 2026-08-10
 
 How segcheck is built, tested and delivered. No new checks, parsers or flags —

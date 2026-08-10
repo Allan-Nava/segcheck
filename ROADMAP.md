@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**65 items · 25 shipped · 40 open · 10 milestones.**
+**65 items · 26 shipped · 39 open · 10 milestones.**
 
 ## At a glance
 
@@ -21,7 +21,7 @@
 | **M6** — Integration | `v0.5.0` | later | `..........` 0% | 6 | 0 |
 | **M10** — Authoring-spec conformance | `v0.5.0` | later | `..........` 0% | 5 | 0 |
 | **M8** — Container image and supply chain | `v0.1.1` | shipped | `##########` 100% | 0 | 5 |
-| **M7** — Project and release | `ongoing` | ongoing | `#####.....` 50% | 6 | 6 |
+| **M7** — Project and release | `ongoing` | ongoing | `######....` 58% | 5 | 7 |
 
 ## Next up
 
@@ -156,12 +156,11 @@ Target `v0.1.1` · shipped · 0 open · 5 shipped · `##########` 100%
 
 ### M7 — Project and release
 
-Target `ongoing` · ongoing · 6 open · 6 shipped · `#####.....` 50%
+Target `ongoing` · ongoing · 5 open · 7 shipped · `######....` 58%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
 | **SC-36** — Real-stream smoke suite | high | S | tests,release | open |
-| **SC-47** — SBOM and signed artefacts | med | M | release | open |
 | **SC-48** — Coverage ratchet | med | S | tests | open |
 | **SC-64** — `scripts/backlog.sh` has no tests | med | S | tests,project | open |
 | **SC-65** — The published cask actually installs | med | S | release,docs | open |
@@ -170,6 +169,7 @@ Target `ongoing` · ongoing · 6 open · 6 shipped · `#####.....` 50%
 | **SC-58** — `cmd/segcheck` tests | high | M | tests,cli | shipped `0.1.1` |
 | **SC-32** — Homebrew tap upload | med | S | release | shipped `0.1.1` |
 | **SC-34** — Backlog and roadmap tooling | med | M | project | shipped `0.1.1` |
+| **SC-47** — SBOM and signed artefacts | med | M | release | shipped `0.1.1` |
 | **SC-33** — Docs site | low | M | docs | shipped `0.1.1` |
 | **SC-50** — Brand assets | low | S | docs | shipped `0.1.1` |
 
@@ -184,6 +184,6 @@ Target `ongoing` · ongoing · 6 open · 6 shipped · `#####.....` 50%
 | `integration` | 4 | 4 |
 | `tests` | 7 | 4 |
 | `output` | 4 | 3 |
-| `release` | 8 | 3 |
 | `docs` | 5 | 2 |
+| `release` | 8 | 2 |
 | `project` | 3 | 1 |
