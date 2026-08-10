@@ -1,0 +1,84 @@
+name: Docker
+
+# Publishes the image built from `main` as :edge, between releases.
+#
+# Releases are not this workflow's job: a `v*` tag goes through release.yml,
+# where goreleaser packages the exact binaries it built for the archives and
+# pushes the versioned tags. This one exists so that the state of main is
+# runnable without waiting for a tag — and so a packaging regression surfaces on
+# the commit that caused it rather than at release time.
+
+on:
+  push:
+    branches: ["main"]
+    # A commit that only moves prose cannot change the image.
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+# :edge must end up pointing at the newest commit, not at whichever build
+# happened to finish last.
+concurrency:
+  group: docker-edge
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - uses: docker/setup-buildx-action@v3
+
+      # No QEMU: the build stage is pinned to BUILDPLATFORM and Go
+      # cross-compiles, so nothing is ever emulated.
+      - name: Build the runner's own architecture
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: segcheck:test
+          build-args: VERSION=edge-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # The image is only worth publishing if it satisfies the same contract CI
+      # asserts. This gates the push: a broken image never reaches the registry.
+      - name: Image smoke test
+        env:
+          SEGCHECK_IMAGE: segcheck:test
+        run: go test -tags docker -run TestDockerImage ./internal/analyze/ -v
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push multi-arch
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/allan-nava/segcheck:edge
+            ghcr.io/allan-nava/segcheck:sha-${{ github.sha }}
+          build-args: VERSION=edge-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.title=segcheck
+            org.opencontainers.image.description=Check what HLS/DASH segments really contain, not just what the manifest says
+            org.opencontainers.image.version=edge-${{ github.sha }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=https://github.com/Allan-Nava/segcheck
+            org.opencontainers.image.licenses=PolyForm-Noncommercial-1.0.0
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

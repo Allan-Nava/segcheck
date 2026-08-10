@@ -12,6 +12,16 @@ docker run --rm ghcr.io/allan-nava/segcheck:latest \
 
 Multi-arch: `linux/amd64` and `linux/arm64` resolve from the same tag.
 
+| Tag | What it is |
+|---|---|
+| `vX.Y.Z` | A release. Built by goreleaser from the same binaries as the release archives. Pin this. |
+| `latest` | The newest release, and it stays put when the tag is a prerelease. |
+| `edge` | The head of `main`, rebuilt on every push. Useful for trying a fix before it ships; not for a schedule. |
+| `sha-<commit>` | One specific commit of `main`, immutable. |
+
+An `edge` image has passed the same contract test as a release — the publish is
+gated on it — but it has not been through a release's real-stream verification.
+
 ## Building it yourself
 
 ```bash

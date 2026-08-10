@@ -8,7 +8,11 @@
 # same contract — no shell, non-root, working TLS — asserted by
 # internal/analyze/docker_test.go.
 
-FROM golang:1.25 AS build
+# Pinned to BUILDPLATFORM on purpose: the toolchain runs natively and Go
+# cross-compiles to TARGETARCH. Without this, building linux/arm64 on an amd64
+# runner drags the whole compile through QEMU — minutes instead of seconds, for
+# a binary that has no cgo and nothing to emulate.
+FROM --platform=$BUILDPLATFORM golang:1.25 AS build
 
 WORKDIR /src
 
@@ -20,7 +24,10 @@ COPY . .
 # VERSION is stamped into the same variable goreleaser stamps, so an image and a
 # released binary can never disagree about what they are.
 ARG VERSION=dev
-RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/segcheck ./cmd/segcheck
+ARG TARGETOS
+ARG TARGETARCH
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/segcheck ./cmd/segcheck
 
 FROM scratch
 

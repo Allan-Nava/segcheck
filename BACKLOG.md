@@ -280,6 +280,16 @@ checks roadmap and blocks nothing.
   Verified by a full `--snapshot` run; the push itself is first exercised at the
   next tag, and the release workflow re-runs SC-45's test against the published
   image. <!-- sc: prio=high size=M labels=release ver=unreleased -->
+- [x] **SC-56 — `:edge` image from `main`**: `.github/workflows/docker.yml`
+  publishes `ghcr.io/allan-nava/segcheck:edge` and `:sha-<commit>` on every push
+  to `main`, so the state of main is runnable without waiting for a tag and a
+  packaging regression surfaces on the commit that caused it. SC-45's contract
+  test gates the push — a broken image never reaches the registry. Releases stay
+  release.yml's job, where goreleaser packages the exact binaries it built for
+  the archives. The `Dockerfile` build stage is pinned to `$BUILDPLATFORM` with
+  `GOOS`/`GOARCH` from `TARGETOS`/`TARGETARCH`, so multi-arch cross-compiles
+  instead of dragging a `go build` through QEMU.
+  <!-- sc: prio=high size=S labels=release ver=unreleased -->
 - [ ] **SC-47 — SBOM and signed artefacts**: goreleaser `sboms` and keyless
   cosign signing for the checksums and the image manifest are configured, and
   the release workflow installs syft and cosign with the `id-token: write`

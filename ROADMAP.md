@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**55 items · 21 shipped · 34 open · 9 milestones.**
+**56 items · 22 shipped · 34 open · 9 milestones.**
 
 ## At a glance
 
@@ -19,7 +19,7 @@
 | **M5** — Live and delivery | `v0.4.0` | later | `..........` 0% | 6 | 0 |
 | **M9** — Wallclock and DVR correctness | `v0.4.0` | later | `..........` 0% | 5 | 0 |
 | **M6** — Integration | `v0.5.0` | later | `..........` 0% | 6 | 0 |
-| **M8** — Container image and supply chain | `v0.3.0` | next | `########..` 80% | 1 | 4 |
+| **M8** — Container image and supply chain | `v0.3.0` | next | `########..` 83% | 1 | 5 |
 | **M7** — Project and release | `ongoing` | ongoing | `####......` 43% | 4 | 3 |
 
 ## Next up
@@ -131,7 +131,7 @@ Target `v0.5.0` · later · 6 open · 0 shipped · `..........` 0%
 
 ### M8 — Container image and supply chain
 
-Target `v0.3.0` · next · 1 open · 4 shipped · `########..` 80%
+Target `v0.3.0` · next · 1 open · 5 shipped · `########..` 83%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
@@ -139,6 +139,7 @@ Target `v0.3.0` · next · 1 open · 4 shipped · `########..` 80%
 | **SC-43** — Dockerfile (scratch, non-root) | high | M | release,project | done, unreleased |
 | **SC-44** — Multi-arch image on GHCR | high | M | release | done, unreleased |
 | **SC-45** — Image smoke test, written first | high | M | tests,release | done, unreleased |
+| **SC-56** — `:edge` image from `main` | high | S | release | done, unreleased |
 | **SC-46** — Scheduled-run recipes | med | S | docs,delivery | done, unreleased |
 
 ### M7 — Project and release
@@ -165,7 +166,7 @@ Target `ongoing` · ongoing · 4 open · 3 shipped · `####......` 43%
 | `delivery` | 5 | 4 |
 | `integration` | 4 | 4 |
 | `output` | 4 | 3 |
-| `release` | 6 | 3 |
+| `release` | 7 | 3 |
 | `tests` | 4 | 3 |
 | `docs` | 4 | 1 |
 | `project` | 2 | 0 |

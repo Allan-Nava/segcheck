@@ -57,9 +57,16 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   goreleaser `dockers_v2` entry packaging the binaries the release already
   built, tagged `vX.Y.Z` plus a `latest` that stays put on a prerelease. The
   release workflow re-runs the smoke test against the published image.
+- **`:edge` image from `main`** (SC-56): `.github/workflows/docker.yml` publishes
+  `ghcr.io/allan-nava/segcheck:edge` and `:sha-<commit>` on every push to `main`,
+  gated on the SC-45 contract test so a broken image never reaches the registry.
+  Releases stay release.yml's job. The `Dockerfile` build stage is pinned to
+  `$BUILDPLATFORM` and takes `GOOS`/`GOARCH` from `TARGETOS`/`TARGETARCH`, so a
+  multi-arch build cross-compiles rather than running `go build` under QEMU —
+  9 seconds instead of minutes for the foreign architecture.
 - **`docs/running-in-containers.md`** (SC-46): Compose and Kubernetes `CronJob`
-  recipes, including why `--exit-on` must stay off under a scheduler and what a
-  schedule costs in CDN egress.
+  recipes, a table of what each image tag means, why `--exit-on` must stay off
+  under a scheduler, and what a schedule costs in CDN egress.
 - SBOM generation and keyless cosign signing are configured (SC-47) but
   **unverified** — neither can run without a tagged release, so the item stays
   open until `cosign verify` succeeds against a published image.
