@@ -245,6 +245,53 @@ wrong place, an ad splices two frames late, or a scrub back into the DVR window
   dependency is not worth it, so the subset is deliberately small.
   <!-- sc: prio=low size=M labels=cli -->
 
+## M10 — Authoring-spec conformance <!-- ms: target=v0.5.0 phase=later -->
+
+The question behind most "why was our stream rejected" tickets: does this ladder
+satisfy the rules the platform will actually enforce? Apple's HLS Authoring
+Specification and DASH-IF IOP are largely a list of constraints on the *media* —
+peak-to-average bitrate, an IDR at every segment start, timescales that agree
+across an adaptation set — and by M3/M4 segcheck already measures nearly all of
+them. This milestone is the verdict layer over measurements it has taken anyway,
+not new parsing.
+
+**Scope guard**: only the rules the media can arbitrate. "Provide a 192 kbps
+audio rendition" or "declare a `RESOLUTION`" are manifest-only assertions and
+belong in [checkfleet](https://github.com/Allan-Nava/checkfleet) — putting them
+here would make segcheck a second manifest linter, which is exactly the line
+`AGENTS.md` draws. Every rule implemented here must fail on media that a
+manifest-only reader would call fine.
+
+- [ ] **SC-63 — `--profile apple|dash-if|none`**: selects which rule set runs,
+  `none` by default. Lands first: a conformance rule with no way to turn it off
+  turns a run that was clean yesterday into a wall of findings today, on a
+  stream nobody changed. Profiles are opt-in, and each finding names the rule it
+  comes from so it can be argued with. <!-- sc: prio=high size=S labels=cli -->
+- [ ] **SC-59 — Apple HLS Authoring Spec, the measurable subset**: peak segment
+  bitrate within 200% of average, segment durations consistent across the
+  ladder, an IDR at every segment start (SC-16), video bitrate within the tier
+  its resolution implies, frame rate stable and shared across rungs (SC-17).
+  Each rule reports the measured value beside the limit, because "fails rule
+  3.4" without a number is unactionable.
+  <!-- sc: prio=high size=L labels=check -->
+- [ ] **SC-60 — I-frame playlists**: `EXT-X-I-FRAME-STREAM-INF` declares byte
+  ranges that must resolve to keyframes and to nothing else, and the I-frame
+  rung must span the same timeline as the video it belongs to. A trick-play
+  track whose ranges land on non-keyframes is the scrub that shows a grey frame,
+  and no manifest reader can see it. <!-- sc: prio=high size=M labels=check,parser -->
+- [ ] **SC-62 — DASH-IF IOP, the measurable subset**: `@codecs` against the
+  sample entry the segments actually carry, timescales consistent across the
+  representations of one adaptation set, `@segmentAlignment="true"` that is
+  actually true, `@startWithSAP` honoured by the fragments. Four claims that are
+  routinely copied between MPDs and quietly stop being true.
+  <!-- sc: prio=med size=L labels=check -->
+- [ ] **SC-61 — Trick-play thumbnails**: `EXT-X-IMAGE-STREAM-INF` and the DASH
+  thumbnail `AdaptationSet` declare a tile grid and an interval; the JPEG or WebP
+  actually served has its own dimensions and tile count. Fetch one, read the
+  image header, and check the grid divides evenly into it. Broken scrub previews
+  are reported as player bugs for weeks before anyone measures the sheet.
+  <!-- sc: prio=low size=M labels=check,parser -->
+
 ## M8 — Container image and supply chain <!-- ms: target=v0.3.0 phase=next -->
 
 A distribution milestone, not a checking one: it does not widen what segcheck
@@ -336,6 +383,14 @@ checks roadmap and blocks nothing.
   after the URL — verified by mutation, since a regression there silently
   ignores every flag after the URL while the run still succeeds.
   <!-- sc: prio=high size=M labels=tests,cli ver=unreleased -->
+- [ ] **SC-64 — `scripts/backlog.sh` has no tests**: the test-first rule covers
+  tooling and this is the one place it was not applied — which is how it shipped
+  a generator that split a table row in three the first time an item title
+  contained a `|` (SC-63). A shell test fixture with a small BACKLOG, asserting
+  the generated ROADMAP for pipes, em dashes, done-versus-open ordering, and the
+  lint failures (duplicate id, gap in the sequence, bad metadata) that are
+  currently only ever exercised by hand.
+  <!-- sc: prio=med size=S labels=tests,project -->
 - [ ] **SC-48 — Coverage ratchet**: CI already prints total coverage; make it
   fail when a commit lowers it. Test-first only holds if something notices when
   it did not happen — a check merged without its test should show up in the

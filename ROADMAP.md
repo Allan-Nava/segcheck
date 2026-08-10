@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**58 items · 24 shipped · 34 open · 9 milestones.**
+**64 items · 24 shipped · 40 open · 10 milestones.**
 
 ## At a glance
 
@@ -19,8 +19,9 @@
 | **M5** — Live and delivery | `v0.4.0` | later | `..........` 0% | 6 | 0 |
 | **M9** — Wallclock and DVR correctness | `v0.4.0` | later | `..........` 0% | 5 | 0 |
 | **M6** — Integration | `v0.5.0` | later | `..........` 0% | 6 | 0 |
+| **M10** — Authoring-spec conformance | `v0.5.0` | later | `..........` 0% | 5 | 0 |
 | **M8** — Container image and supply chain | `v0.3.0` | next | `########..` 83% | 1 | 5 |
-| **M7** — Project and release | `ongoing` | ongoing | `######....` 56% | 4 | 5 |
+| **M7** — Project and release | `ongoing` | ongoing | `#####.....` 50% | 5 | 5 |
 
 ## Next up
 
@@ -129,6 +130,18 @@ Target `v0.5.0` · later · 6 open · 0 shipped · `..........` 0%
 | **SC-41** — Baseline diff | med | M | cli,output | open |
 | **SC-31** — Config file | low | M | cli | open |
 
+### M10 — Authoring-spec conformance
+
+Target `v0.5.0` · later · 5 open · 0 shipped · `..........` 0%
+
+| Item | Priority | Size | Labels | Status |
+|---|---|---|---|---|
+| **SC-59** — Apple HLS Authoring Spec, the measurable subset | high | L | check | open |
+| **SC-60** — I-frame playlists | high | M | check,parser | open |
+| **SC-63** — `--profile apple\|dash-if\|none` | high | S | cli | open |
+| **SC-62** — DASH-IF IOP, the measurable subset | med | L | check | open |
+| **SC-61** — Trick-play thumbnails | low | M | check,parser | open |
+
 ### M8 — Container image and supply chain
 
 Target `v0.3.0` · next · 1 open · 5 shipped · `########..` 83%
@@ -144,13 +157,14 @@ Target `v0.3.0` · next · 1 open · 5 shipped · `########..` 83%
 
 ### M7 — Project and release
 
-Target `ongoing` · ongoing · 4 open · 5 shipped · `######....` 56%
+Target `ongoing` · ongoing · 5 open · 5 shipped · `#####.....` 50%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
 | **SC-36** — Real-stream smoke suite | high | S | tests,release | open |
 | **SC-32** — goreleaser + Homebrew tap | med | S | release | open |
 | **SC-48** — Coverage ratchet | med | S | tests | open |
+| **SC-64** — `scripts/backlog.sh` has no tests | med | S | tests,project | open |
 | **SC-49** — Per-check reference pages | low | M | docs | open |
 | **SC-57** — `internal/fetch` tests | high | M | tests | done, unreleased |
 | **SC-58** — `cmd/segcheck` tests | high | M | tests,cli | done, unreleased |
@@ -162,13 +176,13 @@ Target `ongoing` · ongoing · 4 open · 5 shipped · `######....` 56%
 
 | Label | Items | Open |
 |---|---|---|
-| `check` | 23 | 16 |
-| `parser` | 19 | 13 |
-| `cli` | 7 | 6 |
+| `check` | 27 | 20 |
+| `parser` | 21 | 15 |
+| `cli` | 8 | 7 |
 | `delivery` | 5 | 4 |
 | `integration` | 4 | 4 |
+| `tests` | 7 | 4 |
 | `output` | 4 | 3 |
 | `release` | 7 | 3 |
-| `tests` | 6 | 3 |
 | `docs` | 4 | 1 |
-| `project` | 2 | 0 |
+| `project` | 3 | 1 |

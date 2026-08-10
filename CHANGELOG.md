@@ -33,6 +33,16 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   the check-authoring pattern, known traps such as the 33-bit PTS wrap and the
   `(value, false)` protocol, and pointers), with `AGENTS.md` staying canonical.
 
+- **M10 — Authoring-spec conformance** (SC-59 … SC-63), targeted at v0.5.0: the
+  measurable subset of Apple's HLS Authoring Specification and DASH-IF IOP —
+  peak-to-average bitrate, an IDR at every segment start, bitrate tiers by
+  resolution, `@codecs` against the sample entry, timescales consistent across
+  an adaptation set, `@segmentAlignment` that is actually true — plus I-frame
+  playlists and trick-play thumbnail sheets. A verdict layer over measurements
+  M3 and M4 already take, gated behind an opt-in `--profile` so a conformance
+  rule can never turn yesterday's clean run into today's wall of findings.
+  Scoped to rules the media can arbitrate: manifest-only assertions stay in
+  checkfleet.
 - **M9 — Wallclock and DVR correctness** (SC-51 … SC-55), targeted at v0.4.0
   alongside the live milestone it shares machinery with: `EXT-X-PROGRAM-DATE-TIME`
   checked against the media timestamps and across renditions, DASH

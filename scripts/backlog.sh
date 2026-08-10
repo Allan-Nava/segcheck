@@ -216,6 +216,20 @@ generate() {
 		return "ongoing"
 	}
 	function prank(p) { return (p == "high") ? 1 : (p == "med") ? 2 : 3 }
+
+	# A pipe inside a table cell ends the cell, and a backtick does not protect
+	# it — `--profile apple|dash-if|none` would silently split one row into
+	# three columns. Built by concatenation rather than gsub because the meaning
+	# of a backslash in a gsub replacement is not portable.
+	function esc(s,   out, i, c) {
+		out = ""
+		for (i = 1; i <= length(s); i++) {
+			c = substr(s, i, 1)
+			out = out ((c == "|") ? "\\|" : c)
+		}
+		return out
+	}
+
 	function key(status, prio, num,   n) {
 		n = sprintf("%03d", num)
 		return ((status == "open") ? "0" : "1") prank(prio) n
@@ -232,7 +246,7 @@ generate() {
 		k = key(status, prio, num)
 		cnt[ms]++
 		row[ms, k] = sprintf("| **%s** — %s | %s | %s | %s | %s |", \
-			id, title, prio, size, labels, \
+			id, esc(title), prio, size, esc(labels), \
 			(status != "done") ? "open" : \
 			(ver == "unreleased") ? "done, unreleased" : "shipped `" ver "`")
 		keys[ms] = keys[ms] " " k
@@ -285,7 +299,7 @@ generate() {
 		for (o = 1; o <= nms; o++) {
 			ms = ord[o]
 			printf "| **%s** — %s | `%s` | %s | %s | %d | %d |\n", \
-				ms, mstitle[ms], target[ms], badge(phase[ms]), \
+				ms, esc(mstitle[ms]), target[ms], badge(phase[ms]), \
 				bar(done[ms] + 0, cnt[ms] + 0), open[ms] + 0, done[ms] + 0
 		}
 		print ""
