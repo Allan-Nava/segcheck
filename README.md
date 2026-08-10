@@ -56,8 +56,8 @@ None of those questions can be answered without downloading the bytes.
 ## Install
 
 ```bash
-# Homebrew
-brew install Allan-Nava/tap/segcheck
+# Homebrew (macOS — casks are not supported by Homebrew on Linux)
+brew install --cask allan-nava/tap/segcheck
 
 # Go
 go install github.com/Allan-Nava/segcheck/cmd/segcheck@latest

@@ -396,9 +396,19 @@ checks roadmap and blocks nothing.
   it did not happen — a check merged without its test should show up in the
   build, not in a review three weeks later.
   <!-- sc: prio=med size=S labels=tests -->
-- [ ] **SC-32 — goreleaser + Homebrew tap**: wire the tap upload once the
-  release secret exists (the config is in place with the tap step disabled).
-  <!-- sc: prio=med size=S labels=release -->
+- [ ] **SC-32 — Homebrew tap upload**: `Allan-Nava/homebrew-tap` exists and the
+  cask is generated correctly on every run — verified with `HOMEBREW_TAP_TOKEN`
+  unset, which is why `skip_upload: true` cannot fail a release today. What is
+  missing is only the credential: the workflow's automatic `GITHUB_TOKEN` is
+  scoped to this repository and cannot write to another one, so the upload needs
+  a fine-grained PAT with *Contents: read and write* on `homebrew-tap`, stored
+  as the `HOMEBREW_TAP_TOKEN` secret here. Then drop `skip_upload`. Two things
+  to check on the first published cask, neither of which can be tested before
+  one exists: (1) Homebrew casks are **macOS-only** — Linux Homebrew users have
+  no path through the tap and must be pointed at `go install` or the archives;
+  (2) the binary is unsigned and unnotarized, so if Gatekeeper quarantines it,
+  the fix is a `hooks.post.install` running `xattr -dr com.apple.quarantine`, or
+  real notarization. <!-- sc: prio=med size=S labels=release -->
 - [x] **SC-33 — Docs site**: GitHub Pages served from `docs/`, in the shape of
   the checkfleet site — one self-contained static page (hero and sample output,
   the manifest-claims table, the check matrix with worst status, install, flags,

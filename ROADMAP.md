@@ -162,7 +162,7 @@ Target `ongoing` · ongoing · 5 open · 5 shipped · `#####.....` 50%
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
 | **SC-36** — Real-stream smoke suite | high | S | tests,release | open |
-| **SC-32** — goreleaser + Homebrew tap | med | S | release | open |
+| **SC-32** — Homebrew tap upload | med | S | release | open |
 | **SC-48** — Coverage ratchet | med | S | tests | open |
 | **SC-64** — `scripts/backlog.sh` has no tests | med | S | tests,project | open |
 | **SC-49** — Per-check reference pages | low | M | docs | open |
