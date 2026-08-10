@@ -9,6 +9,19 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **Documentation site** (SC-33): <https://allan-nava.github.io/segcheck/>,
+  served from `docs/` by a `Pages` workflow. One self-contained static page —
+  sample output, the manifest-claims table, the thirteen checks with their worst
+  status, install, the flag reference, CI recipes, what a run costs and what the
+  tool deliberately does not do. No Jekyll, no theme gem and no external request
+  at render time, so the site holds to the same zero-dependency rule as the
+  binary. SC-49 keeps the per-check reference pages on the backlog.
+- **Brand assets** (SC-50): `docs/assets/` gains the logo, favicon, horizontal
+  wordmark and OG card as hand-written SVG, with PNG renders for the consumers
+  that cannot take vectors. The mark is the rendition ladder with one segment
+  the media does not have, flagged in amber, and the verdict beside it. The
+  README leads with it.
+
 - **Backlog and roadmap tooling** (SC-34): `scripts/backlog.sh` lints
   `BACKLOG.md` — stable `SC-n` ids with no gaps or duplicates, valid
   `prio`/`size`/`labels` metadata, shipped items carrying the release that
@@ -20,12 +33,43 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   the check-authoring pattern, known traps such as the 33-bit PTS wrap and the
   `(value, false)` protocol, and pointers), with `AGENTS.md` staying canonical.
 
+- **Container image** (SC-43): `Dockerfile` builds a `FROM scratch` image
+  carrying the static binary, a CA bundle and nothing else, running as
+  `65532:65532`. `--build-arg VERSION` stamps the same `main.version` goreleaser
+  stamps, so an image and a release archive cannot disagree about what they are.
+- **Image smoke test** (SC-45): `internal/analyze/docker_test.go`, behind the
+  `docker` build tag with its own CI job. It asserts the version is stamped, no
+  shell is reachable, a trust store is present, the image does not run as root,
+  and a containerised run finds a planted continuity gap against a live origin
+  while still exiting 0. The trust-store assertion was checked against a
+  deliberately bundle-less image to confirm it fails when it should — without a
+  CA bundle every `https://` manifest fails TLS and reads like a broken origin.
+- **Multi-arch image on GHCR** (SC-44): `linux/amd64` and `linux/arm64` from one
+  goreleaser `dockers_v2` entry packaging the binaries the release already
+  built, tagged `vX.Y.Z` plus a `latest` that stays put on a prerelease. The
+  release workflow re-runs the smoke test against the published image.
+- **`docs/running-in-containers.md`** (SC-46): Compose and Kubernetes `CronJob`
+  recipes, including why `--exit-on` must stay off under a scheduler and what a
+  schedule costs in CDN egress.
+- SBOM generation and keyless cosign signing are configured (SC-47) but
+  **unverified** — neither can run without a tagged release, so the item stays
+  open until `cosign verify` succeeds against a published image.
+
 ### Changed
 
-- `BACKLOG.md` reorganised into seven milestones with target releases and
-  phases, and extended with SC-35 … SC-42: parser fuzzing, a real-stream smoke
+- `brews` → `homebrew_casks` and `dockers`/`docker_manifests` → `dockers_v2` in
+  `.goreleaser.yaml`: both old forms are deprecated and fail `goreleaser check`,
+  which CI now runs so a release config breaks on a pull request rather than on
+  a tag.
+- **Test-first is now an explicit rule** in `AGENTS.md` and `CLAUDE.md`: the
+  test that plants the defect is written and watched fail before the code that
+  finds it. SC-48 adds the CI coverage ratchet that makes a missing test visible
+  in the build rather than in review.
+- `BACKLOG.md` reorganised into eight milestones with target releases and
+  phases, and extended with SC-35 … SC-48: parser fuzzing, a real-stream smoke
   suite, CEA-608/708 captions, subtitle renditions, LL-HLS parts, multi-period
-  DASH, a baseline diff, and AV1/VP9 coded resolution.
+  DASH, a baseline diff, AV1/VP9 coded resolution, the container-image
+  milestone, and the coverage ratchet.
 
 ## [0.1.0] - 2026-08-10
 

@@ -1,0 +1,49 @@
+<svg width="700" height="200" viewBox="0 0 700 200" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="segcheck">
+  <defs>
+    <linearGradient id="w-bg" x1="20" y1="20" x2="180" y2="180" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#17274a"/>
+      <stop offset="0.55" stop-color="#0e1830"/>
+      <stop offset="1" stop-color="#0a1020"/>
+    </linearGradient>
+    <linearGradient id="w-seg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5eead4"/>
+      <stop offset="1" stop-color="#2dd4bf"/>
+    </linearGradient>
+    <linearGradient id="w-check" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#059669"/>
+      <stop offset="0.55" stop-color="#10b981"/>
+      <stop offset="1" stop-color="#34d399"/>
+    </linearGradient>
+    <style>
+      /* rendered as an &lt;img&gt;, so this follows the viewer's OS colour scheme */
+      .wm { fill: #0f172a; }
+      @media (prefers-color-scheme: dark) { .wm { fill: #f1f5f9; } }
+    </style>
+  </defs>
+
+  <!-- mark: the 512 plate, scaled to 160 -->
+  <g transform="translate(20 20) scale(0.3125)">
+    <rect x="8" y="8" width="496" height="496" rx="116" fill="url(#w-bg)"/>
+    <rect x="8.75" y="8.75" width="494.5" height="494.5" rx="115.25" fill="none" stroke="#ffffff" stroke-opacity="0.09" stroke-width="1.5"/>
+    <g fill="url(#w-seg)">
+      <rect x="60"  y="144" width="88" height="52" rx="16"/>
+      <rect x="160" y="144" width="88" height="52" rx="16"/>
+      <rect x="60"  y="230" width="88" height="52" rx="16"/>
+      <rect x="60"  y="316" width="88" height="52" rx="16"/>
+      <rect x="160" y="316" width="88" height="52" rx="16"/>
+    </g>
+    <rect x="163.5" y="233.5" width="81" height="45" rx="13"
+          fill="none" stroke="#f59e0b" stroke-width="7" stroke-linecap="round"
+          stroke-dasharray="20 14"/>
+    <path d="M280 272 L328 324 L428 204"
+          fill="none" stroke="url(#w-check)" stroke-width="48"
+          stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- wordmark: textLength keeps the lockup the same width on every font stack -->
+  <text x="208" y="136" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+        font-size="104" font-weight="700" letter-spacing="-4"
+        textLength="452" lengthAdjust="spacingAndGlyphs">
+    <tspan class="wm">seg</tspan><tspan fill="#10b981">check</tspan>
+  </text>
+</svg>

@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**42 items · 15 shipped · 27 open · 7 milestones.**
+**50 items · 21 shipped · 29 open · 8 milestones.**
 
 ## At a glance
 
@@ -18,7 +18,8 @@
 | **M4** — Everything that is not the video track | `v0.3.0` | next | `..........` 0% | 6 | 0 |
 | **M5** — Live and delivery | `v0.4.0` | later | `..........` 0% | 6 | 0 |
 | **M6** — Integration | `v0.5.0` | later | `..........` 0% | 6 | 0 |
-| **M7** — Project and release | `ongoing` | ongoing | `###.......` 25% | 3 | 1 |
+| **M8** — Container image and supply chain | `v0.3.0` | next | `########..` 80% | 1 | 4 |
+| **M7** — Project and release | `ongoing` | ongoing | `####......` 43% | 4 | 3 |
 
 ## Next up
 
@@ -115,16 +116,31 @@ Target `v0.5.0` · later · 6 open · 0 shipped · `..........` 0%
 | **SC-41** — Baseline diff | med | M | cli,output | open |
 | **SC-31** — Config file | low | M | cli | open |
 
+### M8 — Container image and supply chain
+
+Target `v0.3.0` · next · 1 open · 4 shipped · `########..` 80%
+
+| Item | Priority | Size | Labels | Status |
+|---|---|---|---|---|
+| **SC-47** — SBOM and signed artefacts | med | M | release | open |
+| **SC-43** — Dockerfile (scratch, non-root) | high | M | release,project | done, unreleased |
+| **SC-44** — Multi-arch image on GHCR | high | M | release | done, unreleased |
+| **SC-45** — Image smoke test, written first | high | M | tests,release | done, unreleased |
+| **SC-46** — Scheduled-run recipes | med | S | docs,delivery | done, unreleased |
+
 ### M7 — Project and release
 
-Target `ongoing` · ongoing · 3 open · 1 shipped · `###.......` 25%
+Target `ongoing` · ongoing · 4 open · 3 shipped · `####......` 43%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
 | **SC-36** — Real-stream smoke suite | high | S | tests,release | open |
 | **SC-32** — goreleaser + Homebrew tap | med | S | release | open |
-| **SC-33** — Docs site | low | M | docs | open |
+| **SC-48** — Coverage ratchet | med | S | tests | open |
+| **SC-49** — Per-check reference pages | low | M | docs | open |
 | **SC-34** — Backlog and roadmap tooling | med | M | project | done, unreleased |
+| **SC-33** — Docs site | low | M | docs | done, unreleased |
+| **SC-50** — Brand assets | low | S | docs | done, unreleased |
 
 ## By label
 
@@ -134,9 +150,9 @@ Target `ongoing` · ongoing · 3 open · 1 shipped · `###.......` 25%
 | `check` | 18 | 11 |
 | `cli` | 5 | 5 |
 | `integration` | 4 | 4 |
-| `delivery` | 3 | 3 |
+| `delivery` | 4 | 3 |
 | `output` | 4 | 3 |
-| `release` | 2 | 2 |
-| `tests` | 2 | 2 |
-| `docs` | 1 | 1 |
-| `project` | 1 | 0 |
+| `release` | 6 | 3 |
+| `tests` | 4 | 3 |
+| `docs` | 4 | 1 |
+| `project` | 2 | 0 |

@@ -36,6 +36,14 @@ sentence. A check that only reads the manifest belongs in
 
 ## Testing
 
+- **Test first, always — TDD is not optional here.** The test that plants the
+  defect is written, and watched fail, before the code that finds it. Red,
+  green, refactor. A test written after the implementation tends to assert what
+  the code happens to do rather than what the stream means, and that is exactly
+  how a check ends up green against media it was supposed to flag. This applies
+  to parsers (write the `mediatest` builder and the failing assertion first), to
+  checks, to the CLI, and to tooling — SC-45 is in the backlog ahead of SC-43
+  for that reason.
 - **No binary fixtures.** `internal/media/mediatest` builds MPEG-TS, fMP4 and
   ADTS segments with known timestamps, durations and resolutions. A parser test
   asserts against a value that is known by construction, which is also how the
@@ -80,3 +88,23 @@ scripts/backlog.sh next      # what to pick up
 
 CI runs `lint` and `check` (roadmap freshness), so a backlog edit that skips the
 regeneration fails the build.
+
+## Site and brand
+
+`docs/` is the GitHub Pages site (<https://allan-nava.github.io/segcheck/>),
+deployed by `.github/workflows/pages.yml`. It is **one self-contained static
+page**: no Jekyll, no theme gem, no build step, and no external request at
+render time — the zero-dependency rule applies to the site too. Inline the CSS
+and the JS, and keep every asset in `docs/assets/`.
+
+The page states what the tool does; when a check, a flag or a default changes,
+`docs/index.html` moves in the same commit as the `README.md` row and the
+`--help` text. A site that describes a check that behaves differently is a bug
+report waiting to be filed.
+
+Brand assets are hand-written SVG in `docs/assets/` — `logo.svg` (the mark),
+`favicon.svg`, `logo-wordmark.svg` (horizontal lockup) and `og-card.svg`, with
+PNG renders alongside for consumers that cannot take vectors. The mark is the
+rendition ladder with one missing segment flagged in amber and the verdict
+beside it; the plate and the emerald/slate palette are shared with checkfleet
+on purpose. Edit the SVG and re-render the PNG — never the other way round.

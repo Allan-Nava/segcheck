@@ -1,6 +1,12 @@
+<p align="center">
+  <img src="docs/assets/logo.svg" alt="segcheck" width="96" height="96">
+</p>
+
 <h1 align="center">segcheck</h1>
 
 <p align="center"><strong>Check what your HLS/DASH segments <em>actually contain</em> — not just what the manifest claims.</strong></p>
+
+<p align="center"><a href="https://allan-nava.github.io/segcheck/">allan-nava.github.io/segcheck</a></p>
 
 <p align="center">
   <a href="https://github.com/Allan-Nava/segcheck/releases"><img alt="Latest release" src="https://img.shields.io/github/v/tag/Allan-Nava/segcheck?label=release&sort=semver&color=10b981"></a>
@@ -56,8 +62,16 @@ brew install Allan-Nava/tap/segcheck
 # Go
 go install github.com/Allan-Nava/segcheck/cmd/segcheck@latest
 
+# Docker (linux/amd64 and linux/arm64)
+docker run --rm ghcr.io/allan-nava/segcheck:latest check https://cdn.example/master.m3u8
+
 # Or grab a binary from the releases page
 ```
+
+The image is the static binary and a CA bundle: no shell, no package manager,
+non-root, and the same build as the release archive for that version.
+[docs/running-in-containers.md](docs/running-in-containers.md) has Compose and
+Kubernetes `CronJob` recipes.
 
 ## Usage
 
@@ -134,8 +148,10 @@ which is the single source of truth for planned work: every item has a stable
 `SC-n` id that commits and CHANGELOG entries reference.
 
 In flight for **v0.2.0**: HEVC coded resolution, keyframe alignment, frame rate,
-`sidx`/`SegmentBase`, AV1/VP9, parser fuzzing. After that: audio, captions,
-subtitles and SCTE-35 (v0.3.0), then the live edge and CDN behaviour (v0.4.0).
+`sidx`/`SegmentBase`, AV1/VP9, parser fuzzing. For **v0.3.0**: audio, captions,
+subtitles and SCTE-35, plus a `FROM scratch` container image with multi-arch
+GHCR publication and signed artefacts. Then the live edge and CDN behaviour
+(v0.4.0).
 
 ## License
 

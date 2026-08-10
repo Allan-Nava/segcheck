@@ -71,9 +71,17 @@ func cleanSegments(count int, codedW, codedH int) []segSpec {
 // TS segments themselves.
 func newHLSOrigin(t *testing.T, variants []variantSpec) *httptest.Server {
 	t.Helper()
-	mux := http.NewServeMux()
-	srv := httptest.NewServer(mux)
+	srv := httptest.NewServer(hlsOriginHandler(variants))
 	t.Cleanup(srv.Close)
+	return srv
+}
+
+// hlsOriginHandler is the origin itself, separate from the loopback server the
+// unit tests wrap it in: the container smoke test (docker_test.go) has to serve
+// the same stream on an address a container can reach, which httptest's
+// 127.0.0.1 listener is not.
+func hlsOriginHandler(variants []variantSpec) *http.ServeMux {
+	mux := http.NewServeMux()
 
 	mux.HandleFunc("/master.m3u8", func(w http.ResponseWriter, _ *http.Request) {
 		var b strings.Builder
@@ -128,7 +136,7 @@ func newHLSOrigin(t *testing.T, variants []variantSpec) *httptest.Server {
 			})
 		}
 	}
-	return srv
+	return mux
 }
 
 func runOn(t *testing.T, url string) finding.Result {

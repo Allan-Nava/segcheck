@@ -1,0 +1,26 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="segcheck">
+  <defs>
+    <linearGradient id="fbg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0b1120"/>
+      <stop offset="1" stop-color="#111c34"/>
+    </linearGradient>
+    <linearGradient id="fck" x1="41" y1="37" x2="57" y2="19" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#059669"/>
+      <stop offset="1" stop-color="#34d399"/>
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="62" height="62" rx="15" fill="url(#fbg)"/>
+
+  <g fill="#2dd4bf">
+    <rect x="6"  y="16" width="13" height="9" rx="3"/>
+    <rect x="22" y="16" width="13" height="9" rx="3"/>
+    <rect x="6"  y="30" width="13" height="9" rx="3"/>
+  </g>
+  <!-- solid rather than dashed: at 16px a dashed outline is noise, not a gap -->
+  <rect x="22.9" y="30.9" width="11.2" height="7.2" rx="2.2"
+        fill="#f59e0b" fill-opacity="0.14" stroke="#f59e0b" stroke-width="1.8"/>
+
+  <path d="M41 31 L46.5 37 L57 19"
+        fill="none" stroke="url(#fck)" stroke-width="6.5"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

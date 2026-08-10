@@ -1,0 +1,27 @@
+# The image goreleaser publishes. It does not build anything: goreleaser has
+# already cross-compiled the binary for this platform and dropped it in the
+# build context, so building from source here would produce a *different*
+# binary from the one in the release archives.
+#
+# The base differs from the top-level Dockerfile on purpose. That one starts
+# FROM scratch and copies the CA bundle out of the golang build stage, which it
+# has to hand. Here there is no build stage to take one from, and committing a
+# trust store to the repository would mean shipping a snapshot that goes stale
+# between releases. distroless/static:nonroot supplies a maintained bundle, has
+# no shell, and already runs as 65532.
+#
+# Both images answer to the same contract — no shell, non-root, working TLS —
+# and internal/analyze/docker_test.go is that contract. Point it at either:
+#
+#	SEGCHECK_IMAGE=ghcr.io/allan-nava/segcheck:v0.3.0 go test -tags docker ./internal/analyze/
+FROM gcr.io/distroless/static:nonroot
+
+# goreleaser stages each platform's binary under <os>/<arch>/ in the build
+# context and builds one platform at a time, so TARGETPLATFORM is what selects
+# the right one. Copying a bare `segcheck` from the context root fails with
+# "/segcheck: not found" — the binary is never there.
+ARG TARGETPLATFORM
+COPY ${TARGETPLATFORM}/segcheck /segcheck
+
+ENTRYPOINT ["/segcheck"]
+CMD ["--help"]

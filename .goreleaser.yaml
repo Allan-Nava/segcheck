@@ -34,10 +34,70 @@ archives:
 checksum:
   name_template: "checksums.txt"
 
+# SC-44: one multi-arch image, so `docker run ghcr.io/allan-nava/segcheck:vX.Y.Z`
+# resolves on amd64 and arm64 alike. The binaries are the ones goreleaser already
+# built for the archives — Dockerfile.release only packages them, so an image and
+# its archive can never be different builds.
+#
+# dockers_v2 rather than dockers/docker_manifests: those are deprecated and
+# `goreleaser check` fails on them, which would turn the first release tag into
+# the moment we found out.
+dockers_v2:
+  - id: segcheck
+    images:
+      - "ghcr.io/allan-nava/segcheck"
+    tags:
+      - "{{ .Version }}"
+      # :latest stays where it is when the tag is a prerelease.
+      - '{{ if not .Prerelease }}latest{{ end }}'
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    dockerfile: Dockerfile.release
+    labels:
+      org.opencontainers.image.title: segcheck
+      org.opencontainers.image.description: Check what HLS/DASH segments really contain, not just what the manifest says
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.created: "{{ .Date }}"
+      org.opencontainers.image.source: https://github.com/Allan-Nava/segcheck
+      org.opencontainers.image.licenses: PolyForm-Noncommercial-1.0.0
+
+# SC-47: "zero dependencies" should be something a consumer can verify rather
+# than something the README asserts, and a signature is what lets someone who
+# did not build it trust the binary they downloaded.
+sboms:
+  - id: archive
+    artifacts: archive
+
+signs:
+  - id: checksum
+    cmd: cosign
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
+    output: true
+
+docker_signs:
+  - id: images
+    cmd: cosign
+    args: ["sign", "--yes", "${artifact}"]
+    artifacts: manifests
+    output: true
+
 # SC-32: the tap upload stays off until HOMEBREW_TAP_TOKEN exists on this repo.
-# Everything else about the formula is ready, so enabling it is a one-line change.
-brews:
+# Everything else is ready, so enabling it is a one-line change.
+#
+# A cask, not a formula: `brews` is deprecated, and Homebrew wants a cask for a
+# prebuilt binary anyway — a formula describes something built from source.
+homebrew_casks:
   - name: segcheck
+    binaries: [segcheck]
     repository:
       owner: Allan-Nava
       name: homebrew-tap
@@ -46,8 +106,6 @@ brews:
     homepage: "https://github.com/Allan-Nava/segcheck"
     description: "Check what HLS/DASH segments really contain, not just what the manifest says"
     license: "PolyForm-Noncommercial-1.0.0"
-    test: |
-      system "#{bin}/segcheck", "version"
 
 changelog:
   # CHANGELOG.md is written by hand and is the source of truth; the release notes

@@ -200,6 +200,56 @@ stream the way a viewer receives it".
   dependency is not worth it, so the subset is deliberately small.
   <!-- sc: prio=low size=M labels=cli -->
 
+## M8 — Container image and supply chain <!-- ms: target=v0.3.0 phase=next -->
+
+A distribution milestone, not a checking one: it does not widen what segcheck
+looks at, it widens where it can run — a CI runner with no Go toolchain, a
+Kubernetes `CronJob`, an operator who has Docker and nothing else. The
+zero-dependency static binary is what makes a `FROM scratch` image honest:
+nothing to install, nothing to patch, nothing to CVE-scan but our own code.
+Targeted at v0.3.0 rather than parked at the end because it is orthogonal to the
+checks roadmap and blocks nothing.
+
+- [x] **SC-45 — Image smoke test, written first**: `internal/analyze/docker_test.go`
+  behind the `docker` build tag, run by its own CI job. It asserts the version is
+  stamped, that no shell is reachable, that the image ships a CA bundle, that it
+  does not run as root, and that a containerised run finds a planted continuity
+  gap in a live origin while still exiting 0. Written and watched fail before
+  SC-43 existed; the trust-store assertion was then checked against a
+  deliberately bundle-less image to confirm it can fail.
+  <!-- sc: prio=high size=M labels=tests,release ver=unreleased -->
+- [x] **SC-43 — Dockerfile (scratch, non-root)**: multi-stage, building with
+  `CGO_ENABLED=0 -trimpath` and the same `-X main.version` ldflag goreleaser
+  uses, so the image and the released binary can never report different
+  versions. Final stage `FROM scratch` with the binary, `USER 65532:65532`, and
+  `/etc/ssl/certs/ca-certificates.crt` copied from the builder — **the CA bundle
+  is the trap**: without it every `https://` manifest fails TLS inside the
+  container, and the failure reads like an origin defect rather than a packaging
+  one. <!-- sc: prio=high size=M labels=release,project ver=unreleased -->
+- [x] **SC-44 — Multi-arch image on GHCR**: `linux/amd64` and `linux/arm64` from
+  one `dockers_v2` entry (the older `dockers` + `docker_manifests` pair is
+  deprecated and fails `goreleaser check`), packaging the binaries goreleaser
+  already built rather than rebuilding them, tagged `vX.Y.Z` plus a `latest`
+  that stays put on a prerelease. `Dockerfile.release` copies from
+  `${TARGETPLATFORM}/segcheck` because that is where the binary is staged.
+  Verified by a full `--snapshot` run; the push itself is first exercised at the
+  next tag, and the release workflow re-runs SC-45's test against the published
+  image. <!-- sc: prio=high size=M labels=release ver=unreleased -->
+- [ ] **SC-47 — SBOM and signed artefacts**: goreleaser `sboms` and keyless
+  cosign signing for the checksums and the image manifest are configured, and
+  the release workflow installs syft and cosign with the `id-token: write`
+  permission the keyless flow needs. **Not verified**: neither step can run
+  without a real tag, and syft is not installed locally. Close this once a
+  tagged release has produced an SBOM and a verifiable signature —
+  `cosign verify` against the published image is the acceptance test.
+  <!-- sc: prio=med size=M labels=release -->
+- [x] **SC-46 — Scheduled-run recipes**: `docs/running-in-containers.md` — a
+  Compose service and a Kubernetes `CronJob`, with `backoffLimit`, a locked-down
+  `securityContext`, a pinned tag, the egress cost of a schedule, and why
+  `--exit-on` must stay off in a `CronJob` (a non-zero exit would make the
+  scheduler retry a run that worked).
+  <!-- sc: prio=med size=S labels=docs,delivery ver=unreleased -->
+
 ## M7 — Project and release <!-- ms: target=ongoing phase=ongoing -->
 
 - [x] **SC-34 — Backlog and roadmap tooling**: `scripts/backlog.sh` lints this
@@ -211,9 +261,28 @@ stream the way a viewer receives it".
   the built binary against each and fails on anything above OK. Every false
   positive so far was found this way and not by the unit tests, so the step
   should not stay manual. <!-- sc: prio=high size=S labels=tests,release -->
+- [ ] **SC-48 — Coverage ratchet**: CI already prints total coverage; make it
+  fail when a commit lowers it. Test-first only holds if something notices when
+  it did not happen — a check merged without its test should show up in the
+  build, not in a review three weeks later.
+  <!-- sc: prio=med size=S labels=tests -->
 - [ ] **SC-32 — goreleaser + Homebrew tap**: wire the tap upload once the
   release secret exists (the config is in place with the tap step disabled).
   <!-- sc: prio=med size=S labels=release -->
-- [ ] **SC-33 — Docs site**: GitHub Pages with a page per check and CI recipes,
-  in the shape of the checkfleet site.
+- [x] **SC-33 — Docs site**: GitHub Pages served from `docs/`, in the shape of
+  the checkfleet site — one self-contained static page (hero and sample output,
+  the manifest-claims table, the check matrix with worst status, install, flags,
+  CI recipes, sampling cost, limits, roadmap) plus the deploy workflow. No
+  Jekyll, no theme gem, no external request at render time, in keeping with the
+  zero-dependency rule. <!-- sc: prio=low size=M labels=docs ver=unreleased -->
+- [x] **SC-50 — Brand assets**: logo, favicon, horizontal wordmark and OG card,
+  all hand-written SVG in `docs/assets/` with PNG renders for the consumers that
+  cannot take vectors. The mark is the rendition ladder with one segment the
+  media does not have, flagged, and the verdict beside it — the product's one
+  sentence in a 32px square. Same plate and palette as checkfleet, so the two
+  read as siblings. <!-- sc: prio=low size=S labels=docs ver=unreleased -->
+- [ ] **SC-49 — Per-check reference pages**: one page per check behind the
+  matrix — what it measures, how the threshold is applied, what a finding means
+  for a viewer and what to do about it. The single page carries the summary
+  well; it cannot carry that depth for thirteen checks.
   <!-- sc: prio=low size=M labels=docs -->

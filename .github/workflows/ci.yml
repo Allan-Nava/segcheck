@@ -60,6 +60,34 @@ jobs:
             exit 1
           fi
 
+  # SC-45: the image is part of how segcheck is delivered, so it gets tested
+  # like anything else. An image that cannot reach an origin over TLS, or that
+  # ships a shell, or that runs as root, is a defect even when every unit test
+  # is green — and none of those show up in `go test ./...`.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: Build the image
+        run: docker build -t segcheck:test --build-arg VERSION=ci-${{ github.sha }} .
+
+      - name: Image smoke test
+        env:
+          SEGCHECK_IMAGE: segcheck:test
+        run: go test -tags docker -run TestDockerImage ./internal/analyze/ -v
+
+      # A release config that only gets validated when a tag is pushed is a
+      # config that fails at the worst moment. `check` also fails on deprecated
+      # properties, which is how they get migrated on a normal PR instead.
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: check
+
   # BACKLOG.md is the single source of truth for planned work and ROADMAP.md is
   # generated from it. A stale roadmap is a lie about what is planned, so the
   # generator runs here rather than on trust.

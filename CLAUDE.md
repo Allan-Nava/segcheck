@@ -38,6 +38,12 @@ AGENTS.md wins and this file gets fixed.
   TODO comment. After editing it, run `scripts/backlog.sh roadmap` and commit the
   regenerated `ROADMAP.md`, or CI fails. Commits and CHANGELOG entries reference
   the id.
+- **Test first, always.** The failing test lands before the implementation —
+  red, green, refactor, no exceptions for "small" changes. A test written
+  afterwards asserts what the code does instead of what the stream means, which
+  is how a check ends up passing on media it was meant to flag. Write the
+  `mediatest` builder and the failing assertion, run it, watch it fail for the
+  right reason, then write the parser or the check.
 - **Align everything**: a new or changed check must land in the same commit as
   its `README.md` table row, its `--help` text, its tests, the `BACKLOG.md` tick
   and the `CHANGELOG.md` line. A README that describes a check that behaves
@@ -51,9 +57,11 @@ AGENTS.md wins and this file gets fixed.
 
 1. **Backlog first**: the item exists in `BACKLOG.md` with an `SC-n`, a
    milestone, `prio`, `size` and `labels`. Regenerate `ROADMAP.md`.
-2. **Fixture before code**: `internal/media/mediatest` *builds* a segment with
-   the defect planted and known-by-construction timestamps. No binary fixtures
-   ever enter this repository.
+2. **Red first**: `internal/media/mediatest` *builds* a segment with the defect
+   planted and known-by-construction timestamps, the assertion is written
+   against it, and the test is **run and seen failing for the right reason**
+   before any production code exists. No binary fixtures ever enter this
+   repository.
 3. **Parser change with a round trip**: `mediatest.SPS` is the writer and
    `media.ParseSPS` the reader — the round trip is what catches bit-level
    mistakes. New bitstream readers get the same treatment.
@@ -148,6 +156,11 @@ never by deleting it and reusing the number.
   asserted against; start here before touching a parser
 - `internal/analyze/checks.go` — every check lives here; `analyze.go` does the
   manifest load, rendition pick, segment fan-out
+- `docs/index.html` — the GitHub Pages site
+  (<https://allan-nava.github.io/segcheck/>), one self-contained static page
+  with inline CSS/JS and no external request at render time; brand assets are
+  hand-written SVG in `docs/assets/`, PNGs are renders of them. A check, flag or
+  default that changes moves the page in the same commit as the README row
 - `.goreleaser.yaml` — release build; the Homebrew tap step is present but
   disabled until the secret exists (SC-32)
 - Related: [checkfleet](https://github.com/Allan-Nava/checkfleet) — the

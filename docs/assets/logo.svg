@@ -1,0 +1,46 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="segcheck logo">
+  <defs>
+    <linearGradient id="sc-bg" x1="64" y1="24" x2="448" y2="488" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#17274a"/>
+      <stop offset="0.55" stop-color="#0e1830"/>
+      <stop offset="1" stop-color="#0a1020"/>
+    </linearGradient>
+    <linearGradient id="sc-rim" x1="256" y1="8" x2="256" y2="248" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="sc-seg" x1="60" y1="144" x2="248" y2="368" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5eead4"/>
+      <stop offset="1" stop-color="#2dd4bf"/>
+    </linearGradient>
+    <linearGradient id="sc-check" x1="280" y1="324" x2="428" y2="204" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#059669"/>
+      <stop offset="0.55" stop-color="#10b981"/>
+      <stop offset="1" stop-color="#34d399"/>
+    </linearGradient>
+  </defs>
+
+  <!-- app-icon plate: dark slate with a top rim light, same family as checkfleet -->
+  <rect x="8" y="8" width="496" height="496" rx="116" fill="url(#sc-bg)"/>
+  <rect x="8" y="8" width="496" height="496" rx="116" fill="url(#sc-rim)"/>
+  <rect x="8.75" y="8.75" width="494.5" height="494.5" rx="115.25" fill="none" stroke="#ffffff" stroke-opacity="0.09" stroke-width="1.5"/>
+
+  <!-- the ladder: three rungs of media segments on a shared timeline -->
+  <g fill="url(#sc-seg)">
+    <rect x="60"  y="144" width="88" height="52" rx="16"/>
+    <rect x="160" y="144" width="88" height="52" rx="16"/>
+    <rect x="60"  y="230" width="88" height="52" rx="16"/>
+    <rect x="60"  y="316" width="88" height="52" rx="16"/>
+    <rect x="160" y="316" width="88" height="52" rx="16"/>
+  </g>
+
+  <!-- the defect the manifest cannot express: a segment the media does not have -->
+  <rect x="163.5" y="233.5" width="81" height="45" rx="13"
+        fill="none" stroke="#f59e0b" stroke-width="7" stroke-linecap="round"
+        stroke-dasharray="20 14"/>
+
+  <!-- the verdict -->
+  <path d="M280 272 L328 324 L428 204"
+        fill="none" stroke="url(#sc-check)" stroke-width="48"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

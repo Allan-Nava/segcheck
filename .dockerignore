@@ -1,0 +1,20 @@
+# The build stage compiles ./cmd/segcheck from source, so the context needs the
+# Go tree and nothing else. Everything below either bloats the context or would
+# invalidate the layer cache on changes that cannot affect the binary.
+.git
+.github
+.claude
+graphify-out
+dist
+scripts
+docs
+*.md
+Dockerfile*
+.dockerignore
+.goreleaser.yaml
+.gitignore
+segcheck
+cover.out
+coverage.*
+*.report.md
+*.report.json
