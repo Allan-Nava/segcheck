@@ -5,7 +5,11 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.1] - 2026-08-10
+
+How segcheck is built, tested and delivered. No new checks, parsers or flags —
+the CLI behaves exactly as 0.1.0 did — so `v0.2.0` stays reserved for M3, where
+the backlog has promised it.
 
 ### Added
 
@@ -167,4 +171,5 @@ compares the media against the manifest's claims.
   stream: all three come back clean, with durations matching to +0.00% and coded
   resolutions read from the bitstream.
 
+[0.1.1]: https://github.com/Allan-Nava/segcheck/releases/tag/v0.1.1
 [0.1.0]: https://github.com/Allan-Nava/segcheck/releases/tag/v0.1.0

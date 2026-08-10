@@ -292,7 +292,7 @@ manifest-only reader would call fine.
   are reported as player bugs for weeks before anyone measures the sheet.
   <!-- sc: prio=low size=M labels=check,parser -->
 
-## M8 — Container image and supply chain <!-- ms: target=v0.3.0 phase=next -->
+## M8 — Container image and supply chain <!-- ms: target=v0.1.1 phase=shipped -->
 
 A distribution milestone, not a checking one: it does not widen what segcheck
 looks at, it widens where it can run — a CI runner with no Go toolchain, a
@@ -309,7 +309,7 @@ checks roadmap and blocks nothing.
   gap in a live origin while still exiting 0. Written and watched fail before
   SC-43 existed; the trust-store assertion was then checked against a
   deliberately bundle-less image to confirm it can fail.
-  <!-- sc: prio=high size=M labels=tests,release ver=unreleased -->
+  <!-- sc: prio=high size=M labels=tests,release ver=0.1.1 -->
 - [x] **SC-43 — Dockerfile (scratch, non-root)**: multi-stage, building with
   `CGO_ENABLED=0 -trimpath` and the same `-X main.version` ldflag goreleaser
   uses, so the image and the released binary can never report different
@@ -317,7 +317,7 @@ checks roadmap and blocks nothing.
   `/etc/ssl/certs/ca-certificates.crt` copied from the builder — **the CA bundle
   is the trap**: without it every `https://` manifest fails TLS inside the
   container, and the failure reads like an origin defect rather than a packaging
-  one. <!-- sc: prio=high size=M labels=release,project ver=unreleased -->
+  one. <!-- sc: prio=high size=M labels=release,project ver=0.1.1 -->
 - [x] **SC-44 — Multi-arch image on GHCR**: `linux/amd64` and `linux/arm64` from
   one `dockers_v2` entry (the older `dockers` + `docker_manifests` pair is
   deprecated and fails `goreleaser check`), packaging the binaries goreleaser
@@ -326,7 +326,7 @@ checks roadmap and blocks nothing.
   `${TARGETPLATFORM}/segcheck` because that is where the binary is staged.
   Verified by a full `--snapshot` run; the push itself is first exercised at the
   next tag, and the release workflow re-runs SC-45's test against the published
-  image. <!-- sc: prio=high size=M labels=release ver=unreleased -->
+  image. <!-- sc: prio=high size=M labels=release ver=0.1.1 -->
 - [x] **SC-56 — `:edge` image from `main`**: `.github/workflows/docker.yml`
   publishes `ghcr.io/allan-nava/segcheck:edge` and `:sha-<commit>` on every push
   to `main`, so the state of main is runnable without waiting for a tag and a
@@ -336,28 +336,20 @@ checks roadmap and blocks nothing.
   the archives. The `Dockerfile` build stage is pinned to `$BUILDPLATFORM` with
   `GOOS`/`GOARCH` from `TARGETOS`/`TARGETARCH`, so multi-arch cross-compiles
   instead of dragging a `go build` through QEMU.
-  <!-- sc: prio=high size=S labels=release ver=unreleased -->
-- [ ] **SC-47 — SBOM and signed artefacts**: goreleaser `sboms` and keyless
-  cosign signing for the checksums and the image manifest are configured, and
-  the release workflow installs syft and cosign with the `id-token: write`
-  permission the keyless flow needs. **Not verified**: neither step can run
-  without a real tag, and syft is not installed locally. Close this once a
-  tagged release has produced an SBOM and a verifiable signature —
-  `cosign verify` against the published image is the acceptance test.
-  <!-- sc: prio=med size=M labels=release -->
+  <!-- sc: prio=high size=S labels=release ver=0.1.1 -->
 - [x] **SC-46 — Scheduled-run recipes**: `docs/running-in-containers.md` — a
   Compose service and a Kubernetes `CronJob`, with `backoffLimit`, a locked-down
   `securityContext`, a pinned tag, the egress cost of a schedule, and why
   `--exit-on` must stay off in a `CronJob` (a non-zero exit would make the
   scheduler retry a run that worked).
-  <!-- sc: prio=med size=S labels=docs,delivery ver=unreleased -->
+  <!-- sc: prio=med size=S labels=docs,delivery ver=0.1.1 -->
 
 ## M7 — Project and release <!-- ms: target=ongoing phase=ongoing -->
 
 - [x] **SC-34 — Backlog and roadmap tooling**: `scripts/backlog.sh` lints this
   file and regenerates [ROADMAP.md](ROADMAP.md) from it, with a CI gate that
   fails on a stale roadmap or a malformed item. Zero-dep, POSIX sh and awk.
-  <!-- sc: prio=med size=M labels=project ver=unreleased -->
+  <!-- sc: prio=med size=M labels=project ver=0.1.1 -->
 - [ ] **SC-36 — Real-stream smoke suite**: a script with the reference streams
   from AGENTS.md (Apple fMP4, Apple MPEG-TS, a public DASH manifest) that runs
   the built binary against each and fails on anything above OK. Every false
@@ -371,7 +363,7 @@ checks roadmap and blocks nothing.
   `segcheck/<version>` User-Agent, custom headers, `Range` sent only when asked,
   a 404 whose body and status still reach the caller, the timeout, context
   cancellation, `ContentType` parameter stripping and `CacheStatus` precedence.
-  <!-- sc: prio=high size=M labels=tests ver=unreleased -->
+  <!-- sc: prio=high size=M labels=tests ver=0.1.1 -->
 - [x] **SC-58 — `cmd/segcheck` tests** (was 0.0% of statements, now 90.1%).
   `main` is now `os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))`, and the flag
   set moved from `ExitOnError` to `ContinueOnError` — a flag package that calls
@@ -382,7 +374,15 @@ checks roadmap and blocks nothing.
   what is wrong. `parseInterspersed` is covered by comparing flags before and
   after the URL — verified by mutation, since a regression there silently
   ignores every flag after the URL while the run still succeeds.
-  <!-- sc: prio=high size=M labels=tests,cli ver=unreleased -->
+  <!-- sc: prio=high size=M labels=tests,cli ver=0.1.1 -->
+- [ ] **SC-47 — SBOM and signed artefacts**: goreleaser `sboms` and keyless
+  cosign signing for the checksums and the image manifest are configured, and
+  the release workflow installs syft and cosign with the `id-token: write`
+  permission the keyless flow needs. **Not verified**: neither step can run
+  without a real tag, and syft is not installed locally. It lives here rather
+  than in M8 because it is a release-process chore that only a published release
+  can close — `cosign verify` against the published image is the acceptance
+  test. <!-- sc: prio=med size=M labels=release -->
 - [ ] **SC-65 — The published cask actually installs**: two questions SC-32
   could not answer before a cask existed. (1) The binary is unsigned and
   unnotarized — if Gatekeeper quarantines it, `brew install --cask` succeeds and
@@ -416,19 +416,19 @@ checks roadmap and blocks nothing.
   present on the repo, and a `--snapshot` run still generates the cask without
   publishing. The push itself is first exercised at the next tag. Fine-grained
   PATs expire, so a release after that date will publish its archives and image
-  and then fail at this step. <!-- sc: prio=med size=S labels=release ver=unreleased -->
+  and then fail at this step. <!-- sc: prio=med size=S labels=release ver=0.1.1 -->
 - [x] **SC-33 — Docs site**: GitHub Pages served from `docs/`, in the shape of
   the checkfleet site — one self-contained static page (hero and sample output,
   the manifest-claims table, the check matrix with worst status, install, flags,
   CI recipes, sampling cost, limits, roadmap) plus the deploy workflow. No
   Jekyll, no theme gem, no external request at render time, in keeping with the
-  zero-dependency rule. <!-- sc: prio=low size=M labels=docs ver=unreleased -->
+  zero-dependency rule. <!-- sc: prio=low size=M labels=docs ver=0.1.1 -->
 - [x] **SC-50 — Brand assets**: logo, favicon, horizontal wordmark and OG card,
   all hand-written SVG in `docs/assets/` with PNG renders for the consumers that
   cannot take vectors. The mark is the rendition ladder with one segment the
   media does not have, flagged, and the verdict beside it — the product's one
   sentence in a 32px square. Same plate and palette as checkfleet, so the two
-  read as siblings. <!-- sc: prio=low size=S labels=docs ver=unreleased -->
+  read as siblings. <!-- sc: prio=low size=S labels=docs ver=0.1.1 -->
 - [ ] **SC-49 — Per-check reference pages**: one page per check behind the
   matrix — what it measures, how the threshold is applied, what a finding means
   for a viewer and what to do about it. The single page carries the summary

@@ -20,8 +20,8 @@
 | **M9** — Wallclock and DVR correctness | `v0.4.0` | later | `..........` 0% | 5 | 0 |
 | **M6** — Integration | `v0.5.0` | later | `..........` 0% | 6 | 0 |
 | **M10** — Authoring-spec conformance | `v0.5.0` | later | `..........` 0% | 5 | 0 |
-| **M8** — Container image and supply chain | `v0.3.0` | next | `########..` 83% | 1 | 5 |
-| **M7** — Project and release | `ongoing` | ongoing | `#####.....` 55% | 5 | 6 |
+| **M8** — Container image and supply chain | `v0.1.1` | shipped | `##########` 100% | 0 | 5 |
+| **M7** — Project and release | `ongoing` | ongoing | `#####.....` 50% | 6 | 6 |
 
 ## Next up
 
@@ -144,34 +144,34 @@ Target `v0.5.0` · later · 5 open · 0 shipped · `..........` 0%
 
 ### M8 — Container image and supply chain
 
-Target `v0.3.0` · next · 1 open · 5 shipped · `########..` 83%
+Target `v0.1.1` · shipped · 0 open · 5 shipped · `##########` 100%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
-| **SC-47** — SBOM and signed artefacts | med | M | release | open |
-| **SC-43** — Dockerfile (scratch, non-root) | high | M | release,project | done, unreleased |
-| **SC-44** — Multi-arch image on GHCR | high | M | release | done, unreleased |
-| **SC-45** — Image smoke test, written first | high | M | tests,release | done, unreleased |
-| **SC-56** — `:edge` image from `main` | high | S | release | done, unreleased |
-| **SC-46** — Scheduled-run recipes | med | S | docs,delivery | done, unreleased |
+| **SC-43** — Dockerfile (scratch, non-root) | high | M | release,project | shipped `0.1.1` |
+| **SC-44** — Multi-arch image on GHCR | high | M | release | shipped `0.1.1` |
+| **SC-45** — Image smoke test, written first | high | M | tests,release | shipped `0.1.1` |
+| **SC-56** — `:edge` image from `main` | high | S | release | shipped `0.1.1` |
+| **SC-46** — Scheduled-run recipes | med | S | docs,delivery | shipped `0.1.1` |
 
 ### M7 — Project and release
 
-Target `ongoing` · ongoing · 5 open · 6 shipped · `#####.....` 55%
+Target `ongoing` · ongoing · 6 open · 6 shipped · `#####.....` 50%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
 | **SC-36** — Real-stream smoke suite | high | S | tests,release | open |
+| **SC-47** — SBOM and signed artefacts | med | M | release | open |
 | **SC-48** — Coverage ratchet | med | S | tests | open |
 | **SC-64** — `scripts/backlog.sh` has no tests | med | S | tests,project | open |
 | **SC-65** — The published cask actually installs | med | S | release,docs | open |
 | **SC-49** — Per-check reference pages | low | M | docs | open |
-| **SC-57** — `internal/fetch` tests | high | M | tests | done, unreleased |
-| **SC-58** — `cmd/segcheck` tests | high | M | tests,cli | done, unreleased |
-| **SC-32** — Homebrew tap upload | med | S | release | done, unreleased |
-| **SC-34** — Backlog and roadmap tooling | med | M | project | done, unreleased |
-| **SC-33** — Docs site | low | M | docs | done, unreleased |
-| **SC-50** — Brand assets | low | S | docs | done, unreleased |
+| **SC-57** — `internal/fetch` tests | high | M | tests | shipped `0.1.1` |
+| **SC-58** — `cmd/segcheck` tests | high | M | tests,cli | shipped `0.1.1` |
+| **SC-32** — Homebrew tap upload | med | S | release | shipped `0.1.1` |
+| **SC-34** — Backlog and roadmap tooling | med | M | project | shipped `0.1.1` |
+| **SC-33** — Docs site | low | M | docs | shipped `0.1.1` |
+| **SC-50** — Brand assets | low | S | docs | shipped `0.1.1` |
 
 ## By label
 
