@@ -176,6 +176,51 @@ stream the way a viewer receives it".
   at all, reported once per host rather than per segment.
   <!-- sc: prio=low size=S labels=delivery,check -->
 
+## M9 — Wallclock and DVR correctness <!-- ms: target=v0.4.0 phase=later -->
+
+A manifest does not only claim structure, it claims **time in the real world**:
+this segment starts at 14:03:22 UTC, this window is sixty seconds deep, this
+stream is available now. The media carries the only evidence that can arbitrate
+those claims, and nothing in M1–M8 compares the two — every check so far reasons
+about a timeline relative to itself.
+
+These are the defects that survive a clean run: the stream is perfectly
+continuous, every rung codes what it promises, and a seek still lands in the
+wrong place, an ad splices two frames late, or a scrub back into the DVR window
+404s. Shares the live-edge machinery with M5, so the two ship together.
+
+- [ ] **SC-51 — `EXT-X-PROGRAM-DATE-TIME` against the media**: the manifest
+  claims segment N starts at wallclock T while the media says it starts at PTS
+  P. Check that the mapping is monotonic, that it stays consistent from segment
+  to segment, and above all that it is **the same across renditions** — a ladder
+  whose rungs disagree about PDT makes one seek land in two different places
+  depending on which rung the player happens to be on. PDT is parsed today
+  (SC-4) and compared against nothing.
+  <!-- sc: prio=high size=M labels=check -->
+- [ ] **SC-52 — DASH `availabilityStartTime` and `UTCTiming`**: is the segment
+  the MPD says is available right now actually fetchable, and is the live edge
+  where the clock says it is? Clock skew between packager and client is the
+  classic cause of 404s at the live edge that get investigated as CDN faults for
+  a day. Requires honouring the `UTCTiming` element rather than assuming the
+  local clock, which is itself the thing under test.
+  <!-- sc: prio=high size=M labels=check,parser -->
+- [ ] **SC-53 — The DVR window is real**: the oldest segment inside
+  `timeShiftBufferDepth` — or inside the media playlist's own span — must still
+  fetch and still parse. A DVR window that lies is a seek that fails, and it
+  only ever shows up when a viewer scrubs back, which is to say in a complaint
+  rather than in monitoring. <!-- sc: prio=high size=M labels=check,delivery -->
+- [ ] **SC-54 — Discontinuity integrity**: `EXT-X-DISCONTINUITY-SEQUENCE` and
+  DASH period boundaries against the timeline resets the media actually
+  contains. A declared discontinuity with no reset in the media and a reset with
+  nothing declared are opposite bugs that present as the same stall, and the
+  `continuity` check currently trusts the declaration.
+  <!-- sc: prio=med size=M labels=check -->
+- [ ] **SC-55 — Live-edge drift**: over a `--watch` window (SC-25) the edge must
+  advance at 1× real time. Report an edge that drifts against the wallclock,
+  stalls, or moves backwards — the three shapes of a packager losing its clock,
+  none of which a single-shot check can see.
+  <!-- sc: prio=med size=M labels=check,cli -->
+
 ## M6 — Integration <!-- ms: target=v0.5.0 phase=later -->
 
 - [ ] **SC-27 — Prometheus/OTLP output**: the same findings as metrics, so a

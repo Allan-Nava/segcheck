@@ -33,6 +33,15 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   the check-authoring pattern, known traps such as the 33-bit PTS wrap and the
   `(value, false)` protocol, and pointers), with `AGENTS.md` staying canonical.
 
+- **M9 — Wallclock and DVR correctness** (SC-51 … SC-55), targeted at v0.4.0
+  alongside the live milestone it shares machinery with: `EXT-X-PROGRAM-DATE-TIME`
+  checked against the media timestamps and across renditions, DASH
+  `availabilityStartTime`/`UTCTiming` against what is actually fetchable, the
+  DVR window proven to be real, discontinuity declarations checked against the
+  timeline resets the media contains, and live-edge drift over a `--watch`
+  window. Every check up to now reasons about a timeline relative to itself;
+  this milestone is where the manifest's claims about *real-world* time get
+  arbitrated by the media.
 - **Container image** (SC-43): `Dockerfile` builds a `FROM scratch` image
   carrying the static binary, a CA bundle and nothing else, running as
   `65532:65532`. `--build-arg VERSION` stamps the same `main.version` goreleaser

@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**50 items · 21 shipped · 29 open · 8 milestones.**
+**55 items · 21 shipped · 34 open · 9 milestones.**
 
 ## At a glance
 
@@ -17,6 +17,7 @@
 | **M3** — Codec and timing depth | `v0.2.0` | **now** | `..........` 0% | 6 | 0 |
 | **M4** — Everything that is not the video track | `v0.3.0` | next | `..........` 0% | 6 | 0 |
 | **M5** — Live and delivery | `v0.4.0` | later | `..........` 0% | 6 | 0 |
+| **M9** — Wallclock and DVR correctness | `v0.4.0` | later | `..........` 0% | 5 | 0 |
 | **M6** — Integration | `v0.5.0` | later | `..........` 0% | 6 | 0 |
 | **M8** — Container image and supply chain | `v0.3.0` | next | `########..` 80% | 1 | 4 |
 | **M7** — Project and release | `ongoing` | ongoing | `####......` 43% | 4 | 3 |
@@ -103,6 +104,18 @@ Target `v0.4.0` · later · 6 open · 0 shipped · `..........` 0%
 | **SC-40** — Multi-period DASH | med | L | check,parser | open |
 | **SC-26** — Byte-range support probe | low | S | delivery,check | open |
 
+### M9 — Wallclock and DVR correctness
+
+Target `v0.4.0` · later · 5 open · 0 shipped · `..........` 0%
+
+| Item | Priority | Size | Labels | Status |
+|---|---|---|---|---|
+| **SC-51** — `EXT-X-PROGRAM-DATE-TIME` against the media | high | M | check | open |
+| **SC-52** — DASH `availabilityStartTime` and `UTCTiming` | high | M | check,parser | open |
+| **SC-53** — The DVR window is real | high | M | check,delivery | open |
+| **SC-54** — Discontinuity integrity | med | M | check | open |
+| **SC-55** — Live-edge drift | med | M | check,cli | open |
+
 ### M6 — Integration
 
 Target `v0.5.0` · later · 6 open · 0 shipped · `..........` 0%
@@ -146,11 +159,11 @@ Target `ongoing` · ongoing · 4 open · 3 shipped · `####......` 43%
 
 | Label | Items | Open |
 |---|---|---|
-| `parser` | 18 | 12 |
-| `check` | 18 | 11 |
-| `cli` | 5 | 5 |
+| `check` | 23 | 16 |
+| `parser` | 19 | 13 |
+| `cli` | 6 | 6 |
+| `delivery` | 5 | 4 |
 | `integration` | 4 | 4 |
-| `delivery` | 4 | 3 |
 | `output` | 4 | 3 |
 | `release` | 6 | 3 |
 | `tests` | 4 | 3 |

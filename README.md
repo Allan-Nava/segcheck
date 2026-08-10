@@ -150,8 +150,9 @@ which is the single source of truth for planned work: every item has a stable
 In flight for **v0.2.0**: HEVC coded resolution, keyframe alignment, frame rate,
 `sidx`/`SegmentBase`, AV1/VP9, parser fuzzing. For **v0.3.0**: audio, captions,
 subtitles and SCTE-35, plus a `FROM scratch` container image with multi-arch
-GHCR publication and signed artefacts. Then the live edge and CDN behaviour
-(v0.4.0).
+GHCR publication and signed artefacts. For **v0.4.0**: the live edge and CDN
+behaviour, and wallclock correctness — `EXT-X-PROGRAM-DATE-TIME` and the DVR
+window checked against the media rather than taken at their word.
 
 ## License
 
