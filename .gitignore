@@ -15,3 +15,12 @@ coverage.*
 # Local scratch: reports produced by running the tool in-tree
 *.report.md
 *.report.json
+
+# graphify knowledge graph (Claude Code skill). graph.json / GRAPH_REPORT.md /
+# graph.html are regenerable artefacts — `graphify update .` rebuilds them from
+# the sources, so they are not committed.
+graphify-out/
+
+# graphify writes machine-specific absolute paths into its hook commands, so the
+# generated settings stay local.
+.claude/settings.json
