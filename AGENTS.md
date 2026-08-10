@@ -1,7 +1,9 @@
 # AGENTS.md — segcheck
 
-Working rules for this repository. `CLAUDE.md` points here; this file is the
-single copy.
+Working rules for this repository, for any agent or tool. This file is
+canonical: [CLAUDE.md](CLAUDE.md) is a denser operating brief over the same
+rules, plus the repo map, the known traps and the backlog tooling. When the two
+disagree, this file wins and CLAUDE.md gets fixed.
 
 ## What this tool is
 
@@ -63,4 +65,18 @@ Changelog). `minor` for new checks, parsers or flags; `patch` for fixes. Never
 
 `BACKLOG.md` is the single source of truth for what is planned, with stable
 `SC-n` ids. New ideas go there rather than into scattered TODO comments, and
-commits reference the id.
+commits reference the id. Ids never change and never get reused: an item is
+retired by being marked done, not by being deleted.
+
+Each item carries a trailing `<!-- sc: prio=… size=… labels=… -->` comment
+(invisible when rendered) and each milestone a `<!-- ms: target=… phase=… -->`.
+`ROADMAP.md` is **generated** from all of that — never edit it by hand:
+
+```sh
+scripts/backlog.sh lint      # ids, metadata, milestones
+scripts/backlog.sh roadmap   # regenerate ROADMAP.md — commit the result
+scripts/backlog.sh next      # what to pick up
+```
+
+CI runs `lint` and `check` (roadmap freshness), so a backlog edit that skips the
+regeneration fails the build.

@@ -5,6 +5,28 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Backlog and roadmap tooling** (SC-34): `scripts/backlog.sh` lints
+  `BACKLOG.md` — stable `SC-n` ids with no gaps or duplicates, valid
+  `prio`/`size`/`labels` metadata, shipped items carrying the release that
+  shipped them — and generates `ROADMAP.md` from it, grouped by milestone with
+  progress, a "next up" list and a label index. CI fails on a malformed backlog
+  or a stale roadmap. POSIX sh and awk only, in keeping with the
+  zero-dependency rule.
+- `CLAUDE.md` is now the operating brief for agents (repo map, working rules,
+  the check-authoring pattern, known traps such as the 33-bit PTS wrap and the
+  `(value, false)` protocol, and pointers), with `AGENTS.md` staying canonical.
+
+### Changed
+
+- `BACKLOG.md` reorganised into seven milestones with target releases and
+  phases, and extended with SC-35 … SC-42: parser fuzzing, a real-stream smoke
+  suite, CEA-608/708 captions, subtitle renditions, LL-HLS parts, multi-period
+  DASH, a baseline diff, and AV1/VP9 coded resolution.
+
 ## [0.1.0] - 2026-08-10
 
 First release. `segcheck check <manifest-url>` downloads media segments and

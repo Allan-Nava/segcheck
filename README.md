@@ -126,6 +126,17 @@ go build ./cmd/segcheck
 
 There are no binary fixtures in this repository. `internal/media/mediatest` *builds* MPEG-TS, fMP4 and ADTS segments with known timestamps and resolutions, so every parser is tested against media whose correct answer is known by construction — and the end-to-end tests plant one defect at a time in an `httptest` origin and assert segcheck finds exactly that, and that a clean stream produces nothing above OK.
 
+## Roadmap
+
+[ROADMAP.md](ROADMAP.md) is the milestone view — what is in flight, what is
+next, what is deliberately later. It is generated from [BACKLOG.md](BACKLOG.md),
+which is the single source of truth for planned work: every item has a stable
+`SC-n` id that commits and CHANGELOG entries reference.
+
+In flight for **v0.2.0**: HEVC coded resolution, keyframe alignment, frame rate,
+`sidx`/`SegmentBase`, AV1/VP9, parser fuzzing. After that: audio, captions,
+subtitles and SCTE-35 (v0.3.0), then the live edge and CDN behaviour (v0.4.0).
+
 ## License
 
 [PolyForm Noncommercial 1.0.0](LICENSE) — free for noncommercial use. For commercial use, open an issue.

@@ -60,6 +60,18 @@ jobs:
             exit 1
           fi
 
+  # BACKLOG.md is the single source of truth for planned work and ROADMAP.md is
+  # generated from it. A stale roadmap is a lie about what is planned, so the
+  # generator runs here rather than on trust.
+  backlog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint the backlog
+        run: ./scripts/backlog.sh lint
+      - name: ROADMAP.md is in sync with BACKLOG.md
+        run: ./scripts/backlog.sh check
+
   govulncheck:
     runs-on: ubuntu-latest
     steps:
