@@ -316,6 +316,26 @@ checks roadmap and blocks nothing.
   the built binary against each and fails on anything above OK. Every false
   positive so far was found this way and not by the unit tests, so the step
   should not stay manual. <!-- sc: prio=high size=S labels=tests,release -->
+- [x] **SC-57 — `internal/fetch` tests** (was 0.0% of statements, now 94.1%).
+  The truncation boundary is table-driven across under / exactly-at / one-over /
+  far-over the cap, because `>` versus `>=` there is the difference between an
+  honest ERROR and a confident wrong answer — verified by mutating the
+  comparison and watching the exactly-at-the-cap case fail. Also covers the
+  `segcheck/<version>` User-Agent, custom headers, `Range` sent only when asked,
+  a 404 whose body and status still reach the caller, the timeout, context
+  cancellation, `ContentType` parameter stripping and `CacheStatus` precedence.
+  <!-- sc: prio=high size=M labels=tests ver=unreleased -->
+- [x] **SC-58 — `cmd/segcheck` tests** (was 0.0% of statements, now 90.1%).
+  `main` is now `os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))`, and the flag
+  set moved from `ExitOnError` to `ContinueOnError` — a flag package that calls
+  `os.Exit` itself takes the exit code out of `run`'s hands. The invariant the
+  README leads with is asserted directly: a stream full of BAD findings exits 0,
+  `--exit-on bad` exits 1 on it and 0 on a clean stream, `--exit-on error` does
+  not trip on a BAD one. Ten usage errors are asserted to exit 2 *and* to say
+  what is wrong. `parseInterspersed` is covered by comparing flags before and
+  after the URL — verified by mutation, since a regression there silently
+  ignores every flag after the URL while the run still succeeds.
+  <!-- sc: prio=high size=M labels=tests,cli ver=unreleased -->
 - [ ] **SC-48 — Coverage ratchet**: CI already prints total coverage; make it
   fail when a commit lowers it. Test-first only holds if something notices when
   it did not happen — a check merged without its test should show up in the

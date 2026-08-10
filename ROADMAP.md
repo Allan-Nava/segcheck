@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**56 items · 22 shipped · 34 open · 9 milestones.**
+**58 items · 24 shipped · 34 open · 9 milestones.**
 
 ## At a glance
 
@@ -20,7 +20,7 @@
 | **M9** — Wallclock and DVR correctness | `v0.4.0` | later | `..........` 0% | 5 | 0 |
 | **M6** — Integration | `v0.5.0` | later | `..........` 0% | 6 | 0 |
 | **M8** — Container image and supply chain | `v0.3.0` | next | `########..` 83% | 1 | 5 |
-| **M7** — Project and release | `ongoing` | ongoing | `####......` 43% | 4 | 3 |
+| **M7** — Project and release | `ongoing` | ongoing | `######....` 56% | 4 | 5 |
 
 ## Next up
 
@@ -144,7 +144,7 @@ Target `v0.3.0` · next · 1 open · 5 shipped · `########..` 83%
 
 ### M7 — Project and release
 
-Target `ongoing` · ongoing · 4 open · 3 shipped · `####......` 43%
+Target `ongoing` · ongoing · 4 open · 5 shipped · `######....` 56%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
@@ -152,6 +152,8 @@ Target `ongoing` · ongoing · 4 open · 3 shipped · `####......` 43%
 | **SC-32** — goreleaser + Homebrew tap | med | S | release | open |
 | **SC-48** — Coverage ratchet | med | S | tests | open |
 | **SC-49** — Per-check reference pages | low | M | docs | open |
+| **SC-57** — `internal/fetch` tests | high | M | tests | done, unreleased |
+| **SC-58** — `cmd/segcheck` tests | high | M | tests,cli | done, unreleased |
 | **SC-34** — Backlog and roadmap tooling | med | M | project | done, unreleased |
 | **SC-33** — Docs site | low | M | docs | done, unreleased |
 | **SC-50** — Brand assets | low | S | docs | done, unreleased |
@@ -162,11 +164,11 @@ Target `ongoing` · ongoing · 4 open · 3 shipped · `####......` 43%
 |---|---|---|
 | `check` | 23 | 16 |
 | `parser` | 19 | 13 |
-| `cli` | 6 | 6 |
+| `cli` | 7 | 6 |
 | `delivery` | 5 | 4 |
 | `integration` | 4 | 4 |
 | `output` | 4 | 3 |
 | `release` | 7 | 3 |
-| `tests` | 4 | 3 |
+| `tests` | 6 | 3 |
 | `docs` | 4 | 1 |
 | `project` | 2 | 0 |

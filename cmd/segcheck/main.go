@@ -6,6 +6,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"strings"
@@ -73,30 +74,39 @@ func (h headerFlag) Set(v string) error {
 	return nil
 }
 
-func main() {
-	if len(os.Args) < 2 {
-		fmt.Fprint(os.Stderr, usage)
-		os.Exit(2)
+func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
+
+// run is main without the process boundary: arguments in, writers in, exit code
+// out. Everything the CLI promises — above all "exit 0 whenever the check ran"
+// — is asserted against this rather than against a subprocess.
+func run(args []string, stdout, stderr io.Writer) int {
+	if len(args) < 1 {
+		fmt.Fprint(stderr, usage)
+		return 2
 	}
 
-	switch os.Args[1] {
+	switch args[0] {
 	case "version", "--version", "-v":
-		fmt.Printf("segcheck %s\n", version)
-		return
+		fmt.Fprintf(stdout, "segcheck %s\n", version)
+		return 0
 	case "help", "--help", "-h":
-		fmt.Print(usage)
-		return
+		fmt.Fprint(stdout, usage)
+		return 0
 	case "check":
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command %q\n\n%s", os.Args[1], usage)
-		os.Exit(2)
+		fmt.Fprintf(stderr, "unknown command %q\n\n%s", args[0], usage)
+		return 2
 	}
 
 	opts := analyze.Defaults()
 	headers := headerFlag{}
 
-	fs := flag.NewFlagSet("check", flag.ExitOnError)
-	fs.Usage = func() { fmt.Fprint(os.Stderr, usage) }
+	// ContinueOnError, not ExitOnError: a flag package that calls os.Exit
+	// itself takes the exit code out of run's hands and kills the test process
+	// with it.
+	fs := flag.NewFlagSet("check", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	fs.Usage = func() { fmt.Fprint(stderr, usage) }
 	fs.IntVar(&opts.Segments, "segments", opts.Segments, "")
 	fs.IntVar(&opts.MaxRenditions, "renditions", opts.MaxRenditions, "")
 	fs.IntVar(&opts.MaxAudio, "audio", opts.MaxAudio, "")
@@ -117,23 +127,23 @@ func main() {
 	// — the order everyone actually types — would silently ignore everything
 	// after the URL. Parse in rounds instead, collecting positionals as they
 	// interrupt the flags.
-	positional, err := parseInterspersed(fs, os.Args[2:])
+	positional, err := parseInterspersed(fs, args[1:])
 	if err != nil {
-		os.Exit(2)
+		return 2
 	}
 	if len(positional) != 1 {
 		if len(positional) == 0 {
-			fmt.Fprintf(os.Stderr, "check needs a manifest URL\n\n%s", usage)
+			fmt.Fprintf(stderr, "check needs a manifest URL\n\n%s", usage)
 		} else {
-			fmt.Fprintf(os.Stderr, "check takes one manifest URL, got %d: %s\n\n%s", len(positional), strings.Join(positional, " "), usage)
+			fmt.Fprintf(stderr, "check takes one manifest URL, got %d: %s\n\n%s", len(positional), strings.Join(positional, " "), usage)
 		}
-		os.Exit(2)
+		return 2
 	}
 	target := positional[0]
 
 	if err := validate(opts, *format, *exitOn); err != nil {
-		fmt.Fprintf(os.Stderr, "segcheck: %v\n", err)
-		os.Exit(2)
+		fmt.Fprintf(stderr, "segcheck: %v\n", err)
+		return 2
 	}
 
 	// Ctrl-C cancels in-flight downloads instead of leaving them to the timeout.
@@ -154,22 +164,23 @@ func main() {
 	case "json":
 		s, err := output.JSON(res)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "segcheck: rendering JSON: %v\n", err)
-			os.Exit(1)
+			fmt.Fprintf(stderr, "segcheck: rendering JSON: %v\n", err)
+			return 1
 		}
-		fmt.Print(s)
+		fmt.Fprint(stdout, s)
 	case "markdown", "md":
-		fmt.Print(output.Markdown(res))
+		fmt.Fprint(stdout, output.Markdown(res))
 	default:
-		fmt.Print(output.Text(res, useColor(*noColor)))
+		fmt.Fprint(stdout, output.Text(res, useColor(*noColor)))
 	}
 
 	if *exitOn != "" {
 		threshold := finding.Status(strings.ToUpper(*exitOn))
 		if finding.AtLeast(finding.Worst(res.Findings), threshold) {
-			os.Exit(1)
+			return 1
 		}
 	}
+	return 0
 }
 
 // parseInterspersed parses flags that may appear before and after the

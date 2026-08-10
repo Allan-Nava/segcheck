@@ -71,7 +71,21 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   **unverified** — neither can run without a tagged release, so the item stays
   open until `cosign verify` succeeds against a published image.
 
+- **Tests for the two packages that had none** (SC-57, SC-58). `internal/fetch`
+  goes from 0% to 94.1% and `cmd/segcheck` from 0% to 90.1%; total coverage
+  67.1% → 72.5%. The exit-code rule the README leads with — exit 0 whenever the
+  check ran — is now asserted rather than assumed, as is the response-truncation
+  boundary that decides whether a cut body reaches the parsers as if it were
+  whole. Both suites were mutation-checked: the truncation comparison and the
+  interspersed-flag parser were each broken on purpose to confirm the tests fail
+  when the behaviour does.
+
 ### Changed
+
+- `main` is now `os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))`, with the
+  `check` flag set on `flag.ContinueOnError` instead of `ExitOnError`, so exit
+  codes and output are testable without spawning a process (SC-58). No change to
+  the CLI's behaviour.
 
 - `brews` → `homebrew_casks` and `dockers`/`docker_manifests` → `dockers_v2` in
   `.goreleaser.yaml`: both old forms are deprecated and fail `goreleaser check`,
