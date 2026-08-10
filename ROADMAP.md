@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**64 items · 24 shipped · 40 open · 10 milestones.**
+**65 items · 25 shipped · 40 open · 10 milestones.**
 
 ## At a glance
 
@@ -21,7 +21,7 @@
 | **M6** — Integration | `v0.5.0` | later | `..........` 0% | 6 | 0 |
 | **M10** — Authoring-spec conformance | `v0.5.0` | later | `..........` 0% | 5 | 0 |
 | **M8** — Container image and supply chain | `v0.3.0` | next | `########..` 83% | 1 | 5 |
-| **M7** — Project and release | `ongoing` | ongoing | `#####.....` 50% | 5 | 5 |
+| **M7** — Project and release | `ongoing` | ongoing | `#####.....` 55% | 5 | 6 |
 
 ## Next up
 
@@ -157,17 +157,18 @@ Target `v0.3.0` · next · 1 open · 5 shipped · `########..` 83%
 
 ### M7 — Project and release
 
-Target `ongoing` · ongoing · 5 open · 5 shipped · `#####.....` 50%
+Target `ongoing` · ongoing · 5 open · 6 shipped · `#####.....` 55%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
 | **SC-36** — Real-stream smoke suite | high | S | tests,release | open |
-| **SC-32** — Homebrew tap upload | med | S | release | open |
 | **SC-48** — Coverage ratchet | med | S | tests | open |
 | **SC-64** — `scripts/backlog.sh` has no tests | med | S | tests,project | open |
+| **SC-65** — The published cask actually installs | med | S | release,docs | open |
 | **SC-49** — Per-check reference pages | low | M | docs | open |
 | **SC-57** — `internal/fetch` tests | high | M | tests | done, unreleased |
 | **SC-58** — `cmd/segcheck` tests | high | M | tests,cli | done, unreleased |
+| **SC-32** — Homebrew tap upload | med | S | release | done, unreleased |
 | **SC-34** — Backlog and roadmap tooling | med | M | project | done, unreleased |
 | **SC-33** — Docs site | low | M | docs | done, unreleased |
 | **SC-50** — Brand assets | low | S | docs | done, unreleased |
@@ -183,6 +184,6 @@ Target `ongoing` · ongoing · 5 open · 5 shipped · `#####.....` 50%
 | `integration` | 4 | 4 |
 | `tests` | 7 | 4 |
 | `output` | 4 | 3 |
-| `release` | 7 | 3 |
-| `docs` | 4 | 1 |
+| `release` | 8 | 3 |
+| `docs` | 5 | 2 |
 | `project` | 3 | 1 |

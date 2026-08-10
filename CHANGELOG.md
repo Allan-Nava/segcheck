@@ -92,6 +92,11 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- **The Homebrew tap upload is live** (SC-32): `skip_upload` is gone, so the next
+  tag writes `Casks/segcheck.rb` into `Allan-Nava/homebrew-tap`. The install line
+  in the README is now `brew install --cask allan-nava/tap/segcheck`, with the
+  macOS-only caveat stated — Homebrew on Linux does not support casks, so those
+  users go through `go install` or the release archives.
 - `main` is now `os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))`, with the
   `check` flag set on `flag.ContinueOnError` instead of `ExitOnError`, so exit
   codes and output are testable without spawning a process (SC-58). No change to

@@ -383,6 +383,17 @@ checks roadmap and blocks nothing.
   after the URL — verified by mutation, since a regression there silently
   ignores every flag after the URL while the run still succeeds.
   <!-- sc: prio=high size=M labels=tests,cli ver=unreleased -->
+- [ ] **SC-65 — The published cask actually installs**: two questions SC-32
+  could not answer before a cask existed. (1) The binary is unsigned and
+  unnotarized — if Gatekeeper quarantines it, `brew install --cask` succeeds and
+  the first run dies with "the developer cannot be verified", which reads as a
+  broken build rather than a signing gap. Fix is a `hooks.post.install` running
+  `xattr -dr com.apple.quarantine`, or real notarization. (2) Homebrew casks are
+  macOS-only, so the migration off the deprecated `brews` silently removed the
+  Linux Homebrew path; decide whether that audience is worth carrying a formula
+  alongside the cask, or whether the README pointing them at `go install` is
+  enough. Close it by installing the first published cask on a clean macOS.
+  <!-- sc: prio=med size=S labels=release,docs -->
 - [ ] **SC-64 — `scripts/backlog.sh` has no tests**: the test-first rule covers
   tooling and this is the one place it was not applied — which is how it shipped
   a generator that split a table row in three the first time an item title
@@ -396,19 +407,16 @@ checks roadmap and blocks nothing.
   it did not happen — a check merged without its test should show up in the
   build, not in a review three weeks later.
   <!-- sc: prio=med size=S labels=tests -->
-- [ ] **SC-32 — Homebrew tap upload**: `Allan-Nava/homebrew-tap` exists and the
-  cask is generated correctly on every run — verified with `HOMEBREW_TAP_TOKEN`
-  unset, which is why `skip_upload: true` cannot fail a release today. What is
-  missing is only the credential: the workflow's automatic `GITHUB_TOKEN` is
-  scoped to this repository and cannot write to another one, so the upload needs
-  a fine-grained PAT with *Contents: read and write* on `homebrew-tap`, stored
-  as the `HOMEBREW_TAP_TOKEN` secret here. Then drop `skip_upload`. Two things
-  to check on the first published cask, neither of which can be tested before
-  one exists: (1) Homebrew casks are **macOS-only** — Linux Homebrew users have
-  no path through the tap and must be pointed at `go install` or the archives;
-  (2) the binary is unsigned and unnotarized, so if Gatekeeper quarantines it,
-  the fix is a `hooks.post.install` running `xattr -dr com.apple.quarantine`, or
-  real notarization. <!-- sc: prio=med size=S labels=release -->
+- [x] **SC-32 — Homebrew tap upload**: `skip_upload` is gone, so the next tag
+  writes `Casks/segcheck.rb` into `Allan-Nava/homebrew-tap`. The credential is a
+  fine-grained PAT scoped to that one repository with *Contents: read and
+  write*, stored as the `HOMEBREW_TAP_TOKEN` secret — the workflow's own
+  `GITHUB_TOKEN` is scoped here and cannot write to another repository. Verified
+  before enabling: the token reports `push: true` on the tap, the secret is
+  present on the repo, and a `--snapshot` run still generates the cask without
+  publishing. The push itself is first exercised at the next tag. Fine-grained
+  PATs expire, so a release after that date will publish its archives and image
+  and then fail at this step. <!-- sc: prio=med size=S labels=release ver=unreleased -->
 - [x] **SC-33 — Docs site**: GitHub Pages served from `docs/`, in the shape of
   the checkfleet site — one self-contained static page (hero and sample output,
   the manifest-claims table, the check matrix with worst status, install, flags,

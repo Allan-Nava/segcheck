@@ -90,11 +90,15 @@ docker_signs:
     artifacts: manifests
     output: true
 
-# SC-32: the tap upload stays off until HOMEBREW_TAP_TOKEN exists on this repo.
-# Everything else is ready, so enabling it is a one-line change.
+# SC-32: live. HOMEBREW_TAP_TOKEN is a fine-grained PAT scoped to homebrew-tap
+# with Contents: read and write — the workflow's own GITHUB_TOKEN is scoped to
+# this repository and cannot write to another one. The token expires (fine-
+# grained PATs must); when it does, a release will publish its archives and
+# image and then fail here.
 #
 # A cask, not a formula: `brews` is deprecated, and Homebrew wants a cask for a
 # prebuilt binary anyway — a formula describes something built from source.
+# Casks are macOS-only, so Linux users go through `go install` or the archives.
 homebrew_casks:
   - name: segcheck
     binaries: [segcheck]
@@ -102,7 +106,6 @@ homebrew_casks:
       owner: Allan-Nava
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-    skip_upload: true
     homepage: "https://github.com/Allan-Nava/segcheck"
     description: "Check what HLS/DASH segments really contain, not just what the manifest says"
     license: "PolyForm-Noncommercial-1.0.0"
