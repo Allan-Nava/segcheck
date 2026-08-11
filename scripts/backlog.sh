@@ -11,6 +11,7 @@
 #   scripts/backlog.sh stats      one-line summary
 #   scripts/backlog.sh next [n]   the n highest-priority open items (default 5)
 #   scripts/backlog.sh issues     plan the GitHub issue sync (see below)
+#     --apply | --milestones M11,M12 | --body SC-n | --title SC-n
 #
 # POSIX sh and awk only — this repository has no dependencies, and neither does
 # its tooling.
@@ -420,8 +421,8 @@ item_bodies() {
 	' "$backlog"
 }
 
-# existing_issues emits `<id> <tab> <number> <tab> <state>` for the issues that
-# already exist. A snapshot file stands in for GitHub under test.
+# existing_issues emits `<id> <tab> <number> <tab> <state> <tab> <title>` for the
+# issues that already exist. A snapshot file stands in for GitHub under test.
 existing_issues() {
 	if [ -n "${BACKLOG_ISSUES_SNAPSHOT:-}" ]; then
 		cat "$BACKLOG_ISSUES_SNAPSHOT"
@@ -436,7 +437,7 @@ existing_issues() {
 			ttl = $1
 			dash = index(ttl, " \342\200\224 ")
 			id = dash ? substr(ttl, 1, dash - 1) : ttl
-			if (id ~ /^SC-[0-9]+$/) printf "%s\t%s\t%s\n", id, $2, $3
+			if (id ~ /^SC-[0-9]+$/) printf "%s\t%s\t%s\t%s\n", id, $2, $3, ttl
 		}'
 }
 
@@ -445,21 +446,31 @@ existing_issues() {
 #   CREATE <id> -        an open item with no issue
 #   REOPEN <id> <num>    an open item whose issue was closed
 #   CLOSE  <id> <num>    a shipped item whose issue is still open
+#   RETITLE <id> <num>   the issue exists but its title no longer matches the item
 #   OK     <id> <num>    already in the right state
 #   SKIP   <id> -        shipped and never had an issue: do not create one now
+#
+# RETITLE exists for two reasons: renaming a backlog item should rename its issue,
+# and it is how the issues opened with an empty name — a field-index bug in
+# issue_meta — get repaired without closing and reopening anything.
 plan_issues() {
 	awk -v filter="$1" -F'\t' -v exfile="$tmp/existing.tsv" '
 	BEGIN {
 		n = split(filter, f, ",")
 		for (i = 1; i <= n; i++) if (f[i] != "") want[f[i]] = 1
 	}
-	FILENAME == exfile { ex_num[$1] = $2; ex_state[$1] = $3; next }
+	FILENAME == exfile { ex_num[$1] = $2; ex_state[$1] = $3; ex_title[$1] = $4; next }
 	$1 == "M" { ms_title[$2] = $3; ms_target[$2] = $4; next }
 	$1 == "I" {
 		msid = $2; id = $3; status = $5
 		if (length(want) && !(msid in want)) next
 		num = (id in ex_num) ? ex_num[id] : ""
 		st = (id in ex_state) ? ex_state[id] : ""
+		# A drifted title is corrected whatever state the item is in: a shipped
+		# item can have a mistitled issue too. Emitting this before the state line
+		# means an item needing both gets both.
+		want_title = id " \342\200\224 " $10
+		if (num != "" && ex_title[id] != want_title) printf "RETITLE\t%s\t%s\n", id, num
 		if (status == "open") {
 			if (num == "")            printf "CREATE\t%s\t-\n", id
 			else if (st == "closed")  printf "REOPEN\t%s\t%s\n", id, num
@@ -492,13 +503,23 @@ issue_body() {
 	' "$tmp/bodies.tsv" "$tmp/data.tsv"
 }
 
-# issue_meta prints `<title>|<labels>|<milestone title>` for one item.
+# issue_meta prints `<title> <tab> <labels> <tab> <milestone title>` for one item.
+#
+# Tab-separated, not pipe-separated: a pipe is legal inside an item title, and
+# SC-63 is literally named `--profile apple|dash-if|none`. Splitting on it truncated
+# that issue title at the first pipe.
+#
+# The item record is `I msid id num status prio size labels ver title`, so the
+# title is $10 and $9 is the version. Reading $9 here is what opened 44 issues
+# titled "SC-n — " with nothing after the dash: `ver` is empty for an open item, so
+# the mistake was invisible on every shipped item and on every unit test that
+# looked at the plan or the body rather than the title.
 issue_meta() {
 	awk -v want="$1" -F'\t' '
 	$1 == "M" { ms_title[$2] = $3; next }
 	$1 == "I" && $3 == want {
-		printf "%s \342\200\224 %s|%s,prio-%s|%s \342\200\224 %s\n",
-			$3, $9, $8, $6, $2, ms_title[$2]
+		printf "%s \342\200\224 %s\t%s,prio-%s\t%s \342\200\224 %s\n",
+			$3, $10, $8, $6, $2, ms_title[$2]
 	}
 	' "$tmp/data.tsv"
 }
@@ -554,10 +575,11 @@ apply_issues() {
 		case "$action" in
 		CREATE)
 			meta=$(issue_meta "$id")
-			ttl=${meta%%|*}
-			rest=${meta#*|}
-			labels=${rest%%|*}
-			ms=${rest#*|}
+			tab=$(printf '\t')
+			ttl=${meta%%"$tab"*}
+			rest=${meta#*"$tab"}
+			labels=${rest%%"$tab"*}
+			ms=${rest#*"$tab"}
 			ensure_milestone "$ms"
 			issue_body "$id" >"$tmp/body.md"
 			set -- gh issue create --title "$ttl" --body-file "$tmp/body.md" --milestone "$ms"
@@ -571,6 +593,12 @@ apply_issues() {
 			IFS=$old_ifs
 			url=$("$@")
 			echo "  created $id  $url"
+			;;
+		RETITLE)
+			meta=$(issue_meta "$id")
+			ttl=${meta%%"$(printf '\t')"*}
+			gh issue edit "$num" --title "$ttl" >/dev/null
+			echo "  retitled $id  #$num  -> $ttl"
 			;;
 		CLOSE)
 			gh issue close "$num" \
@@ -590,6 +618,7 @@ issues_cmd() {
 	apply=0
 	filter=""
 	body_of=""
+	title_of=""
 	while [ $# -gt 0 ]; do
 		case "$1" in
 		--apply) apply=1 ;;
@@ -603,6 +632,14 @@ issues_cmd() {
 			}
 			;;
 		--milestones=*) filter="${1#--milestones=}" ;;
+		--title)
+			shift
+			title_of="${1:-}"
+			[ -n "$title_of" ] || {
+				echo "backlog.sh: --title needs an SC-n id" >&2
+				exit 2
+			}
+			;;
 		--body)
 			shift
 			body_of="${1:-}"
@@ -621,6 +658,12 @@ issues_cmd() {
 
 	item_bodies >"$tmp/bodies.tsv"
 
+	if [ -n "$title_of" ]; then
+		meta=$(issue_meta "$title_of")
+		printf '%s\n' "${meta%%"$(printf '\t')"*}"
+		return 0
+	fi
+
 	if [ -n "$body_of" ]; then
 		issue_body "$body_of"
 		return 0
@@ -632,13 +675,14 @@ issues_cmd() {
 	create=$(grep -c '^CREATE' "$tmp/plan.tsv" || true)
 	close=$(grep -c '^CLOSE' "$tmp/plan.tsv" || true)
 	reopen=$(grep -c '^REOPEN' "$tmp/plan.tsv" || true)
+	retitle=$(grep -c '^RETITLE' "$tmp/plan.tsv" || true)
 
 	cat "$tmp/plan.tsv"
 	echo ""
-	echo "plan: $create to create, $close to close, $reopen to reopen"
+	echo "plan: $create to create, $close to close, $reopen to reopen, $retitle to retitle"
 
 	if [ "$apply" -eq 0 ]; then
-		if [ "$((create + close + reopen))" -gt 0 ]; then
+		if [ "$((create + close + reopen + retitle))" -gt 0 ]; then
 			echo "dry run — nothing was changed. Re-run with --apply to execute."
 		else
 			echo "nothing to do: the issues already match BACKLOG.md"
@@ -646,12 +690,12 @@ issues_cmd() {
 		return 0
 	fi
 
-	if [ "$((create + close + reopen))" -eq 0 ]; then
+	if [ "$((create + close + reopen + retitle))" -eq 0 ]; then
 		echo "nothing to do"
 		return 0
 	fi
 	echo "applying:"
-	grep -E '^(CREATE|CLOSE|REOPEN)' "$tmp/plan.tsv" | apply_issues
+	grep -E '^(CREATE|CLOSE|REOPEN|RETITLE)' "$tmp/plan.tsv" | apply_issues
 }
 
 case "${1:-lint}" in

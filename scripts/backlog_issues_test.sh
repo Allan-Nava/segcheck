@@ -86,15 +86,20 @@ cat >"$tmp/BACKLOG.md" <<'EOF'
   <!-- sc: prio=med size=M labels=output -->
 - [ ] **SC-6 — Open but its issue was closed**: reopen it.
   <!-- sc: prio=low size=S labels=tests -->
+- [ ] **SC-7 — `--profile apple|dash-if|none`**: a pipe is legal in a title, and
+  the real SC-63 is named exactly like this.
+  <!-- sc: prio=med size=S labels=cli -->
 EOF
 
 # The issues that already exist, as the planner receives them:
-#   <id> <tab> <number> <tab> <state>
-cat >"$tmp/snapshot.tsv" <<EOF
-SC-1	101	closed
-SC-2	102	open
-SC-4	104	open
-SC-6	106	closed
+#   <id> <tab> <number> <tab> <state> <tab> <title>
+# The title is carried so a renamed item can be spotted — and so that the bug
+# which opened 44 issues titled "SC-n — " cannot come back unnoticed.
+cat >"$tmp/snapshot.tsv" <<'EOF'
+SC-1	101	closed	SC-1 — Already shipped and already closed
+SC-2	102	open	SC-2 — Shipped but its issue is still open
+SC-4	104	open	SC-4 — Open with an issue already open
+SC-6	106	closed	SC-6 — Open but its issue was closed
 EOF
 
 export BACKLOG_FILE="$tmp/BACKLOG.md"
@@ -119,6 +124,7 @@ SKIP	SC-3	-
 OK	SC-4	104
 CREATE	SC-5	-
 REOPEN	SC-6	106
+CREATE	SC-7	-
 EOF
 assert_plan "the plan distinguishes every state" "$tmp/want.txt" "$tmp/actions.txt"
 
@@ -135,13 +141,14 @@ assert_absent "a shipped item with no issue is not created" "CREATE	SC-3" "$tmp/
 # shipped item a closed one, there is nothing left to do. A sync that is not
 # idempotent opens duplicates on every push.
 # ---------------------------------------------------------------------------
-cat >"$tmp/settled.tsv" <<EOF
-SC-1	101	closed
-SC-2	102	closed
-SC-3	103	closed
-SC-4	104	open
-SC-5	105	open
-SC-6	106	open
+cat >"$tmp/settled.tsv" <<'EOF'
+SC-1	101	closed	SC-1 — Already shipped and already closed
+SC-2	102	closed	SC-2 — Shipped but its issue is still open
+SC-3	103	closed	SC-3 — Shipped and never had an issue
+SC-4	104	open	SC-4 — Open with an issue already open
+SC-5	105	open	SC-5 — Open with no issue yet
+SC-6	106	open	SC-6 — Open but its issue was closed
+SC-7	107	open	SC-7 — `--profile apple|dash-if|none`
 EOF
 BACKLOG_ISSUES_SNAPSHOT="$tmp/settled.tsv" sh "$script" issues >"$tmp/plan2.txt"
 grep -E '^(CREATE|CLOSE|REOPEN)' "$tmp/plan2.txt" >"$tmp/changes2.txt" || true
@@ -152,6 +159,40 @@ if [ -s "$tmp/changes2.txt" ]; then
 else
 	echo "ok   a settled backlog is a no-op"
 fi
+
+# ---------------------------------------------------------------------------
+# The title. This is the assertion that was missing, and its absence is why a
+# field-index slip in issue_meta — reading `ver` where the title lives — opened 44
+# public issues named "SC-n — " with nothing after the dash. `ver` is empty for
+# every open item, so the mistake was invisible to a plan-level or body-level test.
+# ---------------------------------------------------------------------------
+sh "$script" issues --title SC-5 >"$tmp/title.txt"
+assert_contains "the title carries the item's name" "SC-5 — Open with no issue yet" "$tmp/title.txt"
+# The bug's exact signature: a line that ends at the em dash with nothing after it.
+checks=$((checks + 1))
+if grep -qE ' \xe2\x80\x94[[:space:]]*$' "$tmp/title.txt"; then
+	fail "the title ends at the dash with no name after it" "$tmp/title.txt"
+else
+	echo "ok   the title is not left dangling after the dash"
+fi
+
+# A pipe in the title must survive intact: it was the field separator until SC-63
+# proved a title can contain one, and the issue was published truncated.
+sh "$script" issues --title SC-7 >"$tmp/pipe.txt"
+assert_contains "a pipe in the title survives" 'SC-7 — `--profile apple|dash-if|none`' "$tmp/pipe.txt"
+
+# An issue whose title has drifted from the item is corrected rather than left, and
+# rather than being closed and reopened.
+cat >"$tmp/drifted.tsv" <<'EOF'
+SC-4	104	open	SC-4 — Some older name
+SC-5	105	open	SC-5 — Open with no issue yet
+SC-6	106	open	SC-6 — Open but its issue was closed
+EOF
+BACKLOG_ISSUES_SNAPSHOT="$tmp/drifted.tsv" sh "$script" issues >"$tmp/plan5.txt"
+grep -E '^(CREATE|CLOSE|REOPEN|OK|SKIP|RETITLE)' "$tmp/plan5.txt" >"$tmp/actions5.txt" || true
+assert_contains "a drifted title is corrected" "RETITLE	SC-4	104" "$tmp/actions5.txt"
+assert_absent "correcting a title does not close the issue" "CLOSE	SC-4" "$tmp/actions5.txt"
+assert_contains "a matching title is left alone" "OK	SC-5	105" "$tmp/actions5.txt"
 
 # ---------------------------------------------------------------------------
 # The milestone filter, so a first run can be limited deliberately rather than
