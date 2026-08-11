@@ -574,6 +574,107 @@ func checkTracks(rends []*renditionData) []finding.Finding {
 	return out
 }
 
+// checkKeyframe reports segments that do not open on a random access point
+// (SC-16).
+//
+// A decoder switching into such a segment has no reference picture: it shows
+// nothing until the next real keyframe, or it shows corruption. This is the defect
+// behind "ABR switching stutters even though the boundaries line up", and it is
+// invisible from the manifest — the boundaries really are aligned, the durations
+// really are correct, and `alignment` passes. Only the media says otherwise.
+//
+// The severity is BAD because it breaks playback for everyone who switches, and
+// the counterpart is that a rendition which states nothing about its keyframes
+// gets an OK-level note instead. An fMP4 fragment need not carry the sample flags,
+// and reporting a defect there would flag legal streams by the thousand.
+func checkKeyframe(rends []*renditionData) []finding.Finding {
+	var out []finding.Finding
+	for _, rd := range rends {
+		if rd.err != nil || rd.initErr != nil {
+			continue
+		}
+		// Audio is independently decodable frame by frame, so the question does
+		// not apply.
+		if rd.r.Kind == manifest.Audio {
+			continue
+		}
+		segs := parsedSegs(rd)
+		if len(segs) == 0 {
+			continue
+		}
+		label := rendLabel(rd)
+
+		readable := 0
+		var noKeyframe []segmentData // no random access point at all: unswitchable
+		var lateKeyframe int         // one is present, just not the first picture
+		for _, sd := range segs {
+			t, ok := sd.info.Track(media.Video)
+			if !ok {
+				continue
+			}
+			opens, known := t.StartsOnKeyframe()
+			if !known {
+				continue
+			}
+			readable++
+			if opens {
+				continue
+			}
+			// It does not open on one. Whether that matters depends on what else is
+			// in the segment, and on whether anyone looked.
+			present, scanned := t.ContainsKeyframe()
+			switch {
+			case scanned && !present:
+				noKeyframe = append(noKeyframe, sd)
+			default:
+				lateKeyframe++
+			}
+		}
+
+		if readable == 0 {
+			out = append(out, finding.Finding{
+				Check: "keyframe", Target: label, Status: finding.OK,
+				Message: "segments do not state whether they open on a keyframe: not verified",
+				Hint:    "fMP4 fragments need not carry sample flags, and an MPEG-TS segment's video payload may not have been reached",
+			})
+			continue
+		}
+
+		// The severe case: nothing in the segment a decoder can start from. One
+		// finding per rendition, naming the first offender, so a rendition that is
+		// wrong throughout does not bury the rest of the report.
+		if len(noKeyframe) > 0 {
+			out = append(out, finding.Finding{
+				Check: "keyframe", Target: segLabel(rd, noKeyframe[0]), Status: finding.BAD,
+				Message: fmt.Sprintf("%d/%d verified segments contain no keyframe at all", len(noKeyframe), readable),
+				Value:   finding.Num(float64(len(noKeyframe))), Unit: "segments",
+				Hint: "a player switching into one of these has no reference picture to start from: the switch shows nothing until the next keyframe, however well the boundaries line up",
+			})
+			continue
+		}
+
+		if lateKeyframe > 0 {
+			// Apple's byte-range reference stream does this: a range boundary falls
+			// on a transport packet, so the segment carries the tail of the previous
+			// picture before its own keyframe. Players start at the keyframe and it
+			// plays everywhere, so this is worth stating and not worth alarming over.
+			out = append(out, finding.Finding{
+				Check: "keyframe", Target: label, Status: finding.OK,
+				Message: fmt.Sprintf("%d/%d segments carry a keyframe but not as their first picture", lateKeyframe, readable),
+				Value:   finding.Num(float64(lateKeyframe)), Unit: "segments",
+				Hint: "usual where segment boundaries fall on transport packets rather than access units; players start at the keyframe and discard what precedes it",
+			})
+			continue
+		}
+
+		out = append(out, finding.Finding{
+			Check: "keyframe", Target: label, Status: finding.OK,
+			Message: fmt.Sprintf("all %d verified segments open on a keyframe", readable),
+		})
+	}
+	return out
+}
+
 // checkEncryption reports disagreements between the manifest's declared
 // protection and what the segments carry.
 func checkEncryption(rends []*renditionData) []finding.Finding {

@@ -123,11 +123,36 @@ the stream is healthy.
   skipped the rung in silence. The search now starts after the fixed fields, and
   both the video and audio cases are asserted against sample entries built to the
   real layout. <!-- sc: prio=high size=S labels=parser,check ver=unreleased -->
-- [ ] **SC-16 — Keyframe alignment**: every segment must start on an IDR/IRAP. A
-  segment that opens on a non-keyframe cannot be switched into, which is the
-  defect behind "ABR switching stutters even though the boundaries line up".
-  Needs slice-type inspection for H.264 and `styp`/`sap` for CMAF.
-  <!-- sc: prio=high size=L labels=check,parser -->
+- [x] **SC-16 — Keyframe alignment**: the `keyframe` check reports segments a
+  player cannot switch into, which is the defect behind "ABR switching stutters
+  even though the boundaries line up" — `alignment` passes, every duration is
+  right, and every switch still breaks. Read three ways, since the containers state
+  it in three places: the first coded slice's `nal_unit_type` for H.264, the whole
+  IRAP range 16–21 for HEVC (recognising only `IDR_W_RADL` would call a switchable
+  `CRA_NUT`-opening segment broken, and CRA is what some live encoders emit for
+  every segment), and `sample_is_non_sync_sample` for fMP4 from trun's
+  first-sample-flags, else its per-sample flags, else the tfhd default. The walk
+  skips parameter sets, AUDs and SEI to stop at the first NAL carrying picture data;
+  only the first `traf` decides.
+  **The severity model was corrected by the reference streams, not by reasoning.**
+  A first draft made "does not open on a keyframe" a BAD, and Apple's own bipbop
+  reported three of them — its segments are byte ranges of one `main.ts`, so a
+  range boundary falls on a transport packet and a segment can carry the tail of
+  the previous picture before its own IDR. Players start at the IDR; the stream
+  plays everywhere. So the BAD is now reserved for a segment carrying **no** random
+  access point at all, and "carries one, just not first" is an OK-level note with a
+  count. A second real defect surfaced the same way: `annexBNALUs` stops after 64
+  units, and a 1080p picture split across dozens of slices pushes the following IDR
+  past that — so bipbop's larger rungs read as having no keyframe at all. The
+  keyframe walk now has its own generous cap and reports whether the cap, rather
+  than the data, stopped it; hitting it, or hitting the 1 MiB elementary-stream
+  capture cap, means absence was never established. Four facts, not one:
+  opens / present / known / scanned, because "there is none" and "nobody looked far
+  enough" must not be the same answer. Mutation-verified (ten mutations, ten
+  caught), and two of the tests were themselves rewritten when that pass showed
+  them passing for the wrong reason. Verified against Apple fMP4, Apple MPEG-TS and
+  a public DASH manifest: zero findings above OK.
+  <!-- sc: prio=high size=L labels=check,parser ver=unreleased -->
 - [ ] **SC-17 — Frame rate**: measured from the timestamp deltas, against
   `FRAME-RATE` / `@frameRate`. Also catches a rung whose real frame rate differs
   from the rest of the ladder. <!-- sc: prio=high size=M labels=check -->

@@ -66,6 +66,57 @@ type Track struct {
 	// transport lost between the packager and us. Always 0 for fMP4, which has
 	// no equivalent packet-level counter.
 	CCErrors int `json:"cc_errors,omitempty"`
+	// OpensOnKeyframe reports whether the segment's first picture is a random
+	// access point — an IDR for H.264, an IRAP for HEVC, a sync sample for fMP4.
+	// Only meaningful when KeyframeKnown is true.
+	OpensOnKeyframe bool `json:"opens_on_keyframe,omitempty"`
+	// HasKeyframe reports that a random access point was positively found in the
+	// segment's opening bytes, whether or not it was the very first picture.
+	HasKeyframe bool `json:"has_keyframe,omitempty"`
+	// KeyframeKnown is false when the segment says nothing about the matter: an
+	// fMP4 fragment carrying no sample flags, or a TS segment whose video payload
+	// could not be read. A check must stay quiet rather than call that a defect.
+	KeyframeKnown bool `json:"keyframe_known,omitempty"`
+	// KeyframeScanned records that the bitstream really was walked looking for a
+	// random access point. It is what makes HasKeyframe == false mean "there is
+	// none" rather than "nobody looked": an fMP4 fragment's sample flags describe
+	// its first sample only, so they settle OpensOnKeyframe without settling
+	// HasKeyframe.
+	KeyframeScanned bool `json:"keyframe_scanned,omitempty"`
+}
+
+// ContainsKeyframe reports whether a random access point was found anywhere in the
+// segment's opening bytes, and whether the bitstream was walked at all.
+//
+// A segment with none cannot be switched into by any route, which is the severe
+// case. One that merely does not *open* on a keyframe is a much weaker signal:
+// Apple's own byte-range reference stream does that, because its segment
+// boundaries fall on transport packets rather than on access units, and it plays
+// everywhere.
+func (t Track) ContainsKeyframe() (bool, bool) {
+	if t.Kind != Video {
+		return false, false
+	}
+	return t.HasKeyframe, t.KeyframeScanned
+}
+
+// StartsOnKeyframe reports whether the segment opens on a random access point,
+// and whether that could be determined at all.
+//
+// A segment that does not open on one cannot be switched into: a decoder arriving
+// there has no reference picture. It is the defect behind "ABR switching stutters
+// even though the segment boundaries line up", and no manifest-level check can
+// see it — the boundaries really are aligned.
+//
+// The second return follows this package's protocol: false means unmeasurable,
+// and the caller must not read the first value.
+func (t Track) StartsOnKeyframe() (bool, bool) {
+	if t.Kind != Video {
+		// Every audio frame is independently decodable, so the question does not
+		// apply; answering it would invite a check to report on audio rungs.
+		return false, false
+	}
+	return t.OpensOnKeyframe, t.KeyframeKnown
 }
 
 // StartSec is the start of the track's presentation interval, in seconds.

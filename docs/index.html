@@ -315,6 +315,7 @@ footer{border-top:1px solid var(--border);padding:34px 0;color:var(--muted);font
           <tr><td><code>timeline</code></td><td>A DASH <code>SegmentTimeline</code> <code>@t</code> against the fragment's <code>tfdt</code></td><td><span class="pill p-bad">BAD</span></td></tr>
           <tr><td><code>bitrate</code></td><td>Measured peak and average against the declared <code>BANDWIDTH</code>, in both directions</td><td><span class="pill p-warn">WARN</span></td></tr>
           <tr><td><code>resolution</code></td><td>The coded resolution in the bitstream against the declared <code>RESOLUTION</code></td><td><span class="pill p-bad">BAD</span></td></tr>
+          <tr><td><code>keyframe</code></td><td>Every segment carries a random access point — an IDR, an HEVC IRAP, an fMP4 sync sample — so it can be switched into at all</td><td><span class="pill p-bad">BAD</span></td></tr>
           <tr><td><code>tracks</code></td><td>Expected video/audio present, codecs match <code>CODECS</code>, track layout stable across segments</td><td><span class="pill p-bad">BAD</span></td></tr>
           <tr><td><code>alignment</code></td><td>Segment boundaries across renditions, so ABR switching does not glitch</td><td><span class="pill p-bad">BAD</span></td></tr>
           <tr><td><code>encryption</code></td><td>Declared protection against what the segments carry</td><td><span class="pill p-bad">BAD</span></td></tr>
@@ -520,7 +521,7 @@ segcheck check https://cdn.example/master.m3u8 --exit-on bad</pre></div>
     <div class="grid g3" style="margin-top:22px">
       <div class="card">
         <div class="card-head"><span class="k">v0.2.0</span><span class="pill p-ok">in flight</span></div>
-        <p>Keyframe alignment, frame rate, <code>sidx</code>/<code>SegmentBase</code>, AV1/VP9, parser fuzzing. HEVC coded resolution is done.</p>
+        <p>Frame rate, <code>sidx</code>/<code>SegmentBase</code>, AV1/VP9, parser fuzzing. HEVC coded resolution and keyframe alignment are done.</p>
       </div>
       <div class="card">
         <div class="card-head"><span class="k">v0.3.0</span></div>

@@ -9,6 +9,32 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **`keyframe`: every segment must carry a random access point** (SC-16). A segment
+  with none cannot be switched into at all — a decoder arriving mid-stream has no
+  reference picture, so the switch shows nothing until the next keyframe. This is
+  the defect behind "ABR switching stutters even though the boundaries line up":
+  `alignment` passes, every duration is correct, the ladder is flawless, and
+  switching is broken for everyone. No manifest-level checker can see it.
+  Read three ways, because the containers state it in three places: the first coded
+  slice's `nal_unit_type` for H.264, the whole IRAP range 16–21 for HEVC — a reader
+  recognising only `IDR_W_RADL` would call a switchable `CRA_NUT`-opening segment
+  broken, and CRA is what some live encoders emit for every segment — and
+  `sample_is_non_sync_sample` for fMP4, from trun's first-sample-flags, else its
+  per-sample flags, else the tfhd default.
+  Two things were learned from the reference streams rather than reasoned out, and
+  both changed the design. A stricter first draft treated "does not *open* on a
+  keyframe" as the defect, and reported Apple's bipbop three times over: its
+  segments are byte ranges of one `main.ts`, so a boundary falls on a transport
+  packet and a segment can carry the tail of the previous picture ahead of its own
+  IDR. Players start at the IDR and it plays everywhere, so that case is now an
+  OK-level note with a count, and the BAD is reserved for no keyframe at all. Then
+  the larger rungs still read as having none, because the shared NAL walk stops
+  after 64 units and a 1080p picture split across dozens of slices pushes the IDR
+  past it. The keyframe walk now has its own cap and reports whether the cap or the
+  data ended it; hitting the cap, or the 1 MiB elementary-stream capture limit,
+  means absence was never established rather than proven. Verified against Apple
+  fMP4, Apple MPEG-TS and a public DASH manifest with zero findings above OK.
+
 - **HEVC/H.265 coded resolution** (SC-15): an HEVC rung in an MPEG-TS segment
   used to report its codec and no resolution, so the `resolution` check had
   nothing to compare and said nothing — a silence indistinguishable from a rung

@@ -79,10 +79,26 @@ func h264Resolution(es []byte) (width, height int, ok bool) {
 // a bounded number of units: the SPS precedes the first slice, so scanning the
 // whole segment would be work with no possible payoff.
 func annexBNALUs(es []byte) [][]byte {
-	const maxNALUs = 64
+	nals, _ := annexBNALUsLimit(es, 64)
+	return nals
+}
+
+// annexBNALUsLimit is annexBNALUs with the cap chosen by the caller, and it says
+// whether the cap was what stopped it.
+//
+// That second return is not cosmetic. The keyframe check has to distinguish "this
+// segment contains no random access point" from "the walk gave up before reaching
+// one", and the two look identical from the slice alone. A 1080p picture split
+// across dozens of slices pushes the following IDR past a 64-unit cap, which is
+// how a stricter first draft of that check reported Apple's reference stream as
+// having no keyframe at all.
+func annexBNALUsLimit(es []byte, maxNALUs int) (nalus [][]byte, truncated bool) {
 	var out [][]byte
 	i := 0
-	for i+3 < len(es) && len(out) < maxNALUs {
+	for i+3 < len(es) {
+		if len(out) >= maxNALUs {
+			return out, true
+		}
 		if es[i] != 0x00 || es[i+1] != 0x00 {
 			i++
 			continue
@@ -110,7 +126,7 @@ func annexBNALUs(es []byte) [][]byte {
 		}
 		i = end
 	}
-	return out
+	return out, false
 }
 
 // unescapeRBSP removes the emulation prevention bytes: inside a NAL unit the

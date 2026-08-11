@@ -189,10 +189,28 @@ func escapeRBSP(rbsp []byte) []byte {
 	return out
 }
 
+// HEVC NAL unit types for an opening picture. 16 through 21 are the random
+// access points a segment can be switched into; anything below is not.
+const (
+	// HEVCIDRWRadl is the usual opening picture of a CMAF or HLS segment.
+	HEVCIDRWRadl = byte(19)
+	// HEVCCRANut is also a random access point, reached by a different route.
+	HEVCCRANut = byte(21)
+	// HEVCTrailR is an ordinary trailing picture: not switchable into.
+	HEVCTrailR = byte(1)
+)
+
 // TSWithHEVCSPS is TS with an HEVC elementary stream: stream type 0x24 in the
 // PMT, and a VPS/SPS/PPS ahead of the first frame. sps is the raw parameter set
-// RBSP, without the start code and without the two NAL header bytes.
+// RBSP, without the start code and without the two NAL header bytes. The segment
+// opens on an IDR.
 func TSWithHEVCSPS(startPTS, frameDur int64, frames int, sps []byte) []byte {
+	return TSWithHEVCSPSOpening(startPTS, frameDur, frames, sps, HEVCIDRWRadl)
+}
+
+// TSWithHEVCSPSOpening is TSWithHEVCSPS with the opening picture's NAL unit type
+// chosen by the caller.
+func TSWithHEVCSPSOpening(startPTS, frameDur int64, frames int, sps []byte, firstNAL byte) []byte {
 	const (
 		pmtPID   = 0x1000
 		videoPID = 0x0100
@@ -210,7 +228,7 @@ func TSWithHEVCSPS(startPTS, frameDur int64, frames int, sps []byte) []byte {
 	es = append(es, startCode...)
 	es = append(es, hevcNAL(34, []byte{0xc0, 0xf3, 0xc0, 0x02})...) // PPS
 	es = append(es, startCode...)
-	es = append(es, hevcNAL(19, []byte{0xaf, 0x1b})...) // IDR_W_RADL slice
+	es = append(es, hevcNAL(firstNAL, []byte{0xaf, 0x1b})...) // the opening picture
 
 	cc := 0
 	out = append(out, tsPacket(videoPID, true, cc, pes(0xE0, startPTS, es))...)

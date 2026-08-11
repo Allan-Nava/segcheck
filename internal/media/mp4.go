@@ -35,6 +35,21 @@ type fragTrack struct {
 	minCTOffset int64
 	haveCT      bool
 	sequence    uint32
+	// firstFlags is the sample_flags word of the fragment's first sample, from
+	// trun's first-sample-flags, else its per-sample flags, else the tfhd default.
+	// A fragment need carry none of them, which is why haveFirstFlags exists: the
+	// absence of the flag is not the absence of a keyframe.
+	firstFlags     uint32
+	haveFirstFlags bool
+}
+
+// noteFirstFlags records the sample_flags of the fragment's first sample, and
+// only the first: several traf boxes may describe one track, and a later
+// fragment's flags say nothing about where this segment opens.
+func (f *fragTrack) noteFirstFlags(flags uint32) {
+	if !f.haveFirstFlags {
+		f.firstFlags, f.haveFirstFlags = flags, true
+	}
 }
 
 // ParseMP4 parses a fragmented MP4 media segment, using init (which may be nil,
@@ -86,6 +101,13 @@ func ParseMP4(data, init []byte) (SegmentInfo, error) {
 		t.ID = id
 		t.Samples = f.samples
 		t.StatedDur = f.sumDuration
+		if f.haveFirstFlags {
+			// The flag describes the first sample only, so it settles whether the
+			// fragment opens on a sync sample without saying whether a later sample
+			// is one. KeyframeScanned stays false for exactly that reason.
+			sync := !sampleIsNonSync(f.firstFlags)
+			t.OpensOnKeyframe, t.HasKeyframe, t.KeyframeKnown = sync, sync, true
+		}
 		if f.samples > 0 && f.sumDuration > 0 {
 			t.FrameDur = f.sumDuration / int64(f.samples)
 		}
@@ -365,6 +387,14 @@ func parseTraf(traf []byte, out map[uint32]*fragTrack) {
 		}
 		off += 4
 	}
+	var defaultFlags uint32
+	haveDefaultFlags := false
+	if flags&0x000020 != 0 {
+		if len(tfhd) >= off+4 {
+			defaultFlags, haveDefaultFlags = be32(tfhd[off:]), true
+		}
+		off += 4
+	}
 
 	f := out[trackID]
 	if f == nil {
@@ -398,6 +428,12 @@ func parseTraf(traf []byte, out map[uint32]*fragTrack) {
 	for _, trun := range findBoxes(traf, "trun") {
 		parseTrun(trun, f, defaultDuration, defaultSize)
 	}
+
+	// The tfhd default is the last word on the first sample's flags: a trun that
+	// states them outright has already been read, and this must not overwrite it.
+	if haveDefaultFlags {
+		f.noteFirstFlags(defaultFlags)
+	}
 }
 
 func parseTrun(trun []byte, f *fragTrack, defaultDuration, defaultSize uint32) {
@@ -412,7 +448,13 @@ func parseTrun(trun []byte, f *fragTrack, defaultDuration, defaultSize uint32) {
 		off += 4 // data-offset
 	}
 	if flags&0x000004 != 0 {
-		off += 4 // first-sample-flags
+		// first-sample-flags exists precisely to say that the fragment opens on a
+		// sync sample while the rest of its samples do not, so it is the most
+		// direct answer to SC-16's question.
+		if len(trun) >= off+4 {
+			f.noteFirstFlags(be32(trun[off:]))
+		}
+		off += 4
 	}
 
 	perSample := 0
@@ -464,6 +506,12 @@ func parseTrun(trun []byte, f *fragTrack, defaultDuration, defaultSize uint32) {
 			f.sumSize += int64(defaultSize)
 		}
 		if flags&0x000400 != 0 {
+			// Per-sample flags. Only sample 0 answers where the segment opens, and
+			// first-sample-flags takes precedence if it was present — noteFirstFlags
+			// keeps whichever arrived first, and that read happens above.
+			if i == 0 && len(trun) >= cur+4 {
+				f.noteFirstFlags(be32(trun[cur:]))
+			}
 			cur += 4 // sample-flags
 		}
 		if flags&0x000800 != 0 {

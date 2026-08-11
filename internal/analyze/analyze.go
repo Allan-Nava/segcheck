@@ -133,6 +133,7 @@ func Run(ctx context.Context, c *fetch.Client, rawurl string, opts Options) find
 	res.Findings = append(res.Findings, checkDuration(rends, opts)...)
 	res.Findings = append(res.Findings, checkBitrate(rends, opts)...)
 	res.Findings = append(res.Findings, checkResolution(rends)...)
+	res.Findings = append(res.Findings, checkKeyframe(rends)...)
 	res.Findings = append(res.Findings, checkTracks(rends)...)
 	res.Findings = append(res.Findings, checkTimeline(rends, opts)...)
 	res.Findings = append(res.Findings, checkEncryption(rends)...)

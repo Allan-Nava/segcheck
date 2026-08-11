@@ -33,10 +33,28 @@ func TS(startPTS, frameDur int64, frames int) []byte {
 	return out
 }
 
+// H.264 NAL header bytes for the opening slice. nal_ref_idc is 3 in both; only
+// the low five bits, the nal_unit_type, differ.
+const (
+	// H264IDRSlice opens a segment on an instantaneous decoder refresh, which is
+	// what makes the segment switchable into.
+	H264IDRSlice = byte(0x65) // nal_unit_type 5
+	// H264NonIDRSlice opens it on an ordinary slice, which is not.
+	H264NonIDRSlice = byte(0x41) // nal_unit_type 1
+)
+
 // TSWithSPS is TS plus an H.264 SPS ahead of the first frame, so the parser can
 // recover the coded resolution. sps is the raw SPS NAL payload (without the
-// start code and without the NAL header byte).
+// start code and without the NAL header byte). The segment opens on an IDR, as a
+// well-formed one does.
 func TSWithSPS(startPTS, frameDur int64, frames int, sps []byte) []byte {
+	return TSWithSPSOpening(startPTS, frameDur, frames, sps, H264IDRSlice)
+}
+
+// TSWithSPSOpening is TSWithSPS with the opening slice's NAL header chosen by the
+// caller, so a test can plant a segment that opens on a non-keyframe — the defect
+// behind "ABR switching stutters even though the boundaries line up".
+func TSWithSPSOpening(startPTS, frameDur int64, frames int, sps []byte, firstSlice byte) []byte {
 	const (
 		pmtPID   = 0x1000
 		videoPID = 0x0100
@@ -48,7 +66,7 @@ func TSWithSPS(startPTS, frameDur int64, frames int, sps []byte) []byte {
 	// Annex-B: start code, NAL header (type 7 = SPS), then the SPS bytes.
 	es := []byte{0x00, 0x00, 0x00, 0x01, 0x67}
 	es = append(es, sps...)
-	es = append(es, 0x00, 0x00, 0x00, 0x01, 0x65) // an IDR slice header follows
+	es = append(es, 0x00, 0x00, 0x00, 0x01, firstSlice)
 
 	cc := 0
 	out = append(out, tsPacket(videoPID, true, cc, pes(0xE0, startPTS, es))...)
@@ -251,6 +269,36 @@ func MP4Segment(trackID uint32, sequence uint32, baseDecodeTime int64, sampleDur
 	))
 	// trun flags 0: sample count only, durations come from the tfhd default.
 	trun := box("trun", concat(u32(0), u32(uint32(samples))))
+	traf := box("traf", concat(tfhd, tfdt, trun))
+	moof := box("moof", concat(mfhd, traf))
+	mdat := box("mdat", make([]byte, payloadBytes))
+	styp := box("styp", concat([]byte("msdh"), u32(0), []byte("msdhmsix")))
+	return concat(styp, moof, mdat)
+}
+
+// MP4SegmentSync is MP4Segment that states, in trun's first-sample-flags,
+// whether the segment's first sample is a sync sample.
+//
+// MP4Segment states nothing either way, which is the honest "not verifiable"
+// case: an fMP4 fragment need not carry the flag at all, and a reader must not
+// take its absence for a defect. This builder is the one that lets a test plant
+// a fragment which says outright that it opens on a non-sync sample.
+func MP4SegmentSync(trackID, sequence uint32, baseDecodeTime int64, sampleDuration uint32, samples, payloadBytes int, sync bool) []byte {
+	mfhd := box("mfhd", concat(u32(0), u32(sequence)))
+	tfhd := box("tfhd", concat(u32(0x000008), u32(trackID), u32(sampleDuration)))
+	tfdt := box("tfdt", concat(
+		[]byte{0x01, 0x00, 0x00, 0x00},
+		u64(uint64(baseDecodeTime)),
+	))
+	// trun flags 0x000004: first-sample-flags-present. In a sample_flags word
+	// sample_is_non_sync_sample is bit 15 counting from the most significant, and
+	// sample_depends_on is bits 6 and 7 — 2 meaning "depends on nothing", which is
+	// what an I-frame is.
+	flags := uint32(0x02000000) // sample_depends_on = 2
+	if !sync {
+		flags = 0x01000000 | 0x00010000 // depends on others, and not a sync sample
+	}
+	trun := box("trun", concat(u32(0x000004), u32(uint32(samples)), u32(flags)))
 	traf := box("traf", concat(tfhd, tfdt, trun))
 	moof := box("moof", concat(mfhd, traf))
 	mdat := box("mdat", make([]byte, payloadBytes))

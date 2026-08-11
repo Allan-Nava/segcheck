@@ -167,6 +167,17 @@ func (s *tsStream) capture(b []byte) {
 	s.es = append(s.es, b...)
 }
 
+// keyframes runs a keyframe walk over the captured elementary stream, and clears
+// Scanned when the capture itself was cut short at maxESCapture: a keyframe past
+// the cap is one nobody looked for, not one that is absent.
+func (s *tsStream) keyframes(walk func([]byte) keyframeVerdict) keyframeVerdict {
+	v := walk(s.es)
+	if len(s.es) >= maxESCapture {
+		v.Scanned = false
+	}
+	return v
+}
+
 func (s *tsStream) track() Track {
 	t := Track{
 		ID:        uint32(s.pid),
@@ -203,8 +214,14 @@ func (s *tsStream) track() Track {
 		switch t.Codec {
 		case "hevc":
 			w, h, ok = hevcResolution(s.es)
+			kf := hevcKeyframes(s.es)
+			t.OpensOnKeyframe, t.HasKeyframe = kf.Opens, kf.Present
+			t.KeyframeKnown, t.KeyframeScanned = kf.Known, kf.Scanned
 		default:
 			w, h, ok = h264Resolution(s.es)
+			kf := h264Keyframes(s.es)
+			t.OpensOnKeyframe, t.HasKeyframe = kf.Opens, kf.Present
+			t.KeyframeKnown, t.KeyframeScanned = kf.Known, kf.Scanned
 		}
 		if ok {
 			t.Width, t.Height = w, h
