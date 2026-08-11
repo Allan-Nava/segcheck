@@ -39,6 +39,9 @@ type segSpec struct {
 	discontinuity bool
 	// codedWidth/codedHeight embed an SPS so the real resolution is readable.
 	codedWidth, codedHeight int
+	// hevc codes the segment as HEVC rather than H.264, which is a different
+	// stream type in the PMT and a different parameter set to read.
+	hevc bool
 	// status, when non-zero, is served instead of the media.
 	status int
 	// body, when non-nil, is served instead of the media.
@@ -129,6 +132,10 @@ func hlsOriginHandler(variants []variantSpec) *http.ServeMux {
 				}
 				w.Header().Set("Content-Type", "video/mp2t")
 				if s.codedWidth > 0 {
+					if s.hevc {
+						_, _ = w.Write(mediatest.TSWithHEVCSPS(s.startPTS, frameDur, segFrames, mediatest.HEVCSPSFor(s.codedWidth, s.codedHeight)))
+						return
+					}
 					_, _ = w.Write(mediatest.TSWithSPS(s.startPTS, frameDur, segFrames, mediatest.SPSFor(s.codedWidth, s.codedHeight)))
 					return
 				}
@@ -517,4 +524,62 @@ func dump(res finding.Result) string {
 		fmt.Fprintf(&b, "  %-5s %-12s %-22s %s\n", f.Status, f.Check, f.Target, f.Message)
 	}
 	return b.String()
+}
+
+// SC-15: before the HEVC reader existed, an HEVC rung reported its codec and no
+// resolution, so this check found nothing to compare and said nothing. The
+// stream below declares 1080p and codes 720p — the same defect
+// TestRun_FindsResolutionMismatch plants in H.264 — and it has to be caught in
+// HEVC too, and attributed to the right rendition.
+func TestRun_FindsResolutionMismatchInHEVC(t *testing.T) {
+	segs := cleanSegments(4, 1280, 720)
+	for i := range segs {
+		segs[i].hevc = true
+	}
+	srv := newHLSOrigin(t, []variantSpec{
+		{name: "1080p", bandwidth: syntheticBandwidth, width: 1920, height: 1080,
+			codecs: "hvc1.1.6.L93.B0", segments: segs},
+	})
+	res := runOn(t, srv.URL+"/master.m3u8")
+
+	f, ok := findFinding(res, "resolution", finding.BAD)
+	if !ok {
+		t.Fatalf("an HEVC rung declaring 1920x1080 while coding 1280x720 was not reported:\n%s", dump(res))
+	}
+	if !strings.Contains(f.Target, "1080p") {
+		t.Errorf("finding is attributed to %q, not to the 1080p rendition", f.Target)
+	}
+	for _, want := range []string{"1920x1080", "1280x720"} {
+		if !strings.Contains(f.Message, want) {
+			t.Errorf("message does not carry %s, so the operator cannot see the gap: %q", want, f.Message)
+		}
+	}
+}
+
+// An HEVC ladder whose rungs code what they declare must produce nothing above
+// OK — a reader that cries wolf on healthy media is worse than no reader.
+func TestRun_CleanHEVCStreamHasNoProblems(t *testing.T) {
+	mk := func(w, h int) []segSpec {
+		segs := cleanSegments(4, w, h)
+		for i := range segs {
+			segs[i].hevc = true
+		}
+		return segs
+	}
+	srv := newHLSOrigin(t, []variantSpec{
+		{name: "720p", bandwidth: syntheticBandwidth, width: 1280, height: 720,
+			codecs: "hvc1.1.6.L93.B0", segments: mk(1280, 720)},
+		{name: "1080p", bandwidth: syntheticBandwidth + 10_000, width: 1920, height: 1080,
+			codecs: "hvc1.1.6.L93.B0", segments: mk(1920, 1080)},
+	})
+	res := runOn(t, srv.URL+"/master.m3u8")
+
+	for _, f := range res.Findings {
+		if f.Status != finding.OK {
+			t.Errorf("clean HEVC stream produced %s on %s/%s: %s", f.Status, f.Check, f.Target, f.Message)
+		}
+	}
+	if !hasCheck(res, "resolution") {
+		t.Error("no resolution finding at all: the check still skips HEVC in silence")
+	}
 }

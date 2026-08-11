@@ -115,7 +115,7 @@ segcheck check https://cdn.example/master.m3u8 --exit-on bad
 | `encryption` | Declared protection against what the segments carry | BAD |
 | `ladder` | Duplicate rungs, inverted rungs, dangling `AUDIO` groups, missing `CODECS` | BAD |
 
-Containers understood: **MPEG-TS** (PAT/PMT, PES timestamps, continuity counters, H.264 SPS for the real resolution), **fragmented MP4 / CMAF** (`moov` for timescale, codec and coded size; `tfdt`/`trun` for the timeline), and **packed audio** (ADTS AAC with the ID3 `transportStreamTimestamp` that gives audio-only renditions a timeline).
+Containers understood: **MPEG-TS** (PAT/PMT, PES timestamps, continuity counters, H.264 and HEVC/H.265 parameter sets for the real resolution), **fragmented MP4 / CMAF** (`moov` for timescale, codec and coded size; `tfdt`/`trun` for the timeline), and **packed audio** (ADTS AAC with the ID3 `transportStreamTimestamp` that gives audio-only renditions a timeline).
 
 ## When *not* to use it
 

@@ -94,10 +94,19 @@ The rungs segcheck currently reads least well. Every item here removes a silent
 skip — a place where the tool says nothing because it cannot look, not because
 the stream is healthy.
 
-- [ ] **SC-15 — HEVC/H.265 SPS**: coded resolution from `hvcC` and from an
-  MPEG-TS HEVC elementary stream. Today HEVC in TS reports the codec but not the
-  resolution, so the `resolution` check silently skips those rungs.
-  <!-- sc: prio=high size=L labels=parser -->
+- [x] **SC-15 — HEVC/H.265 SPS**: coded resolution for HEVC rungs, which used to
+  report a codec and no resolution so the `resolution` check skipped them in
+  silence — a silence indistinguishable from a pass. `internal/media/hevc.go`
+  reads the parameter set out of an MPEG-TS elementary stream: two-byte NAL
+  header, `profile_tier_level` measured exactly (its length depends on the
+  sub-layer count, and misreading it returns a plausible wrong number rather
+  than failing), then the conformance window applied with the SubWidthC /
+  SubHeightC unit for the chroma format. `tsStream.track()` dispatches on stream
+  type rather than trying both readers, because an HEVC stream read as H.264 can
+  find something SPS-shaped. fMP4 needed no reader — the visual sample entry
+  already states it — but `hvc1` now has a test of its own rather than an
+  assumption. Both the sub-layer tail and the end-to-end check were
+  mutation-verified. <!-- sc: prio=high size=L labels=parser ver=unreleased -->
 - [ ] **SC-16 — Keyframe alignment**: every segment must start on an IDR/IRAP. A
   segment that opens on a non-keyframe cannot be switched into, which is the
   defect behind "ABR switching stutters even though the boundaries line up".

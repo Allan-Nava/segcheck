@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**70 items · 26 shipped · 44 open · 11 milestones.**
+**70 items · 27 shipped · 43 open · 11 milestones.**
 
 ## At a glance
 
@@ -14,7 +14,7 @@
 |---|---|---|---|---|---|
 | **M1** — Core: read the segments | `v0.1.0` | shipped | `##########` 100% | 0 | 6 |
 | **M2** — The checks | `v0.1.0` | shipped | `##########` 100% | 0 | 8 |
-| **M3** — Codec and timing depth | `v0.2.0` | **now** | `..........` 0% | 6 | 0 |
+| **M3** — Codec and timing depth | `v0.2.0` | **now** | `##........` 17% | 5 | 1 |
 | **M4** — Everything that is not the video track | `v0.3.0` | next | `..........` 0% | 6 | 0 |
 | **M5** — Live and delivery | `v0.4.0` | later | `..........` 0% | 6 | 0 |
 | **M9** — Wallclock and DVR correctness | `v0.4.0` | later | `..........` 0% | 5 | 0 |
@@ -28,7 +28,6 @@
 
 The open items with the highest priority in the milestones that are in flight.
 
-- **SC-15** — HEVC/H.265 SPS · `high` · size `L` · parser (M3, target `v0.2.0`)
 - **SC-16** — Keyframe alignment · `high` · size `L` · check,parser (M3, target `v0.2.0`)
 - **SC-17** — Frame rate · `high` · size `M` · check (M3, target `v0.2.0`)
 - **SC-18** — Audio sanity · `high` · size `M` · check (M4, target `v0.3.0`)
@@ -36,6 +35,7 @@ The open items with the highest priority in the milestones that are in flight.
 - **SC-20** — SCTE-35 / `EXT-X-DATERANGE` · `high` · size `L` · check,parser (M4, target `v0.3.0`)
 - **SC-35** — Parser fuzzing · `high` · size `M` · tests,parser (M3, target `v0.2.0`)
 - **SC-36** — Real-stream smoke suite · `high` · size `S` · tests,release (M7, target `ongoing`)
+- **SC-37** — CEA-608/708 captions · `high` · size `L` · check,parser (M4, target `v0.3.0`)
 
 ## Milestones
 
@@ -69,16 +69,16 @@ Target `v0.1.0` · shipped · 0 open · 8 shipped · `##########` 100%
 
 ### M3 — Codec and timing depth
 
-Target `v0.2.0` · **now** · 6 open · 0 shipped · `..........` 0%
+Target `v0.2.0` · **now** · 5 open · 1 shipped · `##........` 17%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
-| **SC-15** — HEVC/H.265 SPS | high | L | parser | open |
 | **SC-16** — Keyframe alignment | high | L | check,parser | open |
 | **SC-17** — Frame rate | high | M | check | open |
 | **SC-19** — `sidx` and `SegmentBase` | high | M | parser | open |
 | **SC-35** — Parser fuzzing | high | M | tests,parser | open |
 | **SC-42** — AV1 and VP9 coded resolution | med | L | parser | open |
+| **SC-15** — HEVC/H.265 SPS | high | L | parser | done, unreleased |
 
 ### M4 — Everything that is not the video track
 
@@ -191,7 +191,7 @@ Target `ongoing` · ongoing · 5 open · 7 shipped · `######....` 58%
 | Label | Items | Open |
 |---|---|---|
 | `check` | 32 | 25 |
-| `parser` | 26 | 20 |
+| `parser` | 26 | 19 |
 | `cli` | 8 | 7 |
 | `delivery` | 5 | 4 |
 | `integration` | 4 | 4 |

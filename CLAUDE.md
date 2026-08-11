@@ -99,10 +99,17 @@ AGENTS.md wins and this file gets fixed.
 - **`ERROR` means the check could not run**, not that the stream is broken — it
   sorts above BAD because an operator needs to know the coverage has a hole, and
   that is the only reason.
-- **HEVC in MPEG-TS reports its codec but not its resolution today**, so the
-  `resolution` check silently skips those rungs. That silence is a known gap
-  (SC-15), not a clean bill of health — do not "fix" it by guessing from
-  `RESOLUTION`.
+- **The TS resolution reader dispatches on stream type, never on guesswork.**
+  H.264 (`0x1B`) and HEVC (`0x24`/`0x25`) put the NAL type in different bits —
+  five low bits versus bits 1..6 of a two-byte header — so reading one stream
+  with the other reader does not fail cleanly: it can find something SPS-shaped
+  and return a plausible wrong resolution. Add a codec to `streamCodec`, and add
+  its reader to the switch in `tsStream.track()` at the same time, or the rung
+  goes silent (SC-15 was exactly that silence for HEVC).
+- **In fMP4 the container states the resolution and no bitstream reader is
+  needed** — the visual sample entry carries it. A codec missing from
+  `isVisualSampleEntry` goes silent the way MPEG-TS HEVC used to, which is why
+  `hvc1` has a test of its own rather than being assumed to work.
 - **Clock injection**: `analyze.Options.Now` fixes the clock for live-edge maths
   and DASH `$Time$`/`availabilityStartTime` expansion. Never call `time.Now()`
   inside a check or a parser — the DASH tests pin the clock.

@@ -9,6 +9,20 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **HEVC/H.265 coded resolution** (SC-15): an HEVC rung in an MPEG-TS segment
+  used to report its codec and no resolution, so the `resolution` check had
+  nothing to compare and said nothing — a silence indistinguishable from a rung
+  that passed. `internal/media/hevc.go` reads the parameter set out of the
+  elementary stream: the two-byte NAL header, `profile_tier_level` measured
+  exactly (its length depends on the declared sub-layer count, and a reader that
+  mismeasures it returns a plausible wrong resolution instead of failing), and
+  the conformance window applied with the SubWidthC/SubHeightC unit for the
+  chroma format. The TS reader now dispatches on stream type rather than trying
+  both parsers, because an HEVC stream read as H.264 can find something
+  SPS-shaped and answer confidently. fMP4 already stated the resolution in its
+  visual sample entry and needed no reader, but `hvc1` gained a test rather than
+  staying an assumption.
+
 - **M11 — Content protection, in depth** (SC-66 … SC-70), targeted at v0.6.0.
   The `encryption` check shipped in v0.1.0 answers whether segments are
   protected when the manifest says so, and stops there; this milestone is the

@@ -177,8 +177,19 @@ func encodePTS(pts int64) []byte {
 
 // MP4Init builds an initialisation segment for one track.
 func MP4Init(trackID, timescale uint32, kind string, width, height int) []byte {
+	return mp4InitWith(trackID, timescale, kind, "avc1", width, height)
+}
+
+// MP4InitHEVC is MP4Init with an `hvc1` visual sample entry, so a test can
+// assert that fMP4 HEVC reports its resolution from the container rather than
+// needing the bitstream reader MPEG-TS does.
+func MP4InitHEVC(trackID, timescale uint32, width, height int) []byte {
+	return mp4InitWith(trackID, timescale, "video", "hvc1", width, height)
+}
+
+func mp4InitWith(trackID, timescale uint32, kind, sampleEntryType string, width, height int) []byte {
 	handler := "vide"
-	sampleEntry := visualSampleEntry("avc1", width, height)
+	sampleEntry := visualSampleEntry(sampleEntryType, width, height)
 	if kind == "audio" {
 		handler = "soun"
 		sampleEntry = audioSampleEntry("mp4a")

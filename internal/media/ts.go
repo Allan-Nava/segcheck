@@ -191,7 +191,22 @@ func (s *tsStream) track() Track {
 		t.FrameDur = medianDelta(s.pts)
 	}
 	if t.Kind == Video && len(s.es) > 0 {
-		if w, h, ok := h264Resolution(s.es); ok {
+		// Dispatch on the stream type rather than trying both readers: an HEVC
+		// NAL header is two bytes and carries its type in different bits, so a
+		// stream read with the wrong reader does not fail cleanly — it can find
+		// something that looks like a parameter set and return a plausible
+		// wrong resolution, which is worse than reporting none.
+		var (
+			w, h int
+			ok   bool
+		)
+		switch t.Codec {
+		case "hevc":
+			w, h, ok = hevcResolution(s.es)
+		default:
+			w, h, ok = h264Resolution(s.es)
+		}
+		if ok {
 			t.Width, t.Height = w, h
 		}
 	}

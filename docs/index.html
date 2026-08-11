@@ -282,7 +282,7 @@ footer{border-top:1px solid var(--border);padding:34px 0;color:var(--muted);font
         <thead><tr><th>The manifest says</th><th>segcheck reads the segments and answers</th></tr></thead>
         <tbody>
           <tr><td><code>#EXTINF:6.000</code></td><td>Is the media really 6.000s, or 5.184s and drifting?</td></tr>
-          <tr><td><code>RESOLUTION=1920x1080</code></td><td>What does the H.264 SPS / the <code>avc1</code> sample entry actually code?</td></tr>
+          <tr><td><code>RESOLUTION=1920x1080</code></td><td>What does the H.264 or HEVC parameter set / the sample entry actually code?</td></tr>
           <tr><td>Segment 41 follows segment 40</td><td>Does 41's first timestamp equal 40's last one, or is there a 512ms hole?</td></tr>
           <tr><td><code>BANDWIDTH=2400000</code></td><td>What is the measured peak segment bitrate?</td></tr>
           <tr><td>Four renditions</td><td>Do their segment boundaries land on the same timeline, so ABR switching is seamless?</td></tr>
@@ -291,7 +291,7 @@ footer{border-top:1px solid var(--border);padding:34px 0;color:var(--muted);font
       </table>
     </div>
 
-    <div class="note"><strong>No ffmpeg, no ffprobe, no cgo, no dependencies.</strong> The MPEG-TS, ISO-BMFF/CMAF, H.264 SPS and ADTS parsers are all in-tree, standard library only. <code>segcheck</code> is one static binary that runs from your laptop, a cron job, or CI.</div>
+    <div class="note"><strong>No ffmpeg, no ffprobe, no cgo, no dependencies.</strong> The MPEG-TS, ISO-BMFF/CMAF, H.264 and HEVC parameter set and ADTS parsers are all in-tree, standard library only. <code>segcheck</code> is one static binary that runs from your laptop, a cron job, or CI.</div>
   </div>
 </section>
 
@@ -327,7 +327,7 @@ footer{border-top:1px solid var(--border);padding:34px 0;color:var(--muted);font
     <div class="grid g3">
       <div class="card">
         <div class="card-head"><span class="k">MPEG-TS</span></div>
-        <p>PAT/PMT, PES presentation timestamps, continuity counters, and the H.264 SPS for the resolution the bitstream really codes.</p>
+        <p>PAT/PMT, PES presentation timestamps, continuity counters, and the H.264 or HEVC parameter set for the resolution the bitstream really codes.</p>
       </div>
       <div class="card">
         <div class="card-head"><span class="k">fMP4 / CMAF</span></div>
@@ -513,7 +513,7 @@ segcheck check https://cdn.example/master.m3u8 --exit-on bad</pre></div>
     <div class="grid g3" style="margin-top:22px">
       <div class="card">
         <div class="card-head"><span class="k">v0.2.0</span><span class="pill p-ok">in flight</span></div>
-        <p>HEVC coded resolution, keyframe alignment, frame rate, <code>sidx</code>/<code>SegmentBase</code>, AV1/VP9, parser fuzzing.</p>
+        <p>Keyframe alignment, frame rate, <code>sidx</code>/<code>SegmentBase</code>, AV1/VP9, parser fuzzing. HEVC coded resolution is done.</p>
       </div>
       <div class="card">
         <div class="card-head"><span class="k">v0.3.0</span></div>

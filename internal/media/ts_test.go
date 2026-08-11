@@ -91,6 +91,41 @@ func TestParseTS_ResolutionFromSPS(t *testing.T) {
 	}
 }
 
+// The same recovery for HEVC. MPEG-TS describes no resolution, so an HEVC rung
+// whose parameter set is never read comes back with its codec set and 0x0 for a
+// frame size — and the `resolution` check skips a rung it cannot measure, in
+// silence that reads exactly like a rung that passed.
+func TestParseTS_ResolutionFromHEVCSPS(t *testing.T) {
+	info, err := ParseTS(mediatest.TSWithHEVCSPS(0, 3600, 5, mediatest.HEVCSPSFor(3840, 2160)))
+	if err != nil {
+		t.Fatalf("ParseTS: %v", err)
+	}
+	track, ok := info.Track(Video)
+	if !ok {
+		t.Fatal("no video track")
+	}
+	if track.Codec != "hevc" {
+		t.Errorf("codec = %q, want hevc", track.Codec)
+	}
+	if track.Width != 3840 || track.Height != 2160 {
+		t.Errorf("resolution = %dx%d, want 3840x2160", track.Width, track.Height)
+	}
+}
+
+// An H.264 reader pointed at an HEVC stream must not return a number: the NAL
+// header is a different shape, so anything it recovers is an accident. This is
+// the assertion that keeps the dispatch honest rather than "try both readers".
+func TestParseTS_HEVCIsNotReadAsH264(t *testing.T) {
+	info, err := ParseTS(mediatest.TSWithHEVCSPS(0, 3600, 5, mediatest.HEVCSPSFor(1280, 720)))
+	if err != nil {
+		t.Fatalf("ParseTS: %v", err)
+	}
+	track, _ := info.Track(Video)
+	if track.Width != 1280 || track.Height != 720 {
+		t.Errorf("resolution = %dx%d, want 1280x720", track.Width, track.Height)
+	}
+}
+
 func TestParseTS_RejectsNonTS(t *testing.T) {
 	if _, err := ParseTS([]byte("<html><body>404 Not Found</body></html>")); err == nil {
 		t.Fatal("an HTML error page parsed as MPEG-TS")
