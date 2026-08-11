@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**86 items · 31 shipped · 55 open · 13 milestones.**
+**86 items · 32 shipped · 54 open · 13 milestones.**
 
 ## At a glance
 
@@ -24,7 +24,7 @@
 | **M12** — Colour, HDR and the codec string | `v0.7.0` | later | `..........` 0% | 6 | 0 |
 | **M13** — Audio, past the sanity check | `v0.8.0` | later | `..........` 0% | 6 | 0 |
 | **M8** — Container image and supply chain | `v0.1.1` | shipped | `##########` 100% | 0 | 5 |
-| **M7** — Project and release | `ongoing` | ongoing | `#######...` 67% | 5 | 10 |
+| **M7** — Project and release | `ongoing` | ongoing | `#######...` 73% | 4 | 11 |
 
 ## Next up
 
@@ -198,12 +198,11 @@ Target `v0.1.1` · shipped · 0 open · 5 shipped · `##########` 100%
 
 ### M7 — Project and release
 
-Target `ongoing` · ongoing · 5 open · 10 shipped · `#######...` 67%
+Target `ongoing` · ongoing · 4 open · 11 shipped · `#######...` 73%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
 | **SC-36** — Real-stream smoke suite | high | S | tests,release | open |
-| **SC-48** — Coverage ratchet | med | S | tests | open |
 | **SC-64** — `scripts/backlog.sh` has no tests | med | S | tests,project | open |
 | **SC-65** — The published cask actually installs | med | S | release,docs | open |
 | **SC-49** — Per-check reference pages | low | M | docs | open |
@@ -214,6 +213,7 @@ Target `ongoing` · ongoing · 5 open · 10 shipped · `#######...` 67%
 | **SC-32** — Homebrew tap upload | med | S | release | shipped `0.1.1` |
 | **SC-34** — Backlog and roadmap tooling | med | M | project | shipped `0.1.1` |
 | **SC-47** — SBOM and signed artefacts | med | M | release | shipped `0.1.1` |
+| **SC-48** — Coverage ratchet | med | S | tests | done, unreleased |
 | **SC-80** — GitHub issues generated from the backlog | med | M | project,tests | done, unreleased |
 | **SC-33** — Docs site | low | M | docs | shipped `0.1.1` |
 | **SC-50** — Brand assets | low | S | docs | shipped `0.1.1` |
@@ -227,8 +227,8 @@ Target `ongoing` · ongoing · 5 open · 10 shipped · `#######...` 67%
 | `cli` | 8 | 7 |
 | `delivery` | 5 | 4 |
 | `integration` | 4 | 4 |
-| `tests` | 10 | 4 |
 | `output` | 4 | 3 |
+| `tests` | 10 | 3 |
 | `docs` | 5 | 2 |
 | `release` | 8 | 2 |
 | `project` | 5 | 1 |

@@ -717,11 +717,26 @@ checks roadmap and blocks nothing.
   keeping against a future refactor; removing them to reach a round number would
   trade real safety for a metric.
   <!-- sc: prio=high size=L labels=tests,project ver=unreleased -->
-- [ ] **SC-48 — Coverage ratchet**: CI already prints total coverage; make it
-  fail when a commit lowers it. Test-first only holds if something notices when
-  it did not happen — a check merged without its test should show up in the
-  build, not in a review three weeks later.
-  <!-- sc: prio=med size=S labels=tests -->
+- [x] **SC-48 — Coverage ratchet**: `scripts/coverage.sh check` compares the
+  measurement against the figure recorded in `scripts/coverage.floor` and fails
+  when a commit lowers it, which is what test-first needs to hold — a check
+  merged without its test now shows up in the build rather than in a review three
+  weeks later. SC-78 delivered only half of this and the distinction matters: a
+  hard-coded floor of 99% would have let coverage slide from 99.64% to 99.01%
+  without a word. The floor is a committed file rather than a number in the
+  workflow, so raising it is a reviewable diff, exactly as `ROADMAP.md` is
+  generated but committed. It only goes up: a drop fails, `update` refuses to
+  record a figure below the current floor so a regression cannot be laundered
+  into the baseline, and a gain beyond a 0.25-point tolerance also fails asking
+  to be locked in — a ratchet that never tightens is just a floor, and the slack
+  it leaves is room for a real loss to hide in. The tolerance exists so that
+  deleting a couple of uncovered lines does not nag. Measuring needs `go test`
+  but deciding does not, so `COVERAGE_ACTUAL` injects a measurement and
+  `scripts/coverage_test.sh` asserts the whole decision table without running the
+  suite: the drop, the one-statement drop, standing still, a gain worth
+  recording, a missing floor file, a floor file with rubbish in it (which must not
+  read as zero and pass everything), and `update`'s refusal to go down.
+  <!-- sc: prio=med size=S labels=tests ver=unreleased -->
 - [x] **SC-32 — Homebrew tap upload**: `skip_upload` is gone, so the next tag
   writes `Casks/segcheck.rb` into `Allan-Nava/homebrew-tap`. The credential is a
   fine-grained PAT scoped to that one repository with *Contents: read and

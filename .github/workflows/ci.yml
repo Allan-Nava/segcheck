@@ -33,14 +33,18 @@ jobs:
       # segment fan-out writes into a shared slice, so both matter.
       #
       # scripts/coverage.sh merges the -coverpkg profile before measuring, which
-      # `go tool cover -func` does not do, and fails below the floor. The floor
-      # sits just under the current figure: the nine statements not covered are
-      # defensive guards that cannot be reached with their inputs (see SC-78), so
-      # 99% is the practical ceiling and a drop below it means a check shipped
-      # without its test.
-      - name: Test with coverage
+      # `go tool cover -func` does not do, and then ratchets (SC-48): it fails if
+      # coverage dropped below the figure recorded in scripts/coverage.floor, and
+      # also if it rose enough to be worth locking in. The floor is committed, so
+      # moving it is a reviewable diff rather than a number buried in this file.
+      # The ratchet decides whether the build fails, so its decision table is
+      # asserted before it is trusted to make that call.
+      - name: The coverage ratchet's own tests
+        run: sh scripts/coverage_test.sh
+
+      - name: Test with coverage, ratcheted
         run: |
-          summary=$(./scripts/coverage.sh 99)
+          summary=$(./scripts/coverage.sh check)
           echo "$summary"
           echo "### Coverage" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"

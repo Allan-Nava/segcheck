@@ -67,6 +67,21 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   listed with their reasons in `BACKLOG.md`; they stay as guards rather than
   being deleted to round the number up.
 
+- **The coverage gate is a ratchet now, not a floor** (SC-48): `scripts/coverage.sh
+  check` compares against the figure in `scripts/coverage.floor` and fails when a
+  commit lowers it. SC-78 shipped only half of this, and the difference is the
+  whole point of the item: a hard-coded 99% would have let coverage slide from
+  99.64% to 99.01% without a word. The floor is committed rather than written into
+  the workflow, so moving it is a reviewable diff — the same arrangement as
+  `ROADMAP.md` being generated but committed. It only goes up: a drop fails,
+  `coverage.sh update` refuses to record anything below the current floor so a
+  regression cannot be laundered into the baseline, and a gain beyond a
+  0.25-point tolerance fails asking to be locked in, because a ratchet that never
+  tightens leaves slack for a real loss to hide in. Deciding is separated from
+  measuring — `COVERAGE_ACTUAL` injects a figure — so `scripts/coverage_test.sh`
+  asserts the whole decision table without running the suite, including a floor
+  file containing rubbish, which must not read as zero and pass everything.
+
 - **GitHub issues generated from the backlog** (SC-80): the plan was only visible
   to someone reading `BACKLOG.md` or `ROADMAP.md` in the repository — the issue
   tab was empty, and had been since the project started. `scripts/backlog.sh
