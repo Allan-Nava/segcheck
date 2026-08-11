@@ -18,6 +18,15 @@ type SPSParams struct {
 	CropTop          uint32
 	CropBottom       uint32
 	ScalingMatrix    bool
+	// PicOrderCntType selects how picture order is coded. Type 1 carries a
+	// variable-length list of frame offsets, which is the second place — after
+	// the scaling matrices — where the fields before the resolution change
+	// length. A reader that mismeasures it reads the macroblock counts out of
+	// the middle of an offset.
+	PicOrderCntType uint32
+	// OffsetForRefFrame is written only for PicOrderCntType 1, one signed
+	// Exp-Golomb code per entry.
+	OffsetForRefFrame []int32
 }
 
 // SPSFor builds a High-profile progressive 4:2:0 SPS that codes exactly
@@ -59,7 +68,14 @@ func SPS(p SPSParams) []byte {
 		w.bit(0) // qpprime_y_zero_transform_bypass_flag
 		if p.ScalingMatrix {
 			w.bit(1)
-			for i := 0; i < 8; i++ {
+			// Eight lists, or twelve in 4:4:4 — the count the standard ties to
+			// chroma_format_idc, and the reason a reader that assumes eight ends
+			// up four lists out of step on 4:4:4 content.
+			lists := 8
+			if p.ChromaFormatIDC == 3 {
+				lists = 12
+			}
+			for i := 0; i < lists; i++ {
 				w.bit(1) // this list is present
 				size := 16
 				if i >= 6 {
@@ -74,9 +90,20 @@ func SPS(p SPSParams) []byte {
 		}
 	}
 
-	w.ue(4)  // log2_max_frame_num_minus4
-	w.ue(0)  // pic_order_cnt_type
-	w.ue(4)  // log2_max_pic_order_cnt_lsb_minus4
+	w.ue(4) // log2_max_frame_num_minus4
+	w.ue(p.PicOrderCntType)
+	switch p.PicOrderCntType {
+	case 0:
+		w.ue(4) // log2_max_pic_order_cnt_lsb_minus4
+	case 1:
+		w.bit(0) // delta_pic_order_always_zero_flag
+		w.se(0)  // offset_for_non_ref_pic
+		w.se(0)  // offset_for_top_to_bottom_field
+		w.ue(uint32(len(p.OffsetForRefFrame)))
+		for _, off := range p.OffsetForRefFrame {
+			w.se(off)
+		}
+	}
 	w.ue(2)  // max_num_ref_frames
 	w.bit(0) // gaps_in_frame_num_value_allowed_flag
 	w.ue(p.WidthInMBsMinus1)

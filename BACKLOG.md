@@ -468,6 +468,35 @@ checks roadmap and blocks nothing.
   lint failures (duplicate id, gap in the sequence, bad metadata) that are
   currently only ever exercised by hand.
   <!-- sc: prio=med size=S labels=tests,project -->
+- [x] **SC-71 — The untested helpers behind the findings** (total was 70.7% of
+  statements, now 76.2%; `internal/media` 74.1 → 84.3, `internal/manifest`
+  79.4 → 87.9, `internal/analyze` 85.5 → 89.5, `internal/finding` 83.3 → 94.4).
+  An audit for functions that no test ever called, taking the ones whose failure
+  mode is a *wrong finding* rather than a crash. `parseTrun` was the worst of
+  them at 38.8%: its per-sample fields are an optional bitmap, and the
+  composition-time offset is unsigned in a version 0 box and signed in a version
+  1 one — read the version 1 case as unsigned and a small negative offset moves
+  the segment's start about 13 hours forward, reporting a gap that is not there.
+  Every stride is now pinned by one box carrying all four optional fields, so
+  dropping any of them makes the offset come out of the preceding word.
+  `media.Timeline` had no test at all despite being the promise that a
+  cross-segment check never compares a video start against an audio start.
+  `declaredCodec` gained a contract test asserting every name it can return is a
+  name some parser actually produces — the two tables live in different packages
+  and compare by string, so drift there reports a codec mismatch on every stream
+  of that codec. `describeCounts` is asserted stable over 200 runs because its
+  keys come out of a map and Go randomises that iteration, which would make two
+  runs of the same stream render differently. Also `firstTemplate`'s three-level
+  DASH inheritance (a dropped `@timescale` makes every duration unmeasurable, and
+  the merge must not write through to the AdaptationSet template every sibling
+  representation shares), `dashKind`/`dashName`/`streamInfKind`, both codec
+  tables, and the severity order itself. Verified the way SC-57 and SC-58 were:
+  60 mutations applied to the functions under test, 59 caught. The one survivor
+  is provably a no-op — `applyBaseURLs`' blank-BaseURL guard, since
+  `ResolveReference("")` returns the base either way. Two of the tests were
+  themselves fixed by that pass, having asserted values a broken implementation
+  would also have produced.
+  <!-- sc: prio=high size=M labels=tests ver=unreleased -->
 - [ ] **SC-48 — Coverage ratchet**: CI already prints total coverage; make it
   fail when a commit lowers it. Test-first only holds if something notices when
   it did not happen — a check merged without its test should show up in the

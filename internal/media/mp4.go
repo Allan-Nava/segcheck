@@ -220,6 +220,16 @@ func parseHdlr(b []byte) TrackKind {
 	}
 }
 
+// The fixed fields every sample entry starts with, before any child box. Both
+// begin with the 8-byte SampleEntry (6 reserved plus data_reference_index);
+// VisualSampleEntry adds the pre_defined/reserved block, width, height,
+// resolutions, frame count, compressor name and depth, and AudioSampleEntry the
+// channel count, sample size and sample rate.
+const (
+	visualSampleEntrySize = 78
+	audioSampleEntrySize  = 28
+)
+
 // parseStsd reads the first sample entry: its type is the codec, and for video
 // its width/height are the coded resolution.
 func parseStsd(b []byte) (codec string, width, height int, encrypted bool) {
@@ -234,10 +244,24 @@ func parseStsd(b []byte) (codec string, width, height int, encrypted bool) {
 	typ := e.typ
 	if typ == "encv" || typ == "enca" {
 		encrypted = true
-		// sinf/frma names the original format the encryption replaced.
-		if sinf, ok := findBox(e.payload, "sinf"); ok {
-			if frma, ok := findBox(sinf, "frma"); ok && len(frma) >= 4 {
-				typ = string(frma[:4])
+		// sinf/frma names the original format the encryption replaced. Recovering
+		// it matters twice over: left as "encv" the tracks check compares the
+		// manifest's declared codec against it and reports a mismatch on media
+		// that is correct, and the resolution is never read because "encv" is not
+		// a visual sample entry type.
+		//
+		// The child boxes follow the sample entry's fixed fields, and those are
+		// not boxes: starting the search at byte 0 reads the leading reserved
+		// zeros as a box of declared size 0, which swallows the entry whole.
+		prefix := visualSampleEntrySize
+		if typ == "enca" {
+			prefix = audioSampleEntrySize
+		}
+		if len(e.payload) > prefix {
+			if sinf, ok := findBox(e.payload[prefix:], "sinf"); ok {
+				if frma, ok := findBox(sinf, "frma"); ok && len(frma) >= 4 {
+					typ = string(frma[:4])
+				}
 			}
 		}
 	}
