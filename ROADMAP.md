@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**71 items · 28 shipped · 43 open · 11 milestones.**
+**77 items · 28 shipped · 49 open · 12 milestones.**
 
 ## At a glance
 
@@ -21,6 +21,7 @@
 | **M6** — Integration | `v0.5.0` | later | `..........` 0% | 6 | 0 |
 | **M10** — Authoring-spec conformance | `v0.5.0` | later | `..........` 0% | 5 | 0 |
 | **M11** — Content protection, in depth | `v0.6.0` | later | `..........` 0% | 5 | 0 |
+| **M12** — Colour, HDR and the codec string | `v0.7.0` | later | `..........` 0% | 6 | 0 |
 | **M8** — Container image and supply chain | `v0.1.1` | shipped | `##########` 100% | 0 | 5 |
 | **M7** — Project and release | `ongoing` | ongoing | `######....` 62% | 5 | 8 |
 
@@ -155,6 +156,19 @@ Target `v0.6.0` · later · 5 open · 0 shipped · `..........` 0%
 | **SC-68** — Key rotation integrity | med | L | check,parser | open |
 | **SC-70** — HLS `METHOD` against the payload | med | M | check,parser | open |
 
+### M12 — Colour, HDR and the codec string
+
+Target `v0.7.0` · later · 6 open · 0 shipped · `..........` 0%
+
+| Item | Priority | Size | Labels | Status |
+|---|---|---|---|---|
+| **SC-72** — Colour description readers | high | L | parser | open |
+| **SC-73** — `VIDEO-RANGE` against the transfer function | high | M | check,parser | open |
+| **SC-74** — Codec string profile and level | high | L | check,parser | open |
+| **SC-75** — HDR10 static metadata | med | M | check,parser | open |
+| **SC-76** — Dolby Vision | med | L | check,parser | open |
+| **SC-77** — Colour consistency across the ladder | med | M | check | open |
+
 ### M8 — Container image and supply chain
 
 Target `v0.1.1` · shipped · 0 open · 5 shipped · `##########` 100%
@@ -191,8 +205,8 @@ Target `ongoing` · ongoing · 5 open · 8 shipped · `######....` 62%
 
 | Label | Items | Open |
 |---|---|---|
-| `check` | 32 | 25 |
-| `parser` | 26 | 19 |
+| `check` | 37 | 30 |
+| `parser` | 31 | 24 |
 | `cli` | 8 | 7 |
 | `delivery` | 5 | 4 |
 | `integration` | 4 | 4 |

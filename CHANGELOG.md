@@ -59,6 +59,20 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   against production content. `--key` (SC-22) stays the separate, opt-in case of
   running *content* checks on protected media.
 
+- **M12 — Colour, HDR and the codec string** (SC-72 … SC-77), targeted at v0.7.0.
+  Today `declaredCodec` reduces `avc1.640028` to `"h264"` and asks only whether
+  the media is H.264 too — everything after the first dot is discarded — and
+  `VIDEO-RANGE` is not parsed at all, so a ladder can declare `PQ` over BT.709
+  samples and segcheck says it is fine, because by the only measure it takes it
+  is. The milestone reads the colour description the media states about itself —
+  the H.264 and HEVC VUI, the `colr` box in fMP4 — and answers the manifest's
+  claims with it: `VIDEO-RANGE` against the transfer function, the codec string's
+  profile and level against the SPS and the AV1 sequence header, HDR10 static
+  metadata on a rung that declares PQ, Dolby Vision `dvcC` against
+  `SUPPLEMENTAL-CODECS`, and colour consistency between the rungs of one ladder.
+  Judging whether a grade is *right* for the content stays out — that is grading,
+  not checking.
+
 ### Fixed
 
 - **An encrypted track reported the wrong codec and no resolution** (SC-71). When

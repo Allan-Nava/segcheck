@@ -358,6 +358,86 @@ item here that would is out of scope.
   `METHOD=NONE` that appears mid-playlist without a matching change in the
   media. <!-- sc: prio=med size=M labels=check,parser -->
 
+## M12 — Colour, HDR and the codec string <!-- ms: target=v0.7.0 phase=later -->
+
+Today the `resolution` check compares pixel counts and the codec comparison stops
+at the family name: `declaredCodec` turns `avc1.640028` into `"h264"` and asks
+only whether the media is H.264 too. Everything after that first dot is thrown
+away, and `VIDEO-RANGE` is not parsed at all. So a ladder can declare
+`VIDEO-RANGE=PQ` over BT.709 samples, or `avc1.640028` over a Baseline stream,
+and segcheck says the stream is fine — because by the only measure it currently
+takes, it is.
+
+These are the defects that do not look like defects. Wrong transfer
+characteristics do not black-screen: they render, washed out or crushed, on the
+subset of devices that trust the manifest over the bitstream, and the ticket
+arrives as "the picture looks wrong on TV" months later. A level declared higher
+than the media needs costs nothing; declared lower than the media needs is a
+decoder that refuses the stream on exactly the hardware that reads the codec
+string before it allocates.
+
+**What scopes this milestone: the manifest makes a colour claim, and the media
+answers it.** Reading the VUI, the `colr` box and the HDR SEI is reading the
+media's own statement about itself, which is the comparison this tool exists to
+make. Judging whether the colour volume is *right* for the content is grading,
+not checking, and stays out.
+
+- [ ] **SC-72 — Colour description readers**: the VUI in H.264 and HEVC
+  (`colour_primaries`, `transfer_characteristics`, `matrix_coefficients`,
+  `video_full_range_flag`), and the `colr` box with `nclx` in fMP4, where the
+  container states it and no bitstream reader is needed — the same split that
+  already applies to resolution. The parser prerequisite for everything below;
+  it lands with the `mediatest` writers and the round trip that catches
+  bit-level mistakes, and with nothing consuming it yet. Note the trap: the VUI
+  sits behind the optional parameter sets the current SPS readers skip past, so
+  reaching it means parsing them rather than seeking.
+  <!-- sc: prio=high size=L labels=parser -->
+- [ ] **SC-73 — `VIDEO-RANGE` against the transfer function**: HLS
+  `EXT-X-STREAM-INF` `VIDEO-RANGE=SDR|HLG|PQ` and the DASH
+  `SupplementalProperty` / `EssentialProperty` transfer-characteristic
+  descriptors, checked against what SC-72 reads: `PQ` is transfer 16, `HLG` is
+  18, `SDR` is 1 or 6. `VIDEO-RANGE` is not parsed by the HLS reader at all
+  today, so the attribute lands with the check. A PQ rung whose samples are
+  BT.709 is tone-mapped twice by every device that believes the manifest and
+  once by every device that believes the bitstream, and the two halves of the
+  audience see different pictures of the same stream.
+  <!-- sc: prio=high size=M labels=check,parser -->
+- [ ] **SC-74 — Codec string profile and level**: parse the whole string rather
+  than its first component — `avc1.PPCCLL` against `profile_idc`,
+  `constraint_set` flags and `level_idc` in the SPS; `hvc1.P.C.LX.B` against the
+  profile-tier-level `skipHEVCProfileTierLevel` currently walks past;
+  `av01.P.LL.BB` against the AV1 sequence header. Report both directions, since
+  they fail differently: a level declared below the media's is a decoder that
+  rejects the stream up front, a profile declared above it silently excludes
+  devices that could have played it. The comparison must stay honest about
+  strings it cannot decompose — an unparseable codec string is an OK-level "not
+  verifiable", never a mismatch. <!-- sc: prio=high size=L labels=check,parser -->
+- [ ] **SC-75 — HDR10 static metadata**: a rendition that declares PQ should
+  carry mastering-display colour volume and content light level — SEI 137 and
+  144 in the elementary stream, `mdcv` and `clli` in the sample entry. Missing
+  metadata is not fatal, which is exactly why it ships: the picture is merely
+  tone-mapped by the display's guess instead of the grade's intent, on every
+  panel that would have honoured it. Reported at OK level with the measurement
+  attached when present, one rung above when a PQ ladder carries none at all.
+  <!-- sc: prio=med size=M labels=check,parser -->
+- [ ] **SC-76 — Dolby Vision**: `dvh1`/`dvhe`/`dvav` sample entries and the
+  `dvcC`/`dvvC` configuration box against HLS `SUPPLEMENTAL-CODECS` and the DASH
+  `dvb:` / `ContentProtection`-adjacent DV descriptors — profile, level and the
+  cross-compatibility id that decides whether a non-DV device sees a usable
+  base layer at all. `dvh1` and `dvhe` already parse as visual sample entries so
+  resolution works, which makes the gap quiet: the ladder looks checked. Profile
+  8.4 declared with a cross-compatibility id of 0 is an HDR stream that plays as
+  nothing on every device without a DV decoder.
+  <!-- sc: prio=med size=L labels=check,parser -->
+- [ ] **SC-77 — Colour consistency across the ladder**: one `VIDEO-RANGE` group
+  whose rungs disagree — an SDR 360p rung inside a PQ ladder, a rung that
+  switches matrix coefficients, a full-range flag set on one rendition only.
+  ABR switches between these mid-playback and the picture shifts on the switch,
+  which reads as a network problem to everyone watching. Needs SC-72 and the
+  per-rendition fan-out `ladder` already walks; the check is the comparison
+  between rungs rather than against the manifest, which is what makes it worth
+  its own item. <!-- sc: prio=med size=M labels=check -->
+
 ## M8 — Container image and supply chain <!-- ms: target=v0.1.1 phase=shipped -->
 
 A distribution milestone, not a checking one: it does not widen what segcheck
