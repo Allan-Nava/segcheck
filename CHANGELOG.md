@@ -112,6 +112,23 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   Judging whether a grade is *right* for the content stays out — that is grading,
   not checking.
 
+- **M13 — Audio, past the sanity check** (SC-81 … SC-86), targeted at v0.8.0.
+  SC-18 is the floor — sample rate and channel count consistent within a
+  rendition and against `CODECS` — and above it the audio half of a ladder is
+  checked by its name: `parseStsd` reads width and height and stops, so an fMP4
+  audio track's configuration is never read; `ac-3`, `ec-3`, `Opus` and `fLaC`
+  are recognised by sample entry name with their configuration boxes unopened;
+  and `CHANNELS` / `AudioChannelConfiguration` are parsed by neither reader. So
+  `CHANNELS="6"` over a stereo track, `mp4a.40.2` over SBR content and `16/JOC`
+  over a stream with no object metadata all come back clean. The milestone reads
+  `AudioSpecificConfig`, `dac3`, `dec3`, `dOps`, `dfLa`, `elst` and `dialnorm`,
+  and answers the manifest with them: real channel count against `CHANNELS`, the
+  audio codec string against the configuration it names, loudness that steps
+  between rungs, an Atmos badge with no JOC behind it, and the priming samples
+  behind a lip-sync error that only half the audience sees. **Metadata, never
+  decoding** — measuring what the audio sounds like needs a decoder, which SC-18
+  already rules out and nothing here reintroduces.
+
 ### Fixed
 
 - **An encrypted track reported the wrong codec and no resolution** (SC-79). When

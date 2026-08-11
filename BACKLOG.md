@@ -454,6 +454,76 @@ not checking, and stays out.
   between rungs rather than against the manifest, which is what makes it worth
   its own item. <!-- sc: prio=med size=M labels=check -->
 
+## M13 — Audio, past the sanity check <!-- ms: target=v0.8.0 phase=later -->
+
+SC-18 is the floor: sample rate and channel count consistent within a rendition
+and against `CODECS`. Everything above that floor is currently invisible, and the
+reason is one gap in the parser — `parseStsd` reads width and height and stops,
+so an fMP4 audio track's real configuration is never read at all. Channel counts
+exist only for packed ADTS, where the frame header states them. `ac-3`, `ec-3`,
+`Opus` and `fLaC` are recognised by sample entry name and nothing more: their
+configuration boxes are never opened. On the manifest side, `CHANNELS` and
+`AudioChannelConfiguration` are not parsed by either reader.
+
+The result is that the audio half of a ladder is checked by its name. A rendition
+can declare `CHANNELS="6"` over a stereo track, `mp4a.40.2` over SBR content, or
+`16/JOC` over an E-AC-3 stream carrying no object metadata, and every one of them
+comes back clean.
+
+**What scopes this milestone: metadata, never decoding.** Reading
+`AudioSpecificConfig`, `dac3`, `dec3`, `dOps`, `dfLa`, `elst` and `dialnorm` is
+reading what the media says about itself, which is the comparison this tool
+exists to make and which stays honest at zero dependencies. Judging what the
+audio *sounds* like — silence, clipping, measured loudness — needs a decoder,
+which is why SC-18 already rules it out and why nothing here reintroduces it.
+
+- [ ] **SC-81 — Audio configuration boxes**: `esds`/`AudioSpecificConfig` for
+  `mp4a` (audio object type, sampling frequency index, channel configuration,
+  and the SBR/PS extension that changes both), plus `dac3`, `dec3`, `dOps` and
+  `dfLa`. The parser prerequisite for the rest of the milestone: it gives an
+  fMP4 audio track the same footing video already has, where the container
+  states its configuration and no bitstream reader is needed. Lands with the
+  `mediatest` writers and nothing consuming it yet.
+  <!-- sc: prio=high size=L labels=parser -->
+- [ ] **SC-82 — `CHANNELS` against the real channel count**: HLS
+  `EXT-X-MEDIA CHANNELS` and DASH `AudioChannelConfiguration@value`, neither of
+  which is parsed today, against what SC-81 reads. Distinct from SC-18, which
+  compares renditions with each other and with `CODECS`: this is the manifest's
+  own channel claim, and it is the one a player acts on before it ever decodes a
+  frame. A stereo track advertised as 5.1 makes a receiver select a surround
+  output and upmix into it, so the defect is audible on exactly the systems that
+  were the reason for shipping surround. <!-- sc: prio=high size=M labels=check,parser -->
+- [ ] **SC-83 — Audio codec string against the configuration**: the audio
+  counterpart of SC-74 — `mp4a.40.2` against an audio object type that is really
+  5 or 29, `ec-3` declared over an `ac-3` sample entry, `mp4a.40.5` over content
+  with no SBR at all. Declaring plain AAC-LC over HE-AAC is the classic of the
+  set: devices that trust the string decode the base layer only and play the
+  whole ladder at half the intended bandwidth's worth of top end, which sounds
+  like a bad encode rather than a manifest error. Unparseable strings report
+  OK-level "not verifiable", never a mismatch.
+  <!-- sc: prio=high size=M labels=check -->
+- [ ] **SC-84 — Loudness metadata**: `dialnorm` in the AC-3/E-AC-3 bitstream and
+  the `ludt`/`loud` box where it is present, reported per rendition and compared
+  across the ladder. A ladder whose rungs disagree on dialnorm steps in volume
+  every time ABR switches, which viewers report as the stream being "quiet" and
+  operators cannot reproduce because it only happens on a switch. Reading the
+  declared value is metadata; measuring actual loudness is decoding and stays out.
+  <!-- sc: prio=med size=M labels=check,parser -->
+- [ ] **SC-85 — Immersive audio against the badge**: `CHANNELS="16/JOC"`, the
+  DASH `SupplementalProperty` for object audio and the Dolby Atmos claim in
+  general, against the JOC flag and complexity index in `dec3`. The badge is a
+  product promise as much as a technical one, and when it is wrong the stream
+  still plays — in 5.1, on a system that was bought for the thing the manifest
+  says is there. <!-- sc: prio=med size=M labels=check,parser -->
+- [ ] **SC-86 — Encoder delay and priming**: the `elst` media start offset and
+  the priming samples an AAC encoder prepends, which are the number of samples a
+  player must discard before the audio lines up with the video. Applied by one
+  player and ignored by another, they are a lip-sync error of 20–50 ms that
+  appears on some devices and not others — the hardest audio defect to get
+  reported accurately, because the half of the audience that sees it cannot prove
+  it. Reports the offset per rendition and flags a ladder whose rungs disagree.
+  <!-- sc: prio=med size=L labels=check,parser -->
+
 ## M8 — Container image and supply chain <!-- ms: target=v0.1.1 phase=shipped -->
 
 A distribution milestone, not a checking one: it does not widen what segcheck

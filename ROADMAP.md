@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**80 items · 31 shipped · 49 open · 12 milestones.**
+**86 items · 31 shipped · 55 open · 13 milestones.**
 
 ## At a glance
 
@@ -22,6 +22,7 @@
 | **M10** — Authoring-spec conformance | `v0.5.0` | later | `..........` 0% | 5 | 0 |
 | **M11** — Content protection, in depth | `v0.6.0` | later | `..........` 0% | 5 | 0 |
 | **M12** — Colour, HDR and the codec string | `v0.7.0` | later | `..........` 0% | 6 | 0 |
+| **M13** — Audio, past the sanity check | `v0.8.0` | later | `..........` 0% | 6 | 0 |
 | **M8** — Container image and supply chain | `v0.1.1` | shipped | `##########` 100% | 0 | 5 |
 | **M7** — Project and release | `ongoing` | ongoing | `#######...` 67% | 5 | 10 |
 
@@ -170,6 +171,19 @@ Target `v0.7.0` · later · 6 open · 0 shipped · `..........` 0%
 | **SC-76** — Dolby Vision | med | L | check,parser | open |
 | **SC-77** — Colour consistency across the ladder | med | M | check | open |
 
+### M13 — Audio, past the sanity check
+
+Target `v0.8.0` · later · 6 open · 0 shipped · `..........` 0%
+
+| Item | Priority | Size | Labels | Status |
+|---|---|---|---|---|
+| **SC-81** — Audio configuration boxes | high | L | parser | open |
+| **SC-82** — `CHANNELS` against the real channel count | high | M | check,parser | open |
+| **SC-83** — Audio codec string against the configuration | high | M | check | open |
+| **SC-84** — Loudness metadata | med | M | check,parser | open |
+| **SC-85** — Immersive audio against the badge | med | M | check,parser | open |
+| **SC-86** — Encoder delay and priming | med | L | check,parser | open |
+
 ### M8 — Container image and supply chain
 
 Target `v0.1.1` · shipped · 0 open · 5 shipped · `##########` 100%
@@ -208,8 +222,8 @@ Target `ongoing` · ongoing · 5 open · 10 shipped · `#######...` 67%
 
 | Label | Items | Open |
 |---|---|---|
-| `check` | 38 | 30 |
-| `parser` | 32 | 24 |
+| `check` | 43 | 35 |
+| `parser` | 37 | 29 |
 | `cli` | 8 | 7 |
 | `delivery` | 5 | 4 |
 | `integration` | 4 | 4 |
