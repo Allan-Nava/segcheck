@@ -6,11 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-<<<<<<< HEAD
 **79 items · 30 shipped · 49 open · 12 milestones.**
-=======
-**71 items · 28 shipped · 43 open · 11 milestones.**
->>>>>>> 9acac5aa52bd86bfcda61f3eaaab3d91fe72f1e4
 
 ## At a glance
 
@@ -27,11 +23,7 @@
 | **M11** — Content protection, in depth | `v0.6.0` | later | `..........` 0% | 5 | 0 |
 | **M12** — Colour, HDR and the codec string | `v0.7.0` | later | `..........` 0% | 6 | 0 |
 | **M8** — Container image and supply chain | `v0.1.1` | shipped | `##########` 100% | 0 | 5 |
-<<<<<<< HEAD
 | **M7** — Project and release | `ongoing` | ongoing | `######....` 64% | 5 | 9 |
-=======
-| **M7** — Project and release | `ongoing` | ongoing | `######....` 62% | 5 | 8 |
->>>>>>> 9acac5aa52bd86bfcda61f3eaaab3d91fe72f1e4
 
 ## Next up
 
@@ -192,11 +184,7 @@ Target `v0.1.1` · shipped · 0 open · 5 shipped · `##########` 100%
 
 ### M7 — Project and release
 
-<<<<<<< HEAD
 Target `ongoing` · ongoing · 5 open · 9 shipped · `######....` 64%
-=======
-Target `ongoing` · ongoing · 5 open · 8 shipped · `######....` 62%
->>>>>>> 9acac5aa52bd86bfcda61f3eaaab3d91fe72f1e4
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
@@ -208,10 +196,7 @@ Target `ongoing` · ongoing · 5 open · 8 shipped · `######....` 62%
 | **SC-57** — `internal/fetch` tests | high | M | tests | shipped `0.1.1` |
 | **SC-58** — `cmd/segcheck` tests | high | M | tests,cli | shipped `0.1.1` |
 | **SC-71** — The untested helpers behind the findings | high | M | tests | done, unreleased |
-<<<<<<< HEAD
 | **SC-78** — Coverage to the practical ceiling, and a gate that holds it | high | L | tests,project | done, unreleased |
-=======
->>>>>>> 9acac5aa52bd86bfcda61f3eaaab3d91fe72f1e4
 | **SC-32** — Homebrew tap upload | med | S | release | shipped `0.1.1` |
 | **SC-34** — Backlog and roadmap tooling | med | M | project | shipped `0.1.1` |
 | **SC-47** — SBOM and signed artefacts | med | M | release | shipped `0.1.1` |
@@ -227,11 +212,7 @@ Target `ongoing` · ongoing · 5 open · 8 shipped · `######....` 62%
 | `cli` | 8 | 7 |
 | `delivery` | 5 | 4 |
 | `integration` | 4 | 4 |
-<<<<<<< HEAD
 | `tests` | 9 | 4 |
-=======
-| `tests` | 8 | 4 |
->>>>>>> 9acac5aa52bd86bfcda61f3eaaab3d91fe72f1e4
 | `output` | 4 | 3 |
 | `docs` | 5 | 2 |
 | `release` | 8 | 2 |

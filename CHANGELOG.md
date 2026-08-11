@@ -44,7 +44,6 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   `mediatest` SPS writer also gained `pic_order_cnt_type` 1 and the 4:4:4 scaling
   list count, so the reader is now asserted against the two remaining places
   where the fields before the resolution change length.
-<<<<<<< HEAD
 
 - **Coverage to the practical ceiling, and a CI gate that holds it** (SC-78):
   99.64% of statements, up from a true baseline of 90.94%. The figures reported
@@ -67,8 +66,6 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   against 188, an index clamp whose step is always greater than one — and are
   listed with their reasons in `BACKLOG.md`; they stay as guards rather than
   being deleted to round the number up.
-=======
->>>>>>> 9acac5aa52bd86bfcda61f3eaaab3d91fe72f1e4
 
 - **M11 — Content protection, in depth** (SC-66 … SC-70), targeted at v0.6.0.
   The `encryption` check shipped in v0.1.0 answers whether segments are
@@ -100,11 +97,7 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
-<<<<<<< HEAD
 - **An encrypted track reported the wrong codec and no resolution** (SC-79). When
-=======
-- **An encrypted track reported the wrong codec and no resolution** (SC-71). When
->>>>>>> 9acac5aa52bd86bfcda61f3eaaab3d91fe72f1e4
   a sample entry is `encv` or `enca`, the original format is recovered from its
   `sinf`/`frma` child — but the search started at byte 0 of the entry, where the
   fixed `VisualSampleEntry` fields sit rather than any child box. The leading
