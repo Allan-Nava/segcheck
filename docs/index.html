@@ -345,23 +345,27 @@ footer{border-top:1px solid var(--border);padding:34px 0;color:var(--muted);font
 <section id="install">
   <div class="wrap">
     <p class="eyebrow">Install</p>
-    <h2>One binary, three ways</h2>
+    <h2>One binary, four ways</h2>
     <p class="lede">Static, CGO-free builds for Linux, macOS and Windows on amd64 and arm64.</p>
 
     <div class="grid g2" style="margin-top:22px">
       <div>
         <h3>Homebrew</h3>
-        <div class="code"><pre>brew install Allan-Nava/tap/segcheck</pre></div>
+        <div class="code"><pre>brew install --cask allan-nava/tap/segcheck</pre></div>
+        <p style="color:var(--muted);font-size:14px;margin-top:-4px">macOS only — Homebrew on Linux does not support casks. Use Go or an archive there.</p>
         <h3>Go</h3>
         <div class="code"><pre>go install github.com/Allan-Nava/segcheck/cmd/segcheck@latest</pre></div>
       </div>
       <div>
+        <h3>Docker</h3>
+        <div class="code"><pre>docker run --rm ghcr.io/allan-nava/segcheck:latest \
+  check https://cdn.example/master.m3u8</pre></div>
+        <p style="color:var(--muted);font-size:14px;margin-top:-4px"><code>linux/amd64</code> and <code>linux/arm64</code> from one tag. The image is the static binary and a CA bundle: no shell, no package manager, non-root.</p>
         <h3>Release archive</h3>
-        <div class="code"><pre># the archive for your platform, from the releases page
-tar -xzf segcheck_0.1.0_linux_amd64.tar.gz
+        <div class="code"><pre>tar -xzf segcheck_0.1.1_linux_amd64.tar.gz
 sudo install segcheck /usr/local/bin/
 segcheck version</pre></div>
-        <p style="color:var(--muted);font-size:14px;margin-top:-4px">Checksums are published with every release. Pick the archive for your platform from the <a href="https://github.com/Allan-Nava/segcheck/releases" rel="noopener">releases page</a>.</p>
+        <p style="color:var(--muted);font-size:14px;margin-top:-4px">Every release publishes checksums, an SBOM per archive and keyless <a href="https://docs.sigstore.dev/" rel="noopener">cosign</a> signatures, so what you downloaded can be verified rather than trusted. Archives on the <a href="https://github.com/Allan-Nava/segcheck/releases" rel="noopener">releases page</a>.</p>
       </div>
     </div>
   </div>
@@ -445,15 +449,17 @@ segcheck check https://cdn.example/master.m3u8 --exit-on bad</pre></div>
       <div>
         <h3>GitLab CI</h3>
         <div class="code"><pre>segments:
-  image: golang:1.25
+  image:
+    name: ghcr.io/allan-nava/segcheck:latest
+    entrypoint: [""]
   script:
-    - go install github.com/Allan-Nava/segcheck/cmd/segcheck@latest
     - segcheck check "$STREAM_URL"
         --output json --exit-on bad
         &gt; segcheck.json
   artifacts:
     when: always
     paths: [segcheck.json]</pre></div>
+        <p style="color:var(--muted);font-size:14px;margin-top:-4px">No toolchain to install: the image is the binary. <code>entrypoint: [""]</code> because GitLab runs its own shell — and the image has none, so the runner needs its own.</p>
       </div>
     </div>
 
@@ -461,6 +467,7 @@ segcheck check https://cdn.example/master.m3u8 --exit-on bad</pre></div>
     <div class="code"><pre># every 15 minutes, keep the last report where an operator can find it
 */15 * * * * segcheck check https://cdn.example/live.m3u8 --from edge \
   --segments 8 --output json &gt; /var/log/segcheck/latest.json 2&gt;&amp;1</pre></div>
+    <p style="color:var(--muted);font-size:14px">Leave <code>--exit-on</code> off under a scheduler: segcheck exits 0 whenever the check ran, and a Kubernetes <code>CronJob</code> reads a non-zero exit as a failed job — it would retry a run that worked and tell you nothing about the stream. Compose and <code>CronJob</code> manifests are in <a href="https://github.com/Allan-Nava/segcheck/blob/main/docs/running-in-containers.md" rel="noopener">running-in-containers.md</a>.</p>
   </div>
 </section>
 

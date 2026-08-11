@@ -23,6 +23,25 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   visual sample entry and needed no reader, but `hvc1` gained a test rather than
   staying an assumption.
 
+- **Tests for the untested helpers behind the findings** (SC-71): total coverage
+  70.7% → 76.2% (`internal/media` 74.1 → 84.3, `internal/manifest` 79.4 → 87.9,
+  `internal/analyze` 85.5 → 89.5, `internal/finding` 83.3 → 94.4). An audit for
+  functions no test ever called, prioritising the ones whose failure mode is a
+  wrong finding rather than a crash. `parseTrun` was the worst at 38.8%: its
+  per-sample fields are an optional bitmap and its composition-time offset is
+  unsigned in a version 0 box but signed in a version 1 one, so reading version 1
+  as unsigned moves a segment's start about 13 hours and reports a gap that does
+  not exist. `media.Timeline` — the promise that a cross-segment check never
+  compares a video start against an audio start — had no test at all.
+  `declaredCodec` gained a contract test asserting every name it returns is one a
+  parser actually produces, since the two tables sit in different packages and
+  are compared by string. `describeCounts` is asserted stable over 200 runs
+  because Go randomises the map iteration its output depends on. Also
+  `firstTemplate`'s three-level DASH inheritance, `dashKind`, `dashName`,
+  `streamInfKind`, both codec tables and the severity order. Verified as SC-57
+  and SC-58 were: 60 mutations, 59 caught, the one survivor provably a no-op. No
+  production code changed.
+
 - **M11 — Content protection, in depth** (SC-66 … SC-70), targeted at v0.6.0.
   The `encryption` check shipped in v0.1.0 answers whether segments are
   protected when the manifest says so, and stops there; this milestone is the
@@ -39,6 +58,15 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **The documentation site had drifted from what shipped.** Install still read
+  `brew install Allan-Nava/tap/segcheck` after the formula became a cask in
+  v0.1.1, and there was no Docker install at all although the image ships on
+  GHCR. Fixed, plus: the GitLab CI recipe now runs the published image instead
+  of installing a Go toolchain, the schedule recipe says why `--exit-on` must
+  stay off under a `CronJob`, and the archive block names the SBOM and cosign
+  signatures every release now carries. The check matrix and the flag reference
+  were audited against the README table and the `usage` const and were already
+  in sync.
 - The release workflow's `verify-image` job pulled
   `ghcr.io/…/segcheck:v0.1.1`, which never exists: goreleaser tags images with
   `{{ .Version }}`, the git tag *without* its leading `v`. The job now strips
