@@ -292,6 +292,63 @@ manifest-only reader would call fine.
   are reported as player bugs for weeks before anyone measures the sheet.
   <!-- sc: prio=low size=M labels=check,parser -->
 
+## M11 — Content protection, in depth <!-- ms: target=v0.6.0 phase=later -->
+
+The `encryption` check shipped in v0.1.0 answers one question — are these
+segments protected when the manifest says they are — and stops there. Everything
+that actually breaks a DRM launch is one level down: *which* system, *which*
+scheme, *which* key, and whether the media agrees with the manifest about any of
+it. A packaging mistake here does not look like a defect. It looks like a stream
+that plays perfectly on the developer's Mac and black-screens on a third of the
+installed base.
+
+**The principle that scopes this milestone: none of it needs a key.** segcheck
+must be able to answer "is this protected the way you said it is" against
+production content, in CI, with no credential of any kind — that is what makes
+these checks runnable at all. Reading `pssh`, `schm`, `tenc` and `senc` is
+reading metadata, not decrypting. SC-22 (`--key`) is the separate, opt-in case
+of running the *content* checks on protected media; M11 never needs it, and any
+item here that would is out of scope.
+
+- [ ] **SC-66 — DRM systems present against declared**: enumerate the `pssh`
+  boxes in the initialisation segment by system UUID — Widevine
+  `edef8ba9-79d6-4ace-a3c8-27dcd51d21ed`, PlayReady
+  `9a04f079-9840-4286-ab92-e65be0885f95`, FairPlay
+  `94ce86fb-07ff-4f43-adb8-93d2fa968ca2` — and compare them against what the
+  manifest promises (`EXT-X-KEY` `KEYFORMAT`, DASH
+  `ContentProtection@schemeIdUri`). A ladder whose MPD advertises PlayReady but
+  whose CMAF init carries only a Widevine `pssh` plays on Chrome and dies on
+  Xbox and Edge, and the manifest reads perfectly on the way down.
+  <!-- sc: prio=high size=M labels=check,parser -->
+- [ ] **SC-67 — Encryption scheme**: the scheme in `schm` and the defaults in
+  `tenc` — `cenc`, `cbcs`, `cens`, `cbc1` — against the scheme the manifest
+  declares. `cbcs` content served as `cenc` plays nowhere, and because the two
+  differ by a box field rather than by anything visible, MPDs get copied between
+  them. Reported per rendition, since a ladder that mixes schemes is its own
+  failure. <!-- sc: prio=high size=M labels=check,parser -->
+- [ ] **SC-69 — Clear lead, and media that is not protected at all**: read the
+  per-sample encryption state from `senc`/`saiz`/`saio` and report a rendition
+  whose samples are in the clear while the manifest declares it protected, plus
+  a clear lead longer or shorter than the one that was asked for. This is the
+  most expensive defect in the milestone and the quietest: the content ships
+  unprotected, every player plays it, nobody files a bug, and the first signal
+  is a rights-holder audit. <!-- sc: prio=high size=L labels=check,parser -->
+- [ ] **SC-68 — Key rotation integrity**: where the manifest rotates keys — a
+  new `EXT-X-KEY`, a DASH period or KID change — the KID carried by the segments
+  must actually change at that boundary, and no segment may reference a KID that
+  was never announced. Both directions are real defects and they fail
+  differently: rotation declared but not applied leaves a retired key working,
+  rotation applied but not declared black-screens every player at the boundary.
+  Needs the segment timeline that SC-7 already builds.
+  <!-- sc: prio=med size=L labels=check,parser -->
+- [ ] **SC-70 — HLS `METHOD` against the payload**: `AES-128` protects a whole
+  segment, `SAMPLE-AES` and `SAMPLE-AES-CTR` protect samples inside an otherwise
+  parseable container, and the three are not interchangeable — a player told the
+  wrong one produces noise rather than an error. Check the declared method
+  against how the TS or CMAF payload is really protected, and flag a
+  `METHOD=NONE` that appears mid-playlist without a matching change in the
+  media. <!-- sc: prio=med size=M labels=check,parser -->
+
 ## M8 — Container image and supply chain <!-- ms: target=v0.1.1 phase=shipped -->
 
 A distribution milestone, not a checking one: it does not widen what segcheck

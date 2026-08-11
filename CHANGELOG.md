@@ -7,6 +7,22 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **M11 — Content protection, in depth** (SC-66 … SC-70), targeted at v0.6.0.
+  The `encryption` check shipped in v0.1.0 answers whether segments are
+  protected when the manifest says so, and stops there; this milestone is the
+  level below, where DRM launches actually break. Which system (`pssh` per
+  Widevine / PlayReady / FairPlay UUID against `KEYFORMAT` and
+  `ContentProtection@schemeIdUri`), which scheme (`cenc` versus `cbcs` from
+  `schm`/`tenc`), whether the media is protected at all (`senc`/`saiz`/`saio`
+  per-sample state, and the clear lead's real length), whether declared key
+  rotation is actually applied, and whether an HLS `METHOD` matches how the
+  payload is really protected. **None of it needs a key** — reading protection
+  metadata is not decrypting, which is what makes these checks runnable in CI
+  against production content. `--key` (SC-22) stays the separate, opt-in case of
+  running *content* checks on protected media.
+
 ### Fixed
 
 - The release workflow's `verify-image` job pulled

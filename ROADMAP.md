@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**65 items · 26 shipped · 39 open · 10 milestones.**
+**70 items · 26 shipped · 44 open · 11 milestones.**
 
 ## At a glance
 
@@ -20,6 +20,7 @@
 | **M9** — Wallclock and DVR correctness | `v0.4.0` | later | `..........` 0% | 5 | 0 |
 | **M6** — Integration | `v0.5.0` | later | `..........` 0% | 6 | 0 |
 | **M10** — Authoring-spec conformance | `v0.5.0` | later | `..........` 0% | 5 | 0 |
+| **M11** — Content protection, in depth | `v0.6.0` | later | `..........` 0% | 5 | 0 |
 | **M8** — Container image and supply chain | `v0.1.1` | shipped | `##########` 100% | 0 | 5 |
 | **M7** — Project and release | `ongoing` | ongoing | `######....` 58% | 5 | 7 |
 
@@ -142,6 +143,18 @@ Target `v0.5.0` · later · 5 open · 0 shipped · `..........` 0%
 | **SC-62** — DASH-IF IOP, the measurable subset | med | L | check | open |
 | **SC-61** — Trick-play thumbnails | low | M | check,parser | open |
 
+### M11 — Content protection, in depth
+
+Target `v0.6.0` · later · 5 open · 0 shipped · `..........` 0%
+
+| Item | Priority | Size | Labels | Status |
+|---|---|---|---|---|
+| **SC-66** — DRM systems present against declared | high | M | check,parser | open |
+| **SC-67** — Encryption scheme | high | M | check,parser | open |
+| **SC-69** — Clear lead, and media that is not protected at all | high | L | check,parser | open |
+| **SC-68** — Key rotation integrity | med | L | check,parser | open |
+| **SC-70** — HLS `METHOD` against the payload | med | M | check,parser | open |
+
 ### M8 — Container image and supply chain
 
 Target `v0.1.1` · shipped · 0 open · 5 shipped · `##########` 100%
@@ -177,8 +190,8 @@ Target `ongoing` · ongoing · 5 open · 7 shipped · `######....` 58%
 
 | Label | Items | Open |
 |---|---|---|
-| `check` | 27 | 20 |
-| `parser` | 21 | 15 |
+| `check` | 32 | 25 |
+| `parser` | 26 | 20 |
 | `cli` | 8 | 7 |
 | `delivery` | 5 | 4 |
 | `integration` | 4 | 4 |

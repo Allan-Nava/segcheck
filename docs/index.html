@@ -517,11 +517,23 @@ segcheck check https://cdn.example/master.m3u8 --exit-on bad</pre></div>
       </div>
       <div class="card">
         <div class="card-head"><span class="k">v0.3.0</span></div>
-        <p>Audio, captions, subtitles and SCTE-35, plus a <code>FROM scratch</code> container image with multi-arch GHCR publication and signed artefacts.</p>
+        <p>Audio, captions, subtitles and SCTE-35 ad signalling — everything in a stream that is not the video track.</p>
       </div>
       <div class="card">
         <div class="card-head"><span class="k">v0.4.0</span></div>
-        <p>The live edge and CDN behaviour.</p>
+        <p>The live edge and CDN behaviour, plus wallclock correctness: <code>EXT-X-PROGRAM-DATE-TIME</code> and the DVR window checked against the media instead of taken at their word.</p>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="k">v0.5.0</span></div>
+        <p>Metrics and chat outputs, a config file, and the measurable subset of the Apple HLS Authoring Spec and DASH-IF IOP behind an opt-in <code>--profile</code>.</p>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="k">v0.6.0</span></div>
+        <p>Content protection in depth: which DRM system the segments really carry, <code>cenc</code> versus <code>cbcs</code>, and media in the clear while the manifest says it is protected. None of it needs a key.</p>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="k">v0.1.1</span><span class="pill p-ok">shipped</span></div>
+        <p>A <code>FROM scratch</code> container image on GHCR, multi-arch and signed, the Homebrew tap, and tests for the two packages that had none.</p>
       </div>
     </div>
   </div>
