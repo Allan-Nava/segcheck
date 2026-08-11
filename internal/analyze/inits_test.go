@@ -1,14 +1,21 @@
 package analyze
 
 import (
+<<<<<<< HEAD
 	"context"
+=======
+>>>>>>> 9acac5aa52bd86bfcda61f3eaaab3d91fe72f1e4
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+<<<<<<< HEAD
 	"time"
 
 	"github.com/Allan-Nava/segcheck/internal/fetch"
+=======
+
+>>>>>>> 9acac5aa52bd86bfcda61f3eaaab3d91fe72f1e4
 	"github.com/Allan-Nava/segcheck/internal/finding"
 	"github.com/Allan-Nava/segcheck/internal/manifest"
 	"github.com/Allan-Nava/segcheck/internal/media"
@@ -30,8 +37,13 @@ import (
 func TestInitFor_ByteRangeMap(t *testing.T) {
 	rd := rend("720p")
 	sd := segmentData{seg: manifest.Segment{
+<<<<<<< HEAD
 		Sequence:  1,
 		InitURI:   "https://cdn.example.com/hls/all.mp4",
+=======
+		Sequence: 1,
+		InitURI:  "https://cdn.example.com/hls/all.mp4",
+>>>>>>> 9acac5aa52bd86bfcda61f3eaaab3d91fe72f1e4
 		InitRange: &manifest.ByteRange{Offset: 0, Length: 800},
 	}}
 
@@ -179,6 +191,7 @@ func TestCheckAlignment_NeedsTwoMeasurableStarts(t *testing.T) {
 		t.Errorf("checkAlignment reported with only one measurable start:\n%s", dumpFindings(got))
 	}
 }
+<<<<<<< HEAD
 
 // A rendition that names neither a URI nor inline segments cannot be sampled.
 // Neither parser produces one today — HLS always sets a URI, DASH sets either
@@ -249,3 +262,5 @@ func TestResolveInits_SkipsRenditionsThatNeedNoInit(t *testing.T) {
 		t.Errorf("a rendition with no init segment was given an init error: %v", ts.initErr)
 	}
 }
+=======
+>>>>>>> 9acac5aa52bd86bfcda61f3eaaab3d91fe72f1e4

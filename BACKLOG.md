@@ -593,6 +593,7 @@ checks roadmap and blocks nothing.
   themselves fixed by that pass, having asserted values a broken implementation
   would also have produced.
   <!-- sc: prio=high size=M labels=tests ver=unreleased -->
+<<<<<<< HEAD
 - [x] **SC-78 — Coverage to the practical ceiling, and a gate that holds it**
   (99.64% of statements, from a true baseline of 90.94%). Two measurement bugs
   came first, and the reported numbers before this were all wrong: `go test
@@ -626,6 +627,8 @@ checks roadmap and blocks nothing.
   keeping against a future refactor; removing them to reach a round number would
   trade real safety for a metric.
   <!-- sc: prio=high size=L labels=tests,project ver=unreleased -->
+=======
+>>>>>>> 9acac5aa52bd86bfcda61f3eaaab3d91fe72f1e4
 - [ ] **SC-48 — Coverage ratchet**: CI already prints total coverage; make it
   fail when a commit lowers it. Test-first only holds if something notices when
   it did not happen — a check merged without its test should show up in the
