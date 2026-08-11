@@ -1,11 +1,14 @@
 package analyze
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/Allan-Nava/segcheck/internal/fetch"
 	"github.com/Allan-Nava/segcheck/internal/finding"
 	"github.com/Allan-Nava/segcheck/internal/manifest"
 	"github.com/Allan-Nava/segcheck/internal/media"
@@ -174,5 +177,75 @@ func TestCheckAlignment_NeedsTwoMeasurableStarts(t *testing.T) {
 	got := checkAlignment([]*renditionData{measurable, unmeasurableStart}, Defaults())
 	if len(got) != 0 {
 		t.Errorf("checkAlignment reported with only one measurable start:\n%s", dumpFindings(got))
+	}
+}
+
+// A rendition that names neither a URI nor inline segments cannot be sampled.
+// Neither parser produces one today — HLS always sets a URI, DASH sets either
+// segments or an Unsupported reason — so this is the guard that keeps a future
+// third shape from being silently skipped instead of reported.
+func TestSelectRenditions_RenditionWithNothingToFetch(t *testing.T) {
+	pl := manifest.Playlist{
+		URL: "https://cdn.example.com/hls/master.m3u8", Master: true,
+		Renditions: []manifest.Rendition{
+			{Name: "ghost", Kind: manifest.Video, Bandwidth: 800000},
+		},
+	}
+	client := fetch.New(fetch.Options{Timeout: 2 * time.Second})
+	rends, _ := selectRenditions(context.Background(), client, pl, Defaults())
+
+	if len(rends) != 1 {
+		t.Fatalf("got %d renditions, want 1", len(rends))
+	}
+	if rends[0].err == nil {
+		t.Fatal("a rendition with nothing to fetch was accepted silently")
+	}
+	if !strings.Contains(rends[0].err.Error(), "neither a URI nor inline segments") {
+		t.Errorf("err = %v, want it to say what is missing", rends[0].err)
+	}
+}
+
+// Init segments are fetched once and shared, and renditions that need none are
+// stepped over. A ladder mixing MPEG-TS (no init) with fMP4 (an EXT-X-MAP) is the
+// normal shape during a packager migration, and the TS rungs must not be given
+// another rendition's init failure.
+func TestResolveInits_SkipsRenditionsThatNeedNoInit(t *testing.T) {
+	initBody := mediatest.MP4Init(1, 90000, "video", 1280, 720)
+	var initHits int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		initHits++
+		w.Header().Set("Content-Type", "video/mp4")
+		_, _ = w.Write(initBody)
+	}))
+	defer srv.Close()
+
+	// One fMP4 rendition whose two segments share an init, and one TS rendition
+	// with no init at all.
+	fmp4 := rend("720p")
+	for i := 1; i <= 2; i++ {
+		fmp4.segs = append(fmp4.segs, segmentData{
+			seg: manifest.Segment{Sequence: i, URI: "seg.m4s", InitURI: srv.URL + "/init.mp4"},
+		})
+	}
+	ts := rend("360p", withSegs(
+		segmentData{seg: manifest.Segment{Sequence: 1, URI: "seg1.ts"}},
+		segmentData{seg: manifest.Segment{Sequence: 2, URI: "seg2.ts"}},
+	))
+
+	client := fetch.New(fetch.Options{Timeout: 5 * time.Second})
+	out := resolveInits(context.Background(), client, []*renditionData{fmp4, ts}, 2)
+
+	if len(out) != 1 {
+		t.Errorf("resolved %d init segments, want 1 shared by both fMP4 segments", len(out))
+	}
+	if initHits != 1 {
+		t.Errorf("the init segment was fetched %d times, want once", initHits)
+	}
+	if fmp4.initErr != nil {
+		t.Errorf("the fMP4 rendition reported an init error: %v", fmp4.initErr)
+	}
+	// The TS rendition needed no init, so it must not have inherited a failure.
+	if ts.initErr != nil {
+		t.Errorf("a rendition with no init segment was given an init error: %v", ts.initErr)
 	}
 }

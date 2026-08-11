@@ -3,9 +3,12 @@
 /dist/
 *.exe
 
-# Coverage
-cover.out
-coverage.*
+# Coverage artefacts, at the repository root only. Unanchored these would also
+# match scripts/coverage.sh, which is source and has to be committed — an
+# unanchored pattern here silently kept it out of the tree and left CI calling a
+# script that was never pushed.
+/cover.out
+/coverage.*
 
 # Editors and OS
 .DS_Store

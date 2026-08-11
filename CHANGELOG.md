@@ -45,6 +45,28 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   list count, so the reader is now asserted against the two remaining places
   where the fields before the resolution change length.
 
+- **Coverage to the practical ceiling, and a CI gate that holds it** (SC-78):
+  99.64% of statements, up from a true baseline of 90.94%. The figures reported
+  before this were wrong in two ways: `go test -cover ./...` credits a package
+  only for its own tests, so `internal/media/mediatest` read 0.0% although every
+  parser test runs through it, and a `-coverpkg=./...` profile carries one copy
+  of each block per test binary which `go tool cover -func` sums rather than
+  merges. `scripts/coverage.sh` (POSIX sh and awk, like the rest of `scripts/`)
+  merges by block position and fails below 99%; `-count=1` is mandatory because a
+  cached package result carries stale line numbers. Newly covered: every
+  remaining `ParseTS` branch, the ISO-BMFF box plumbing including 64-bit and
+  size-0 boxes and every `tfhd`/`trun` flag combination, the H.264 chroma formats
+  and both variable-length blocks before the resolution, the ADTS and ID3 walks,
+  DASH `SegmentList` and open-ended `@r`, HLS `EXT-X-MEDIA` and implicit byte
+  ranges, and every `(value, false)` guard where a check must stay silent rather
+  than report a measurement it could not take. `main` is covered by re-executing
+  the test binary as a subprocess, the only way to assert an exit code reaches
+  the shell. Nine statements remain uncovered because they are unreachable by
+  construction — a three-bit field compared against 7, a constant 4 compared
+  against 188, an index clamp whose step is always greater than one — and are
+  listed with their reasons in `BACKLOG.md`; they stay as guards rather than
+  being deleted to round the number up.
+
 - **M11 — Content protection, in depth** (SC-66 … SC-70), targeted at v0.6.0.
   The `encryption` check shipped in v0.1.0 answers whether segments are
   protected when the manifest says so, and stops there; this milestone is the
@@ -75,7 +97,7 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
-- **An encrypted track reported the wrong codec and no resolution** (SC-71). When
+- **An encrypted track reported the wrong codec and no resolution** (SC-79). When
   a sample entry is `encv` or `enca`, the original format is recovered from its
   `sinf`/`frma` child — but the search started at byte 0 of the entry, where the
   fixed `VisualSampleEntry` fields sit rather than any child box. The leading

@@ -31,14 +31,21 @@ jobs:
 
       # The parsers are the whole product, and the concurrency around the
       # segment fan-out writes into a shared slice, so both matter.
+      #
+      # scripts/coverage.sh merges the -coverpkg profile before measuring, which
+      # `go tool cover -func` does not do, and fails below the floor. The floor
+      # sits just under the current figure: the nine statements not covered are
+      # defensive guards that cannot be reached with their inputs (see SC-78), so
+      # 99% is the practical ceiling and a drop below it means a check shipped
+      # without its test.
       - name: Test with coverage
         run: |
-          go test -coverprofile=cover.out ./...
+          summary=$(./scripts/coverage.sh 99)
+          echo "$summary"
           echo "### Coverage" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          go tool cover -func=cover.out | tail -1 >> "$GITHUB_STEP_SUMMARY"
+          echo "$summary" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          go tool cover -func=cover.out | tail -1
 
       - name: Test with the race detector
         run: go test -race ./...

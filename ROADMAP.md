@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**77 items · 28 shipped · 49 open · 12 milestones.**
+**79 items · 30 shipped · 49 open · 12 milestones.**
 
 ## At a glance
 
@@ -14,7 +14,7 @@
 |---|---|---|---|---|---|
 | **M1** — Core: read the segments | `v0.1.0` | shipped | `##########` 100% | 0 | 6 |
 | **M2** — The checks | `v0.1.0` | shipped | `##########` 100% | 0 | 8 |
-| **M3** — Codec and timing depth | `v0.2.0` | **now** | `##........` 17% | 5 | 1 |
+| **M3** — Codec and timing depth | `v0.2.0` | **now** | `###.......` 29% | 5 | 2 |
 | **M4** — Everything that is not the video track | `v0.3.0` | next | `..........` 0% | 6 | 0 |
 | **M5** — Live and delivery | `v0.4.0` | later | `..........` 0% | 6 | 0 |
 | **M9** — Wallclock and DVR correctness | `v0.4.0` | later | `..........` 0% | 5 | 0 |
@@ -23,7 +23,7 @@
 | **M11** — Content protection, in depth | `v0.6.0` | later | `..........` 0% | 5 | 0 |
 | **M12** — Colour, HDR and the codec string | `v0.7.0` | later | `..........` 0% | 6 | 0 |
 | **M8** — Container image and supply chain | `v0.1.1` | shipped | `##########` 100% | 0 | 5 |
-| **M7** — Project and release | `ongoing` | ongoing | `######....` 62% | 5 | 8 |
+| **M7** — Project and release | `ongoing` | ongoing | `######....` 64% | 5 | 9 |
 
 ## Next up
 
@@ -70,7 +70,7 @@ Target `v0.1.0` · shipped · 0 open · 8 shipped · `##########` 100%
 
 ### M3 — Codec and timing depth
 
-Target `v0.2.0` · **now** · 5 open · 1 shipped · `##........` 17%
+Target `v0.2.0` · **now** · 5 open · 2 shipped · `###.......` 29%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
@@ -80,6 +80,7 @@ Target `v0.2.0` · **now** · 5 open · 1 shipped · `##........` 17%
 | **SC-35** — Parser fuzzing | high | M | tests,parser | open |
 | **SC-42** — AV1 and VP9 coded resolution | med | L | parser | open |
 | **SC-15** — HEVC/H.265 SPS | high | L | parser | done, unreleased |
+| **SC-79** — Encrypted fMP4 reported the wrong codec and no resolution | high | S | parser,check | done, unreleased |
 
 ### M4 — Everything that is not the video track
 
@@ -183,7 +184,7 @@ Target `v0.1.1` · shipped · 0 open · 5 shipped · `##########` 100%
 
 ### M7 — Project and release
 
-Target `ongoing` · ongoing · 5 open · 8 shipped · `######....` 62%
+Target `ongoing` · ongoing · 5 open · 9 shipped · `######....` 64%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
@@ -195,6 +196,7 @@ Target `ongoing` · ongoing · 5 open · 8 shipped · `######....` 62%
 | **SC-57** — `internal/fetch` tests | high | M | tests | shipped `0.1.1` |
 | **SC-58** — `cmd/segcheck` tests | high | M | tests,cli | shipped `0.1.1` |
 | **SC-71** — The untested helpers behind the findings | high | M | tests | done, unreleased |
+| **SC-78** — Coverage to the practical ceiling, and a gate that holds it | high | L | tests,project | done, unreleased |
 | **SC-32** — Homebrew tap upload | med | S | release | shipped `0.1.1` |
 | **SC-34** — Backlog and roadmap tooling | med | M | project | shipped `0.1.1` |
 | **SC-47** — SBOM and signed artefacts | med | M | release | shipped `0.1.1` |
@@ -205,13 +207,13 @@ Target `ongoing` · ongoing · 5 open · 8 shipped · `######....` 62%
 
 | Label | Items | Open |
 |---|---|---|
-| `check` | 37 | 30 |
-| `parser` | 31 | 24 |
+| `check` | 38 | 30 |
+| `parser` | 32 | 24 |
 | `cli` | 8 | 7 |
 | `delivery` | 5 | 4 |
 | `integration` | 4 | 4 |
-| `tests` | 8 | 4 |
+| `tests` | 9 | 4 |
 | `output` | 4 | 3 |
 | `docs` | 5 | 2 |
 | `release` | 8 | 2 |
-| `project` | 3 | 1 |
+| `project` | 4 | 1 |

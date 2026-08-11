@@ -107,6 +107,22 @@ the stream is healthy.
   already states it — but `hvc1` now has a test of its own rather than an
   assumption. Both the sub-layer tail and the end-to-end check were
   mutation-verified. <!-- sc: prio=high size=L labels=parser ver=unreleased -->
+- [x] **SC-79 — Encrypted fMP4 reported the wrong codec and no resolution**:
+  found while closing SC-78's coverage gap, and reachable on any CMAF stream with
+  `cenc`/`cbcs` protection. `parseStsd` looked for `sinf`/`frma` — where an
+  encrypted sample entry preserves the format the encryption replaced — from byte
+  0 of the sample entry payload. Those first bytes are not a box: a
+  VisualSampleEntry opens with 78 bytes of fixed fields (28 for audio), whose
+  leading reserved zeros `boxesIn` reads as a box of declared size 0 that swallows
+  the entry whole, so the search never found anything. The codec was therefore
+  reported as `encv`/`enca`, and `checkTracks` compared the manifest's declared
+  `avc1` against it and emitted a **codec-mismatch WARN on every encrypted
+  rendition** — a defect reported against media that was entirely correct. The
+  resolution was lost the same way from the other side: `encv` is not in the
+  visual-sample-entry list, so the frame size was never read and `resolution`
+  skipped the rung in silence. The search now starts after the fixed fields, and
+  both the video and audio cases are asserted against sample entries built to the
+  real layout. <!-- sc: prio=high size=S labels=parser,check ver=unreleased -->
 - [ ] **SC-16 — Keyframe alignment**: every segment must start on an IDR/IRAP. A
   segment that opens on a non-keyframe cannot be switched into, which is the
   defect behind "ABR switching stutters even though the boundaries line up".
@@ -577,6 +593,39 @@ checks roadmap and blocks nothing.
   themselves fixed by that pass, having asserted values a broken implementation
   would also have produced.
   <!-- sc: prio=high size=M labels=tests ver=unreleased -->
+- [x] **SC-78 — Coverage to the practical ceiling, and a gate that holds it**
+  (99.64% of statements, from a true baseline of 90.94%). Two measurement bugs
+  came first, and the reported numbers before this were all wrong: `go test
+  -cover ./...` gives each package credit only for its own tests, so
+  `internal/media/mediatest` read 0.0% despite every parser test running through
+  it, and `go test -coverpkg=./...` then emits one copy of each block per test
+  binary which `go tool cover -func` **sums instead of merging** — a block
+  covered by one binary of seven reads as 1/7. `scripts/coverage.sh` merges by
+  block position in awk, and `-count=1` is mandatory because a cached package
+  result carries the line numbers its source had when cached, mixing two versions
+  of a file into one profile. CI now fails below 99%. Filling the gap covered
+  every remaining branch of `ParseTS` (mid-segment resync, null and
+  adaptation-only packets, a scrambled payload, a stream seen before its PMT),
+  the ISO-BMFF box plumbing (64-bit sizes, size-0 boxes running to EOF, version 1
+  `tkhd`/`mdhd`/`tfdt`, every `tfhd`/`trun` flag combination), the H.264 chroma
+  formats and both variable-length blocks before the resolution, ADTS header
+  variants and the ID3 frame walk, DASH `SegmentList` and open-ended `@r`,
+  HLS `EXT-X-MEDIA` types and byte ranges with implicit offsets, and every
+  measurement guard in the checks — the `(value, false)` paths where a check must
+  stay silent. `main` is covered by re-executing the test binary as a
+  subprocess, which is the only way to assert that an exit code reaches the
+  shell. **Nine statements remain uncovered and are unreachable by construction**,
+  not untested: `pick`'s index clamp and duplicate guard (with `len > max` the
+  step is strictly greater than one, so indices strictly increase and never reach
+  `len`), the HEVC `sps_max_sub_layers_minus1 > 7` check (a three-bit field
+  cannot exceed 7), `ParseMP4`'s no-track error when fragments are present (the
+  loop over a non-empty map always appends), `ParseTS`'s `payloadStart >=
+  len(pkt)` (4 against 188) and `packets == 0` (`tsSyncOffset` guarantees an
+  iteration), the JSON render error in `run` (no check produces a non-finite
+  `Value`), and `useColor`'s `os.Stdout.Stat()` failure. Each is a guard worth
+  keeping against a future refactor; removing them to reach a round number would
+  trade real safety for a metric.
+  <!-- sc: prio=high size=L labels=tests,project ver=unreleased -->
 - [ ] **SC-48 — Coverage ratchet**: CI already prints total coverage; make it
   fail when a commit lowers it. Test-first only holds if something notices when
   it did not happen — a check merged without its test should show up in the
