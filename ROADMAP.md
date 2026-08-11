@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**70 items · 27 shipped · 43 open · 11 milestones.**
+**71 items · 28 shipped · 43 open · 11 milestones.**
 
 ## At a glance
 
@@ -22,7 +22,7 @@
 | **M10** — Authoring-spec conformance | `v0.5.0` | later | `..........` 0% | 5 | 0 |
 | **M11** — Content protection, in depth | `v0.6.0` | later | `..........` 0% | 5 | 0 |
 | **M8** — Container image and supply chain | `v0.1.1` | shipped | `##########` 100% | 0 | 5 |
-| **M7** — Project and release | `ongoing` | ongoing | `######....` 58% | 5 | 7 |
+| **M7** — Project and release | `ongoing` | ongoing | `######....` 62% | 5 | 8 |
 
 ## Next up
 
@@ -169,7 +169,7 @@ Target `v0.1.1` · shipped · 0 open · 5 shipped · `##########` 100%
 
 ### M7 — Project and release
 
-Target `ongoing` · ongoing · 5 open · 7 shipped · `######....` 58%
+Target `ongoing` · ongoing · 5 open · 8 shipped · `######....` 62%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
@@ -180,6 +180,7 @@ Target `ongoing` · ongoing · 5 open · 7 shipped · `######....` 58%
 | **SC-49** — Per-check reference pages | low | M | docs | open |
 | **SC-57** — `internal/fetch` tests | high | M | tests | shipped `0.1.1` |
 | **SC-58** — `cmd/segcheck` tests | high | M | tests,cli | shipped `0.1.1` |
+| **SC-71** — The untested helpers behind the findings | high | M | tests | done, unreleased |
 | **SC-32** — Homebrew tap upload | med | S | release | shipped `0.1.1` |
 | **SC-34** — Backlog and roadmap tooling | med | M | project | shipped `0.1.1` |
 | **SC-47** — SBOM and signed artefacts | med | M | release | shipped `0.1.1` |
@@ -195,7 +196,7 @@ Target `ongoing` · ongoing · 5 open · 7 shipped · `######....` 58%
 | `cli` | 8 | 7 |
 | `delivery` | 5 | 4 |
 | `integration` | 4 | 4 |
-| `tests` | 7 | 4 |
+| `tests` | 8 | 4 |
 | `output` | 4 | 3 |
 | `docs` | 5 | 2 |
 | `release` | 8 | 2 |

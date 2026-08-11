@@ -39,8 +39,11 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   because Go randomises the map iteration its output depends on. Also
   `firstTemplate`'s three-level DASH inheritance, `dashKind`, `dashName`,
   `streamInfKind`, both codec tables and the severity order. Verified as SC-57
-  and SC-58 were: 60 mutations, 59 caught, the one survivor provably a no-op. No
-  production code changed.
+  and SC-58 were: 60 mutations, 59 caught, the one survivor provably a no-op. The
+  audit changed production code exactly once, in the `encv` case below; the
+  `mediatest` SPS writer also gained `pic_order_cnt_type` 1 and the 4:4:4 scaling
+  list count, so the reader is now asserted against the two remaining places
+  where the fields before the resolution change length.
 
 - **M11 — Content protection, in depth** (SC-66 … SC-70), targeted at v0.6.0.
   The `encryption` check shipped in v0.1.0 answers whether segments are
@@ -57,6 +60,17 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   running *content* checks on protected media.
 
 ### Fixed
+
+- **An encrypted track reported the wrong codec and no resolution** (SC-71). When
+  a sample entry is `encv` or `enca`, the original format is recovered from its
+  `sinf`/`frma` child — but the search started at byte 0 of the entry, where the
+  fixed `VisualSampleEntry` fields sit rather than any child box. The leading
+  reserved zeros parse as a box of declared size 0, which swallows the entry
+  whole, so `frma` was never found. The codec stayed `"encv"`, which the `tracks`
+  check compared against the manifest's declared codec and reported as a mismatch
+  on media that was correct, and the resolution was never read at all because
+  `"encv"` is not a visual sample entry type. The search now starts after the
+  fixed fields — 78 bytes for video, 28 for audio.
 
 - **The documentation site had drifted from what shipped.** Install still read
   `brew install Allan-Nava/tap/segcheck` after the formula became a cask in
