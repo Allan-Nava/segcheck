@@ -556,6 +556,27 @@ checks roadmap and blocks nothing.
   alongside the cask, or whether the README pointing them at `go install` is
   enough. Close it by installing the first published cask on a clean macOS.
   <!-- sc: prio=med size=S labels=release,docs -->
+- [x] **SC-80 — GitHub issues generated from the backlog**: the plan was visible
+  only to someone reading `BACKLOG.md` or `ROADMAP.md` in the repository, so a
+  contributor looking at the issue tab saw an empty project. `backlog.sh issues`
+  now syncs them, one way — backlog to issues, never the reverse, because the
+  `SC-n` id is what commits and the CHANGELOG reference and a title edited on
+  GitHub must not be able to move it. Deciding what to do is kept apart from
+  doing it: `issues` prints a plan and touches nothing, `--apply` executes it.
+  That split is what makes the interesting half testable, and
+  `scripts/backlog_issues_test.sh` asserts it against a fixture backlog with no
+  network call and nothing created on a public repository — every state told
+  apart (create, reopen, close, leave alone, and *never* open an issue for work
+  already shipped), idempotence proved on a settled backlog because a sync that
+  is not idempotent opens a duplicate on every push, the milestone filter, the
+  body's contents, and a malformed backlog stopping the sync rather than planning
+  against half of it and closing issues for items it merely failed to read. The
+  script creates the label vocabulary and the milestones it needs, so a fresh
+  clone or a fork does not fail on the first apply with an unknown label. The
+  workflow runs on a push that touches `BACKLOG.md` or the script — nothing else
+  can change the plan — under a `concurrency` group, because two runs racing would
+  both see "no issue for SC-n" and open it twice. Does not close SC-64: `lint` and
+  `roadmap` are still untested. <!-- sc: prio=med size=M labels=project,tests ver=unreleased -->
 - [ ] **SC-64 — `scripts/backlog.sh` has no tests**: the test-first rule covers
   tooling and this is the one place it was not applied — which is how it shipped
   a generator that split a table row in three the first time an item title

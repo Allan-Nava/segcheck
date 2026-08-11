@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**79 items · 30 shipped · 49 open · 12 milestones.**
+**80 items · 31 shipped · 49 open · 12 milestones.**
 
 ## At a glance
 
@@ -23,7 +23,7 @@
 | **M11** — Content protection, in depth | `v0.6.0` | later | `..........` 0% | 5 | 0 |
 | **M12** — Colour, HDR and the codec string | `v0.7.0` | later | `..........` 0% | 6 | 0 |
 | **M8** — Container image and supply chain | `v0.1.1` | shipped | `##########` 100% | 0 | 5 |
-| **M7** — Project and release | `ongoing` | ongoing | `######....` 64% | 5 | 9 |
+| **M7** — Project and release | `ongoing` | ongoing | `#######...` 67% | 5 | 10 |
 
 ## Next up
 
@@ -184,7 +184,7 @@ Target `v0.1.1` · shipped · 0 open · 5 shipped · `##########` 100%
 
 ### M7 — Project and release
 
-Target `ongoing` · ongoing · 5 open · 9 shipped · `######....` 64%
+Target `ongoing` · ongoing · 5 open · 10 shipped · `#######...` 67%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
@@ -200,6 +200,7 @@ Target `ongoing` · ongoing · 5 open · 9 shipped · `######....` 64%
 | **SC-32** — Homebrew tap upload | med | S | release | shipped `0.1.1` |
 | **SC-34** — Backlog and roadmap tooling | med | M | project | shipped `0.1.1` |
 | **SC-47** — SBOM and signed artefacts | med | M | release | shipped `0.1.1` |
+| **SC-80** — GitHub issues generated from the backlog | med | M | project,tests | done, unreleased |
 | **SC-33** — Docs site | low | M | docs | shipped `0.1.1` |
 | **SC-50** — Brand assets | low | S | docs | shipped `0.1.1` |
 
@@ -212,8 +213,8 @@ Target `ongoing` · ongoing · 5 open · 9 shipped · `######....` 64%
 | `cli` | 8 | 7 |
 | `delivery` | 5 | 4 |
 | `integration` | 4 | 4 |
-| `tests` | 9 | 4 |
+| `tests` | 10 | 4 |
 | `output` | 4 | 3 |
 | `docs` | 5 | 2 |
 | `release` | 8 | 2 |
-| `project` | 4 | 1 |
+| `project` | 5 | 1 |

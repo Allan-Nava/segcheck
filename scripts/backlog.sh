@@ -10,14 +10,20 @@
 #   scripts/backlog.sh check      fail if ROADMAP.md is stale (CI gate)
 #   scripts/backlog.sh stats      one-line summary
 #   scripts/backlog.sh next [n]   the n highest-priority open items (default 5)
+#   scripts/backlog.sh issues     plan the GitHub issue sync (see below)
 #
 # POSIX sh and awk only — this repository has no dependencies, and neither does
 # its tooling.
+#
+# BACKLOG_FILE and BACKLOG_ISSUES_SNAPSHOT override the backlog path and the
+# source of "which issues exist already". Both exist so the issue planner can be
+# tested without a network call and without creating anything on a public
+# repository — see scripts/backlog_issues_test.sh.
 
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-backlog="$root/BACKLOG.md"
+backlog="${BACKLOG_FILE:-$root/BACKLOG.md}"
 roadmap="$root/ROADMAP.md"
 
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/segcheck-backlog.XXXXXX")
@@ -369,6 +375,285 @@ next_items() {
 	' "$tmp/data.tsv"
 }
 
+# ---------------------------------------------------------------------------
+# GitHub issue sync.
+#
+# BACKLOG.md stays the source of truth; the issues are a view of it, the same way
+# ROADMAP.md is. Deciding what to do is kept separate from doing it: `issues`
+# prints a plan and touches nothing, `issues --apply` executes that plan. The
+# planner is what the tests assert, because the failure modes are all in the
+# decision — a sync that is not idempotent opens a duplicate for every item on
+# every push, and one that misreads a tick closes issues for work still open.
+# ---------------------------------------------------------------------------
+
+# item_bodies emits `<id> <tab> <prose>` — the item's text with the metadata
+# comment and the bold title removed, whitespace collapsed onto one line.
+item_bodies() {
+	awk '
+	function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
+
+	function flush(   b, p, rest, q, id, dash) {
+		if (buf == "") return
+		b = buf; buf = ""
+		p = index(b, "**"); if (!p) return
+		rest = substr(b, p + 2)
+		q = index(rest, "**"); if (!q) return
+		id = substr(rest, 1, q - 1)
+		dash = index(id, " \342\200\224 ")
+		if (!dash) return
+		id = substr(id, 1, dash - 1)
+
+		# Everything after the closing ** of the title, minus a leading colon.
+		rest = substr(rest, q + 2)
+		sub(/^[ \t]*:[ \t]*/, "", rest)
+		# Drop the metadata comment wherever it sits.
+		p = index(rest, "<!-- sc:")
+		if (p) rest = substr(rest, 1, p - 1)
+		gsub(/[ \t]+/, " ", rest)
+		printf "%s\t%s\n", id, trim(rest)
+	}
+
+	/^- \[[ x]\] \*\*SC-/ { flush(); buf = $0; next }
+	buf != "" && /^[ \t]+[^ \t]/ { buf = buf " " $0; next }
+	buf != "" { flush() }
+	END { flush() }
+	' "$backlog"
+}
+
+# existing_issues emits `<id> <tab> <number> <tab> <state>` for the issues that
+# already exist. A snapshot file stands in for GitHub under test.
+existing_issues() {
+	if [ -n "${BACKLOG_ISSUES_SNAPSHOT:-}" ]; then
+		cat "$BACKLOG_ISSUES_SNAPSHOT"
+		return
+	fi
+	# The id is the title prefix, which is the only durable link back to the
+	# backlog: issue numbers are assigned by GitHub and ids never change.
+	gh issue list --state all --limit 500 \
+		--json number,title,state \
+		--jq '.[] | "\(.title)\t\(.number)\t\(.state | ascii_downcase)"' |
+		awk -F'\t' '{
+			ttl = $1
+			dash = index(ttl, " \342\200\224 ")
+			id = dash ? substr(ttl, 1, dash - 1) : ttl
+			if (id ~ /^SC-[0-9]+$/) printf "%s\t%s\t%s\n", id, $2, $3
+		}'
+}
+
+# plan_issues prints one action line per item, plus a human-readable summary on
+# stderr-free trailing lines. Actions:
+#   CREATE <id> -        an open item with no issue
+#   REOPEN <id> <num>    an open item whose issue was closed
+#   CLOSE  <id> <num>    a shipped item whose issue is still open
+#   OK     <id> <num>    already in the right state
+#   SKIP   <id> -        shipped and never had an issue: do not create one now
+plan_issues() {
+	awk -v filter="$1" -F'\t' -v exfile="$tmp/existing.tsv" '
+	BEGIN {
+		n = split(filter, f, ",")
+		for (i = 1; i <= n; i++) if (f[i] != "") want[f[i]] = 1
+	}
+	FILENAME == exfile { ex_num[$1] = $2; ex_state[$1] = $3; next }
+	$1 == "M" { ms_title[$2] = $3; ms_target[$2] = $4; next }
+	$1 == "I" {
+		msid = $2; id = $3; status = $5
+		if (length(want) && !(msid in want)) next
+		num = (id in ex_num) ? ex_num[id] : ""
+		st = (id in ex_state) ? ex_state[id] : ""
+		if (status == "open") {
+			if (num == "")            printf "CREATE\t%s\t-\n", id
+			else if (st == "closed")  printf "REOPEN\t%s\t%s\n", id, num
+			else                      printf "OK\t%s\t%s\n", id, num
+		} else {
+			if (num == "")            printf "SKIP\t%s\t-\n", id
+			else if (st == "open")    printf "CLOSE\t%s\t%s\n", id, num
+			else                      printf "OK\t%s\t%s\n", id, num
+		}
+	}
+	' "$tmp/existing.tsv" "$tmp/data.tsv"
+}
+
+# issue_body composes the markdown body for one item.
+issue_body() {
+	awk -v want="$1" -F'\t' \
+		-v bodyfile="$tmp/bodies.tsv" \
+		-v repo_blob="https://github.com/Allan-Nava/segcheck/blob/main" '
+	FILENAME == bodyfile { body[$1] = $2; next }
+	$1 == "M" { ms_title[$2] = $3; ms_target[$2] = $4; next }
+	$1 == "I" && $3 == want {
+		printf "%s\n\n", body[want]
+		print "---"
+		print ""
+		printf "Planned work, tracked in [BACKLOG.md](%s/BACKLOG.md) as `%s` under **%s — %s**, targeted at %s (priority %s, size %s).\n",
+			repo_blob, want, $2, ms_title[$2], ms_target[$2], $6, $7
+		print ""
+		print "`BACKLOG.md` is the single source of truth: it carries the stable `SC-n` id that commits and the CHANGELOG reference, and [ROADMAP.md](" repo_blob "/ROADMAP.md) is generated from it. This issue is a view of that item, kept in step by `scripts/backlog.sh issues --apply`, so closing it means ticking the item in the backlog and regenerating the roadmap in the same commit."
+	}
+	' "$tmp/bodies.tsv" "$tmp/data.tsv"
+}
+
+# issue_meta prints `<title>|<labels>|<milestone title>` for one item.
+issue_meta() {
+	awk -v want="$1" -F'\t' '
+	$1 == "M" { ms_title[$2] = $3; next }
+	$1 == "I" && $3 == want {
+		printf "%s \342\200\224 %s|%s,prio-%s|%s \342\200\224 %s\n",
+			$3, $9, $8, $6, $2, ms_title[$2]
+	}
+	' "$tmp/data.tsv"
+}
+
+# ensure_milestone creates the GitHub milestone for an M-n if it is missing, and
+# is quiet when it already exists.
+ensure_milestone() {
+	title=$1
+	if gh api "repos/:owner/:repo/milestones?state=all&per_page=100" \
+		--jq '.[].title' 2>/dev/null | grep -qxF "$title"; then
+		return 0
+	fi
+	gh api "repos/:owner/:repo/milestones" -f title="$title" \
+		-f description="Backlog milestone $title. Source of truth: BACKLOG.md" >/dev/null
+	echo "  created milestone $title"
+}
+
+# ensure_labels creates the label vocabulary if it is missing. Without this a
+# fresh clone — or a fork — fails on the first `--apply` with an unknown label,
+# and `gh issue create` would otherwise be capable of opening the issue with the
+# labels silently dropped.
+ensure_labels() {
+	gh label list --limit 200 --json name --jq '.[].name' >"$tmp/labels.txt" 2>/dev/null || : >"$tmp/labels.txt"
+	# Keep in step with the vocabulary lint enforces, plus the priorities.
+	for spec in \
+		"parser|1d76db|Segment and manifest readers" \
+		"check|0e8a16|An analysis that compares media against the manifest" \
+		"output|5319e7|Renderers: terminal, JSON, markdown" \
+		"cli|fbca04|Flags, exit codes, usage" \
+		"delivery|c2e0c6|Docker image, packaging, install" \
+		"integration|bfd4f2|Using segcheck from other systems" \
+		"tests|d4c5f9|Test coverage and test tooling" \
+		"docs|0075ca|Documentation and the Pages site" \
+		"release|b60205|Tagging, artefacts, signing" \
+		"project|6a737d|Backlog, roadmap, repo hygiene" \
+		"prio-high|b60205|High priority in BACKLOG.md" \
+		"prio-med|fbca04|Medium priority in BACKLOG.md" \
+		"prio-low|c2e0c6|Low priority in BACKLOG.md"; do
+		name=${spec%%|*}
+		rest=${spec#*|}
+		colour=${rest%%|*}
+		desc=${rest#*|}
+		if ! grep -qxF "$name" "$tmp/labels.txt"; then
+			gh label create "$name" --color "$colour" --description "$desc" >/dev/null
+			echo "  created label $name"
+		fi
+	done
+}
+
+apply_issues() {
+	ensure_labels
+	while IFS="$(printf '\t')" read -r action id num; do
+		case "$action" in
+		CREATE)
+			meta=$(issue_meta "$id")
+			ttl=${meta%%|*}
+			rest=${meta#*|}
+			labels=${rest%%|*}
+			ms=${rest#*|}
+			ensure_milestone "$ms"
+			issue_body "$id" >"$tmp/body.md"
+			set -- gh issue create --title "$ttl" --body-file "$tmp/body.md" --milestone "$ms"
+			# One --label per name; a label that does not exist is a hard error
+			# rather than a silently unlabelled issue.
+			old_ifs=$IFS
+			IFS=,
+			for l in $labels; do
+				[ -n "$l" ] && set -- "$@" --label "$l"
+			done
+			IFS=$old_ifs
+			url=$("$@")
+			echo "  created $id  $url"
+			;;
+		CLOSE)
+			gh issue close "$num" \
+				--comment "Shipped: the backlog item is ticked in BACKLOG.md. Closed by \`scripts/backlog.sh issues --apply\`." >/dev/null
+			echo "  closed $id  #$num"
+			;;
+		REOPEN)
+			gh issue reopen "$num" \
+				--comment "Reopened: the backlog item is open again in BACKLOG.md. Reopened by \`scripts/backlog.sh issues --apply\`." >/dev/null
+			echo "  reopened $id  #$num"
+			;;
+		esac
+	done
+}
+
+issues_cmd() {
+	apply=0
+	filter=""
+	body_of=""
+	while [ $# -gt 0 ]; do
+		case "$1" in
+		--apply) apply=1 ;;
+		--dry-run) apply=0 ;;
+		--milestones)
+			shift
+			filter="${1:-}"
+			[ -n "$filter" ] || {
+				echo "backlog.sh: --milestones needs a value, e.g. --milestones M11,M12" >&2
+				exit 2
+			}
+			;;
+		--milestones=*) filter="${1#--milestones=}" ;;
+		--body)
+			shift
+			body_of="${1:-}"
+			[ -n "$body_of" ] || {
+				echo "backlog.sh: --body needs an SC-n id" >&2
+				exit 2
+			}
+			;;
+		*)
+			echo "backlog.sh: unknown option for issues: $1" >&2
+			exit 2
+			;;
+		esac
+		shift
+	done
+
+	item_bodies >"$tmp/bodies.tsv"
+
+	if [ -n "$body_of" ]; then
+		issue_body "$body_of"
+		return 0
+	fi
+
+	existing_issues >"$tmp/existing.tsv"
+	plan_issues "$filter" >"$tmp/plan.tsv"
+
+	create=$(grep -c '^CREATE' "$tmp/plan.tsv" || true)
+	close=$(grep -c '^CLOSE' "$tmp/plan.tsv" || true)
+	reopen=$(grep -c '^REOPEN' "$tmp/plan.tsv" || true)
+
+	cat "$tmp/plan.tsv"
+	echo ""
+	echo "plan: $create to create, $close to close, $reopen to reopen"
+
+	if [ "$apply" -eq 0 ]; then
+		if [ "$((create + close + reopen))" -gt 0 ]; then
+			echo "dry run — nothing was changed. Re-run with --apply to execute."
+		else
+			echo "nothing to do: the issues already match BACKLOG.md"
+		fi
+		return 0
+	fi
+
+	if [ "$((create + close + reopen))" -eq 0 ]; then
+		echo "nothing to do"
+		return 0
+	fi
+	echo "applying:"
+	grep -E '^(CREATE|CLOSE|REOPEN)' "$tmp/plan.tsv" | apply_issues
+}
+
 case "${1:-lint}" in
 lint)
 	lint
@@ -394,8 +679,13 @@ stats)
 next)
 	next_items "${2:-5}"
 	;;
+issues)
+	shift
+	issues_cmd "$@"
+	;;
 *)
 	echo "usage: scripts/backlog.sh [lint|roadmap|check|stats|next [n]]" >&2
+	echo "       scripts/backlog.sh issues [--apply] [--milestones M11,M12] [--body SC-n]" >&2
 	exit 2
 	;;
 esac

@@ -106,6 +106,12 @@ jobs:
         run: ./scripts/backlog.sh lint
       - name: ROADMAP.md is in sync with BACKLOG.md
         run: ./scripts/backlog.sh check
+      # The issue sync decides what to create and what to close, and it runs on
+      # a push with issues:write. Its planner is asserted against a fixture
+      # backlog here so a regression shows up before it opens duplicates or
+      # closes live issues.
+      - name: The issue planner
+        run: sh scripts/backlog_issues_test.sh
 
   govulncheck:
     runs-on: ubuntu-latest

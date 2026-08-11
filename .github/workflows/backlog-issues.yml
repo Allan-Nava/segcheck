@@ -1,0 +1,72 @@
+name: Backlog issues
+
+# Keep the GitHub issues in step with BACKLOG.md.
+#
+# BACKLOG.md is the single source of truth, the same way it already is for
+# ROADMAP.md: an item's stable SC-n id is what commits and the CHANGELOG
+# reference, and the issue is a view of it. So the sync runs one way only —
+# backlog to issues, never the reverse. Editing an issue title or closing it on
+# GitHub does not change the plan; ticking the item in BACKLOG.md does.
+#
+# It runs only when BACKLOG.md itself changes, because nothing else can alter the
+# plan, and on demand so a first run can be done deliberately.
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "BACKLOG.md"
+      - "scripts/backlog.sh"
+      - ".github/workflows/backlog-issues.yml"
+  workflow_dispatch:
+    inputs:
+      milestones:
+        description: "Limit to these milestones, comma-separated (e.g. M11,M12). Empty means all."
+        required: false
+        default: ""
+      dry_run:
+        description: "Print the plan without changing anything"
+        type: boolean
+        required: false
+        default: false
+
+# The default token is read-only for contents; opening and closing issues needs
+# this. Nothing here writes to the repository itself.
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  # Two runs racing would both see "no issue for SC-n" and open it twice.
+  group: backlog-issues
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The plan is printed before anything is applied, so the run's log says
+      # what it was about to do even if a later step fails.
+      - name: Plan
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./scripts/backlog.sh issues \
+            ${{ github.event.inputs.milestones && format('--milestones {0}', github.event.inputs.milestones) || '' }} \
+            | tee "$RUNNER_TEMP/plan.txt"
+          {
+            echo "### Backlog issue sync — plan"
+            echo '```'
+            tail -3 "$RUNNER_TEMP/plan.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Apply
+        if: github.event.inputs.dry_run != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./scripts/backlog.sh issues --apply \
+            ${{ github.event.inputs.milestones && format('--milestones {0}', github.event.inputs.milestones) || '' }}

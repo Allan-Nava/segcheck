@@ -67,6 +67,23 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   listed with their reasons in `BACKLOG.md`; they stay as guards rather than
   being deleted to round the number up.
 
+- **GitHub issues generated from the backlog** (SC-80): the plan was only visible
+  to someone reading `BACKLOG.md` or `ROADMAP.md` in the repository — the issue
+  tab was empty, and had been since the project started. `scripts/backlog.sh
+  issues` now syncs it, one way only: backlog to issues, never the reverse,
+  because the `SC-n` id is what commits and this file reference and a title edited
+  on GitHub must not be able to move it. Planning is separate from doing —
+  `issues` prints a plan and changes nothing, `--apply` executes it — which is
+  what makes the decisions testable: `scripts/backlog_issues_test.sh` asserts them
+  against a fixture backlog with no network call, covering every state (create,
+  reopen, close, leave alone, and never open an issue for shipped work),
+  idempotence on a settled backlog, the milestone filter, and a malformed backlog
+  stopping the sync instead of planning against half of it. The script also
+  creates the label vocabulary and milestones it needs, so a fork does not fail on
+  its first apply. `.github/workflows/backlog-issues.yml` runs it on a push that
+  touches the backlog or the script, under a concurrency group so two runs cannot
+  both open the same issue, and CI runs the planner's tests.
+
 - **M11 — Content protection, in depth** (SC-66 … SC-70), targeted at v0.6.0.
   The `encryption` check shipped in v0.1.0 answers whether segments are
   protected when the manifest says so, and stops there; this milestone is the
