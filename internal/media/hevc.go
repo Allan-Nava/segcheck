@@ -96,7 +96,7 @@ func parseHEVCSPS(rbsp []byte) (width, height int, ok bool) {
 
 	w := int(picWidth) - int((winLeft+winRight)*subWidthC)
 	h := int(picHeight) - int((winTop+winBottom)*subHeightC)
-	if w <= 0 || h <= 0 || w > 16384 || h > 16384 {
+	if !plausibleResolution(w, h) {
 		return 0, 0, false
 	}
 	return w, h, true

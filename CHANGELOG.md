@@ -9,6 +9,17 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **Fuzz targets for every parser** (SC-35): TS, MP4, `sidx`, packed audio, the
+  H.264/HEVC parameter sets, and `Parse` itself for the container detection in
+  front of them. The seed corpus is built from `mediatest` rather than checked in —
+  no binary fixture enters this repository — so `go test` runs the seeds on every
+  build and the targets double as a regression suite without anyone opting into
+  fuzzing. CI fuzzes each target for 60s.
+  The property asserted is not only "does not panic" but "when it claims success,
+  what it returns is self-consistent". That second half is what mattered: all three
+  defects below were found by it, and a panic-only target would have passed every
+  one of them.
+
 - **Single-file DASH is checked instead of skipped** (SC-19). A `SegmentBase` or
   on-demand representation used to come back marked unsupported — honest, and
   useless: one line saying so, and every other check skipped for the whole
@@ -201,6 +212,22 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   already rules out and nothing here reintroduces.
 
 ### Fixed
+
+- **Three parser defects found by fuzzing** (SC-88), all of the same shape — a
+  parser answering confidently instead of failing.
+  A `sidx` version byte other than 0 was read as version 1, so a version of `0x30`
+  had the time fields read at the wrong width; a run of `0xff` then became a
+  `first_offset` of nearly 2^64 and every subsegment offset came out negative — a
+  byte-range request starting before the file does. Versions other than 0 and 1 are
+  rejected now and the offset arithmetic is guarded against overflow.
+  Timestamps advancing by a single tick on a 90kHz clock yielded 90000fps, which
+  `framerate` would have compared against the manifest and used to call the
+  rendition wrong. A rate past 1000fps is arithmetic on timestamps that did not
+  advance, not a measurement.
+  And the bitstream readers had always refused an implausible frame size while the
+  container readers had not, so a malformed `tkhd` or sample entry could report a
+  16688x12336 rendition and have `resolution` report a mismatch against a manifest
+  that says nothing of the kind. One rule for both now: unknown beats wrong.
 
 - **`trex` defaults were never read** (SC-87), which made every sample zero ticks
   long on a large share of real on-demand DASH. `mvex`/`trex` in the

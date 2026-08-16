@@ -794,3 +794,29 @@ func TestSortedInitIDsAndSortUint32(t *testing.T) {
 		}
 	}
 }
+
+// Found by the fuzzer (SC-35). The bitstream readers have always refused an
+// implausible frame size, because a parameter set read a few bits out of step
+// yields a number rather than a failure. The container readers did not, so a
+// malformed tkhd or sample entry could report a 16688x12336 rendition — and
+// `resolution` would then report a mismatch against a manifest that says nothing
+// of the kind. Unknown beats wrong.
+func TestParseTkhdAndStsd_RefuseAnImplausibleResolution(t *testing.T) {
+	// A tkhd whose last eight bytes read as an enormous frame.
+	tkhd := append([]byte{0, 0, 0, 0}, make([]byte, 68)...)
+	tkhd = append(tkhd, u32b(60000<<16)...)
+	tkhd = append(tkhd, u32b(50000<<16)...)
+	if _, w, h := parseTkhd(tkhd); w != 0 || h != 0 {
+		t.Errorf("tkhd reported %dx%d, want it refused", w, h)
+	}
+
+	// And a visual sample entry stating the same.
+	if _, w, h, _ := parseStsd(stsdBox(visualEntry("avc1", 60000, 50000))); w != 0 || h != 0 {
+		t.Errorf("sample entry reported %dx%d, want it refused", w, h)
+	}
+
+	// A real 8K frame is still well inside the bound.
+	if _, w, h, _ := parseStsd(stsdBox(visualEntry("avc1", 7680, 4320))); w != 7680 || h != 4320 {
+		t.Errorf("8K sample entry = %dx%d, want it accepted", w, h)
+	}
+}

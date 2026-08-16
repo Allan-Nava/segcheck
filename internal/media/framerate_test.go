@@ -112,3 +112,21 @@ func TestFrameRateFPS_NotForAudio(t *testing.T) {
 		t.Errorf("an audio track reported %v fps", fps)
 	}
 }
+
+// Found by the fuzzer (SC-35). A transport stream whose timestamps advance by a
+// single tick yields 90000fps, and nothing rejected it — so the framerate check
+// would have compared 90000 against the manifest and called the rendition wrong.
+// Timestamps that barely advance are not a frame rate.
+func TestFrameRateFPS_RejectsAnImplausibleRate(t *testing.T) {
+	for _, frameDur := range []int64{1, 2, 45, 89} {
+		tr := Track{Kind: Video, Timescale: 90000, FrameDur: frameDur, HasPTS: true, Samples: 50}
+		if fps, ok := tr.FrameRateFPS(); ok {
+			t.Errorf("frameDur %d: reported %v fps as a measurement", frameDur, fps)
+		}
+	}
+	// The fastest rate anyone actually ships still measures.
+	tr := Track{Kind: Video, Timescale: 90000, FrameDur: 90000 / 240, HasPTS: true, Samples: 50}
+	if fps, ok := tr.FrameRateFPS(); !ok || fps != 240 {
+		t.Errorf("240fps = %v, %v; want it measured", fps, ok)
+	}
+}

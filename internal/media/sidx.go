@@ -70,6 +70,13 @@ func ParseSIDX(data []byte, indexOffset int64) (SIDX, error) {
 		return out, fmt.Errorf("sidx too short to hold its fixed fields")
 	}
 	version := sidx[0]
+	// The standard defines versions 0 and 1. Treating anything else as version 1
+	// reads the time fields at the wrong width — a fuzzer found version 0x30 being
+	// read as 64-bit, which turned a run of 0xff bytes into a first_offset of
+	// nearly 2^64 and every subsegment offset negative.
+	if version > 1 {
+		return out, fmt.Errorf("sidx version %d is not 0 or 1", version)
+	}
 	out.Timescale = be32(sidx[8:])
 
 	off := 12
@@ -110,7 +117,17 @@ func ParseSIDX(data []byte, indexOffset int64) (SIDX, error) {
 
 	// The first subsegment begins where the index box ends, plus first_offset,
 	// measured from wherever the index itself sits in the file.
+	//
+	// first_offset is a 64-bit unsigned field, so a malformed index can state a
+	// value no int64 can hold. A negative offset would become a byte-range request
+	// starting before the file does.
+	if firstOffset > 1<<62 {
+		return out, fmt.Errorf("sidx first_offset %d is not a position in any file", firstOffset)
+	}
 	pos := indexOffset + int64(indexEnd) + int64(firstOffset)
+	if pos < 0 {
+		return out, fmt.Errorf("sidx places its first subsegment at %d", pos)
+	}
 
 	for i := 0; i < count; i++ {
 		p := off + i*12
@@ -123,7 +140,12 @@ func ParseSIDX(data []byte, indexOffset int64) (SIDX, error) {
 			StartsWithSAP: be32(sidx[p+8:])&0x80000000 != 0,
 		}
 		out.Entries = append(out.Entries, e)
+		// The sizes are 31-bit and the count is bounded, so this cannot run away,
+		// but the check costs nothing and the alternative is a negative range.
 		pos += e.Size
+		if pos < 0 {
+			return out, fmt.Errorf("sidx subsegment sizes overflow the file position")
+		}
 	}
 	return out, nil
 }

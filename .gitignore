@@ -10,6 +10,11 @@
 /cover.out
 /coverage.*
 
+# A fuzz crash writes its input here. That file is evidence, not source: the fix
+# is to turn the input into an explicit test with the bytes written out in code,
+# which is also what keeps the no-binary-fixtures rule intact.
+internal/media/testdata/fuzz/
+
 # Editors and OS
 .DS_Store
 .idea/

@@ -32,6 +32,26 @@ const (
 	Other TrackKind = "other"
 )
 
+// maxCodedDimension bounds a frame size the readers will report.
+//
+// The bitstream readers have always refused anything larger, because a parameter
+// set read a few bits out of step yields a plausible-looking but absurd number.
+// The container readers did not, so a malformed tkhd or sample entry could report
+// a 16688x12336 rendition — and `resolution` would then report a mismatch against
+// a manifest that says nothing of the kind. One rule for both: a size past this is
+// not a measurement, it is a misread.
+const maxCodedDimension = 16384
+
+// plausibleResolution reports whether a frame size is one the readers will state.
+func plausibleResolution(w, h int) bool {
+	return w > 0 && h > 0 && w <= maxCodedDimension && h <= maxCodedDimension
+}
+
+// maxPlausibleFPS bounds what counts as a measured frame rate. High-speed capture
+// reaches a few hundred; anything past this is arithmetic on timestamps that did
+// not advance, not a rate the pictures are shown at.
+const maxPlausibleFPS = 1000
+
 // PTSModulus is the wrap point of an MPEG-TS 33-bit presentation timestamp.
 const PTSModulus = int64(1) << 33
 
@@ -103,7 +123,15 @@ func (t Track) FrameRateFPS() (float64, bool) {
 	if t.Kind != Video || t.Timescale == 0 || t.FrameDur <= 0 || !t.HasPTS {
 		return 0, false
 	}
-	return float64(t.Timescale) / float64(t.FrameDur), true
+	fps := float64(t.Timescale) / float64(t.FrameDur)
+	// A frame duration of a few ticks on a 90kHz clock is not a frame rate: it is
+	// timestamps that failed to advance. Reporting the 90000fps that falls out of
+	// a one-tick gap would have the framerate check compare it against the
+	// manifest and call the rendition wrong.
+	if fps > maxPlausibleFPS {
+		return 0, false
+	}
+	return fps, true
 }
 
 // ContainsKeyframe reports whether a random access point was found anywhere in the

@@ -501,3 +501,100 @@ func TestResolveSIDX_TreeWithNoMediaAnywhere(t *testing.T) {
 		t.Error("an index tree with no media anywhere resolved successfully")
 	}
 }
+
+// Found by the fuzzer (SC-35). The version byte was 0x30 — the character '0' —
+// and any value other than 0 was being treated as version 1, so the time fields
+// were read at the wrong width. A run of 0xff bytes then became a first_offset of
+// nearly 2^64, and every subsegment offset came out negative: a byte-range request
+// starting before the file does.
+func TestParseSIDX_VersionOtherThanZeroOrOne(t *testing.T) {
+	body := make([]byte, 32)
+	body[0] = 0x30 // not a version the standard defines
+	if _, err := ParseSIDX(mkbox("sidx", body), 0); err == nil {
+		t.Error("an index declaring version 0x30 was parsed")
+	}
+	// The two real versions still work.
+	for _, v := range []byte{0, 1} {
+		box := mediatest.SIDX(v, 90000, 0, 0, []mediatest.SIDXEntry{
+			{Size: 100, Duration: 90000, StartsWithSAP: true},
+		})
+		if _, err := ParseSIDX(box, 0); err != nil {
+			t.Errorf("version %d: %v", v, err)
+		}
+	}
+}
+
+// first_offset is a 64-bit unsigned field, so an index can state a value no int64
+// holds. The result must be an error rather than a negative position.
+func TestParseSIDX_FirstOffsetTooLargeToBeAPosition(t *testing.T) {
+	entries := []mediatest.SIDXEntry{{Size: 100, Duration: 90000, StartsWithSAP: true}}
+	box := mediatest.SIDX(1, 90000, 0, 1<<63, entries)
+
+	idx, err := ParseSIDX(box, 5000)
+	if err == nil {
+		t.Fatalf("an absurd first_offset was accepted: first entry at %d", idx.Entries[0].Offset)
+	}
+	for _, e := range idx.Entries {
+		if e.Offset < 0 {
+			t.Errorf("a negative offset %d escaped", e.Offset)
+		}
+	}
+}
+
+// @indexRange is a number from a manifest, so the position handed in is not
+// necessarily sane either. Adding it to first_offset and to the cumulative
+// subsegment sizes must not wrap into a negative position, which would become a
+// byte-range request starting before the file does.
+func TestParseSIDX_OffsetArithmeticCannotWrap(t *testing.T) {
+	entries := []mediatest.SIDXEntry{
+		{Size: 1 << 30, Duration: 90000, StartsWithSAP: true},
+		{Size: 1 << 30, Duration: 90000, StartsWithSAP: true},
+	}
+
+	// An index positioned so far into the file that the first subsegment wraps.
+	// Both halves are individually within range; their sum is not.
+	box := mediatest.SIDX(1, 90000, 0, 1<<62, entries)
+	if idx, err := ParseSIDX(box, 1<<62); err == nil {
+		t.Errorf("a wrapping first position was accepted: %d", idx.Entries[0].Offset)
+	}
+
+	// And one where the position is fine but the sizes accumulate past the end.
+	box = mediatest.SIDX(0, 90000, 0, 0, entries)
+	idx, err := ParseSIDX(box, 1<<63-1-(1<<29))
+	if err == nil {
+		for _, e := range idx.Entries {
+			if e.Offset < 0 {
+				t.Fatalf("a negative offset %d escaped", e.Offset)
+			}
+		}
+	}
+}
+
+// A tree whose references all point at further indexes, with no media at the
+// bottom, has to be reported rather than yielding an empty success.
+func TestResolveSIDX_LeavesThatAreThemselvesIndexes(t *testing.T) {
+	// A leaf whose single reference is an index pointing at the media that
+	// follows it — but that "media" is itself another index box.
+	inner := mediatest.SIDX(0, 90000, 0, 0, []mediatest.SIDXEntry{
+		{Size: 100, Duration: 90000, StartsWithSAP: true},
+	})
+	// A leaf index that references a region holding only the inner index.
+	mid := mediatest.SIDX(0, 90000, 0, 0, []mediatest.SIDXEntry{
+		{Size: uint32(len(inner)), Duration: 90000, Reference: true},
+	})
+	data := append(append([]byte{}, mid...), inner...)
+
+	// This one does resolve: the inner index describes real media.
+	if _, err := ResolveSIDX(data, 0); err != nil {
+		t.Fatalf("a two-level tree with media at the bottom failed: %v", err)
+	}
+
+	// Now the same shape with the inner index describing only another reference,
+	// so no level ever reaches media.
+	barren := mediatest.SIDX(0, 90000, 0, 0, []mediatest.SIDXEntry{
+		{Size: 12, Duration: 90000, Reference: true},
+	})
+	if _, err := ResolveSIDX(append(append([]byte{}, barren...), barren...), 0); err == nil {
+		t.Error("a tree that never reaches media resolved successfully")
+	}
+}

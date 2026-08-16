@@ -71,6 +71,35 @@ jobs:
             exit 1
           fi
 
+  # SC-35: the parsers eat bytes from the open internet — a segment truncated by a
+  # proxy, an HTML error page served with a 200, a file a packager wrote wrongly.
+  # A panic on any of that is a crash in someone else's CI run. The seed corpus is
+  # built from mediatest and runs on every `go test`; this job is the deeper pass.
+  #
+  # A crash writes its input under internal/media/testdata/fuzz. That file is the
+  # evidence, not something to commit: the fix is to turn the input into an
+  # explicit test with the bytes written out in code, the way the three defects
+  # this found were handled.
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - name: Fuzz the parsers
+        run: |
+          for target in FuzzParseTS FuzzParseMP4 FuzzParseSIDX \
+                        FuzzParsePackedAudio FuzzParseSPS FuzzParse; do
+            echo "::group::$target"
+            go test ./internal/media/ -run "^$target$" -fuzz "^$target$" -fuzztime=60s
+            echo "::endgroup::"
+          done
+      - name: Show any crashing input
+        if: failure()
+        run: |
+          find internal/media/testdata -type f -print -exec cat {} \; 2>/dev/null || true
+
   # SC-45: the image is part of how segcheck is delivered, so it gets tested
   # like anything else. An image that cannot reach an origin over TLS, or that
   # ships a shell, or that runs as root, is a defect even when every unit test

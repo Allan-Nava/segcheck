@@ -243,7 +243,7 @@ func parseH264SPS(rbsp []byte) (width, height int, ok bool) {
 
 	w := int(widthInMBs*16) - int((cropLeft+cropRight)*cropUnitX)
 	h := int((2-frameMBsOnly)*heightInMapUnits*16) - int((cropTop+cropBottom)*cropUnitY)
-	if w <= 0 || h <= 0 || w > 16384 || h > 16384 {
+	if !plausibleResolution(w, h) {
 		return 0, 0, false
 	}
 	return w, h, true

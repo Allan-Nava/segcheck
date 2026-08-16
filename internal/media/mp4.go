@@ -234,9 +234,13 @@ func parseTkhd(b []byte) (id uint32, width, height int) {
 	}
 	// width and height are 16.16 fixed point in the last 8 bytes.
 	if len(b) >= 8 {
-		w := be32(b[len(b)-8:]) >> 16
-		h := be32(b[len(b)-4:]) >> 16
-		width, height = int(w), int(h)
+		w := int(be32(b[len(b)-8:]) >> 16)
+		h := int(be32(b[len(b)-4:]) >> 16)
+		// A malformed box yields a number rather than a failure, so it is bounded
+		// here the way the bitstream readers bound theirs: unknown beats wrong.
+		if plausibleResolution(w, h) {
+			width, height = w, h
+		}
 	}
 	return id, width, height
 }
@@ -316,8 +320,11 @@ func parseStsd(b []byte) (codec string, width, height int, encrypted bool) {
 	}
 	codec = mp4Codec(typ)
 	if isVisualSampleEntry(typ) && len(e.payload) >= 28 {
-		width = int(be16(e.payload[24:]))
-		height = int(be16(e.payload[26:]))
+		w := int(be16(e.payload[24:]))
+		h := int(be16(e.payload[26:]))
+		if plausibleResolution(w, h) {
+			width, height = w, h
+		}
 	}
 	return codec, width, height, encrypted
 }

@@ -212,10 +212,37 @@ the stream is healthy.
   and the OBU sequence header for AV1 in CMAF, so an AV1 ladder gets the same
   resolution check as an H.264 one.
   <!-- sc: prio=med size=L labels=parser -->
-- [ ] **SC-35 — Parser fuzzing**: `go test -fuzz` targets for the TS, MP4, SPS
-  and ADTS readers, with a checked-in seed corpus. The parsers eat bytes from
-  the open internet; a panic on a truncated box is a crash in someone's CI.
-  <!-- sc: prio=high size=M labels=tests,parser -->
+- [x] **SC-35 — Parser fuzzing**: six `go test -fuzz` targets — TS, MP4, SIDX,
+  packed audio, the H.264/HEVC parameter sets, and `Parse` itself for the
+  container detection in front of them. The seed corpus is **built from
+  `mediatest` rather than checked in**, because no binary fixture enters this
+  repository; the builders already produce a well-formed segment of each kind, and
+  mutating those is where a fuzzer should start. `go test` runs the seeds on every
+  build, so the targets double as a regression suite without anyone opting in.
+  The property asserted is not only "does not panic" but "when it claims success,
+  what it returns is self-consistent" — a parser that survives by reporting a
+  60000x12000 frame has not survived, it has moved the failure downstream into a
+  finding about media that never said any such thing. That second property is what
+  found all three defects below; a panic-only target would have passed.
+  A crash writes its input under `testdata/fuzz`, which is gitignored: the fix is
+  to turn it into an explicit test with the bytes written out in code, which is how
+  all three were handled. CI fuzzes each target for 60s.
+  <!-- sc: prio=high size=M labels=tests,parser ver=unreleased -->
+- [x] **SC-88 — Three defects the fuzzer found**: all of the same shape — a parser
+  answering confidently instead of failing. **`sidx` version**: anything other than
+  0 was read as version 1, so a version byte of `0x30` had the time fields read at
+  the wrong width, turning a run of `0xff` into a `first_offset` of nearly 2^64 and
+  every subsegment offset negative — a byte-range request starting before the file
+  does. Versions other than 0 and 1 are rejected now, and the offset arithmetic is
+  guarded against overflow. **Frame rate**: timestamps advancing by one tick on a
+  90kHz clock yielded 90000fps, which `framerate` would have compared against the
+  manifest and called the rendition wrong; a rate past 1000fps is arithmetic on
+  timestamps that did not advance, not a measurement. **Resolution**: the bitstream
+  readers had always refused an implausible frame size, but the container readers
+  had not, so a malformed `tkhd` or sample entry could report 16688x12336 and have
+  `resolution` report a mismatch against a manifest that says nothing of the kind.
+  One rule for both now, and unknown beats wrong.
+  <!-- sc: prio=high size=S labels=parser ver=unreleased -->
 
 ## M4 — Everything that is not the video track <!-- ms: target=v0.3.0 phase=next -->
 
