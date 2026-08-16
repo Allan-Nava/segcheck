@@ -7,6 +7,27 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-17
+
+The release M3 was for: the rungs segcheck read least well. Two new checks —
+`keyframe` and `framerate` — two new readers, HEVC parameter sets and the `sidx`
+of a single-file DASH representation, and the tooling that keeps the rest honest.
+
+The through-line is silence. A check that cannot look reports nothing, and nothing
+reads exactly like a clean bill of health: an HEVC rung had no resolution to
+compare, a single-file DASH representation was marked unsupported and skipped
+whole, an encrypted track reported its codec as `encv`. Each of those was a rung
+the tool was quietly not checking.
+
+The other through-line is that **the reference streams, not the unit tests, found
+every design error here** — five of them. A keyframe rule that flagged Apple's own
+bipbop; a NAL walk that stopped before the keyframe on 1080p; a DASH profile that
+states no `SegmentBase` at all; a hierarchical index whose top level references
+only other indexes; `trex` defaults without which every duration read as zero.
+Unit tests assert what their author thought of. So that step is now a test of its
+own (SC-36), the parsers are fuzzed (SC-35), and coverage ratchets rather than
+merely being printed (SC-48).
+
 ### Added
 
 - **AV1, VP9 and VP8 are asserted, not assumed** (SC-42). The item assumed a
@@ -463,5 +484,6 @@ compares the media against the manifest's claims.
   stream: all three come back clean, with durations matching to +0.00% and coded
   resolutions read from the bitstream.
 
+[0.2.0]: https://github.com/Allan-Nava/segcheck/releases/tag/v0.2.0
 [0.1.1]: https://github.com/Allan-Nava/segcheck/releases/tag/v0.1.1
 [0.1.0]: https://github.com/Allan-Nava/segcheck/releases/tag/v0.1.0

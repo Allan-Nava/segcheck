@@ -88,7 +88,7 @@ prints what to pick up.
   ops-style markdown; `--exit-on`.
   <!-- sc: prio=high size=M labels=output ver=0.1.0 -->
 
-## M3 — Codec and timing depth <!-- ms: target=v0.2.0 phase=now -->
+## M3 — Codec and timing depth <!-- ms: target=v0.2.0 phase=shipped -->
 
 The rungs segcheck currently reads least well. Every item here removes a silent
 skip — a place where the tool says nothing because it cannot look, not because
@@ -106,7 +106,7 @@ the stream is healthy.
   find something SPS-shaped. fMP4 needed no reader — the visual sample entry
   already states it — but `hvc1` now has a test of its own rather than an
   assumption. Both the sub-layer tail and the end-to-end check were
-  mutation-verified. <!-- sc: prio=high size=L labels=parser ver=unreleased -->
+  mutation-verified. <!-- sc: prio=high size=L labels=parser ver=0.2.0 -->
 - [x] **SC-79 — Encrypted fMP4 reported the wrong codec and no resolution**:
   found while closing SC-78's coverage gap, and reachable on any CMAF stream with
   `cenc`/`cbcs` protection. `parseStsd` looked for `sinf`/`frma` — where an
@@ -122,7 +122,7 @@ the stream is healthy.
   visual-sample-entry list, so the frame size was never read and `resolution`
   skipped the rung in silence. The search now starts after the fixed fields, and
   both the video and audio cases are asserted against sample entries built to the
-  real layout. <!-- sc: prio=high size=S labels=parser,check ver=unreleased -->
+  real layout. <!-- sc: prio=high size=S labels=parser,check ver=0.2.0 -->
 - [x] **SC-16 — Keyframe alignment**: the `keyframe` check reports segments a
   player cannot switch into, which is the defect behind "ABR switching stutters
   even though the boundaries line up" — `alignment` passes, every duration is
@@ -152,7 +152,7 @@ the stream is healthy.
   caught), and two of the tests were themselves rewritten when that pass showed
   them passing for the wrong reason. Verified against Apple fMP4, Apple MPEG-TS and
   a public DASH manifest: zero findings above OK.
-  <!-- sc: prio=high size=L labels=check,parser ver=unreleased -->
+  <!-- sc: prio=high size=L labels=check,parser ver=0.2.0 -->
 - [x] **SC-17 — Frame rate**: the `framerate` check measures the rate from the
   median gap between presentation timestamps — the one measure that survives
   B-frames, since the stream is not in presentation order and a mean would also be
@@ -171,7 +171,7 @@ the stream is healthy.
   already carried both `FRAME-RATE` and `@frameRate`. Mutation-verified (nine
   mutations, nine caught) and checked against Apple fMP4, Apple MPEG-TS and a
   public DASH manifest with zero findings above OK.
-  <!-- sc: prio=high size=M labels=check ver=unreleased -->
+  <!-- sc: prio=high size=M labels=check ver=0.2.0 -->
 - [x] **SC-19 — `sidx` and `SegmentBase`**: single-file DASH representations are
   sampled now instead of being reported unsupported — an honest answer that
   skipped every other check for the whole rendition. Three layers, because
@@ -192,7 +192,7 @@ the stream is healthy.
   The offsets are the part to get right: a reference states a size, not a position,
   so they accumulate from the end of the index box plus `first_offset`, and the
   index's own position in the file has to be added because `@indexRange` addresses
-  it there. <!-- sc: prio=high size=M labels=parser ver=unreleased -->
+  it there. <!-- sc: prio=high size=M labels=parser ver=0.2.0 -->
 - [x] **SC-87 — `trex` defaults were never read**: `mvex`/`trex` in the
   initialisation segment states the default sample duration, size and flags for a
   track, and a fragment may state none of them itself. A large share of real
@@ -207,7 +207,7 @@ the stream is healthy.
   packaged this way. `DurationSec` also stopped reporting a computed zero as a
   measurement — timestamps that never advance measure nothing, and saying
   otherwise is the same false report by another route.
-  <!-- sc: prio=high size=S labels=parser,check ver=unreleased -->
+  <!-- sc: prio=high size=S labels=parser,check ver=0.2.0 -->
 - [x] **SC-42 — AV1 and VP9 coded resolution**: the item assumed a parser was
   missing. Checked before writing one, and it was not: an `av01`, `vp09` or `vp08`
   visual sample entry already reported both codec and resolution end to end,
@@ -228,7 +228,7 @@ the stream is healthy.
   **profile and level** is a real gap, and it belongs with SC-74 in M12 where the
   codec string is already the subject. MPEG-TS AV1 is deliberately out: there is no
   deployed stream type for it.
-  <!-- sc: prio=med size=L labels=parser ver=unreleased -->
+  <!-- sc: prio=med size=L labels=parser ver=0.2.0 -->
 - [x] **SC-35 — Parser fuzzing**: six `go test -fuzz` targets — TS, MP4, SIDX,
   packed audio, the H.264/HEVC parameter sets, and `Parse` itself for the
   container detection in front of them. The seed corpus is **built from
@@ -244,7 +244,7 @@ the stream is healthy.
   A crash writes its input under `testdata/fuzz`, which is gitignored: the fix is
   to turn it into an explicit test with the bytes written out in code, which is how
   all three were handled. CI fuzzes each target for 60s.
-  <!-- sc: prio=high size=M labels=tests,parser ver=unreleased -->
+  <!-- sc: prio=high size=M labels=tests,parser ver=0.2.0 -->
 - [x] **SC-88 — Three defects the fuzzer found**: all of the same shape — a parser
   answering confidently instead of failing. **`sidx` version**: anything other than
   0 was read as version 1, so a version byte of `0x30` had the time fields read at
@@ -259,9 +259,9 @@ the stream is healthy.
   had not, so a malformed `tkhd` or sample entry could report 16688x12336 and have
   `resolution` report a mismatch against a manifest that says nothing of the kind.
   One rule for both now, and unknown beats wrong.
-  <!-- sc: prio=high size=S labels=parser ver=unreleased -->
+  <!-- sc: prio=high size=S labels=parser ver=0.2.0 -->
 
-## M4 — Everything that is not the video track <!-- ms: target=v0.3.0 phase=next -->
+## M4 — Everything that is not the video track <!-- ms: target=v0.3.0 phase=now -->
 
 Audio, captions, subtitles, ad signalling and protected content — the parts of a
 stream that break in production and that no manifest-only checker can see.
@@ -290,7 +290,7 @@ stream that break in production and that no manifest-only checker can see.
   goes on the command line as a literal.
   <!-- sc: prio=med size=M labels=cli,parser -->
 
-## M5 — Live and delivery <!-- ms: target=v0.4.0 phase=later -->
+## M5 — Live and delivery <!-- ms: target=v0.4.0 phase=next -->
 
 A live edge and a CDN are the two things a single-shot check cannot see. These
 items are what turn segcheck from "check this stream once" into "check this
@@ -319,7 +319,7 @@ stream the way a viewer receives it".
   at all, reported once per host rather than per segment.
   <!-- sc: prio=low size=S labels=delivery,check -->
 
-## M9 — Wallclock and DVR correctness <!-- ms: target=v0.4.0 phase=later -->
+## M9 — Wallclock and DVR correctness <!-- ms: target=v0.4.0 phase=next -->
 
 A manifest does not only claim structure, it claims **time in the real world**:
 this segment starts at 14:03:22 UTC, this window is sixty seconds deep, this
@@ -721,7 +721,7 @@ checks roadmap and blocks nothing.
   stops reading, and silence reads exactly like a clean bill of health. Verified by
   breaking things on purpose — reverting the `trex` fix is caught (as `continuity`
   going silent), and so is a resolution reader that always refuses.
-  <!-- sc: prio=high size=S labels=tests,release ver=unreleased -->
+  <!-- sc: prio=high size=S labels=tests,release ver=0.2.0 -->
 - [x] **SC-57 — `internal/fetch` tests** (was 0.0% of statements, now 94.1%).
   The truncation boundary is table-driven across under / exactly-at / one-over /
   far-over the cap, because `>` versus `>=` there is the difference between an
@@ -781,7 +781,7 @@ checks roadmap and blocks nothing.
   workflow runs on a push that touches `BACKLOG.md` or the script — nothing else
   can change the plan — under a `concurrency` group, because two runs racing would
   both see "no issue for SC-n" and open it twice. Does not close SC-64: `lint` and
-  `roadmap` are still untested. <!-- sc: prio=med size=M labels=project,tests ver=unreleased -->
+  `roadmap` are still untested. <!-- sc: prio=med size=M labels=project,tests ver=0.2.0 -->
 - [ ] **SC-64 — `scripts/backlog.sh` has no tests**: the test-first rule covers
   tooling and this is the one place it was not applied — which is how it shipped
   a generator that split a table row in three the first time an item title
@@ -818,7 +818,7 @@ checks roadmap and blocks nothing.
   `ResolveReference("")` returns the base either way. Two of the tests were
   themselves fixed by that pass, having asserted values a broken implementation
   would also have produced.
-  <!-- sc: prio=high size=M labels=tests ver=unreleased -->
+  <!-- sc: prio=high size=M labels=tests ver=0.2.0 -->
 - [x] **SC-78 — Coverage to the practical ceiling, and a gate that holds it**
   (99.64% of statements, from a true baseline of 90.94%). Two measurement bugs
   came first, and the reported numbers before this were all wrong: `go test
@@ -851,7 +851,7 @@ checks roadmap and blocks nothing.
   `Value`), and `useColor`'s `os.Stdout.Stat()` failure. Each is a guard worth
   keeping against a future refactor; removing them to reach a round number would
   trade real safety for a metric.
-  <!-- sc: prio=high size=L labels=tests,project ver=unreleased -->
+  <!-- sc: prio=high size=L labels=tests,project ver=0.2.0 -->
 - [x] **SC-48 — Coverage ratchet**: `scripts/coverage.sh check` compares the
   measurement against the figure recorded in `scripts/coverage.floor` and fails
   when a commit lowers it, which is what test-first needs to hold — a check
@@ -871,7 +871,7 @@ checks roadmap and blocks nothing.
   suite: the drop, the one-statement drop, standing still, a gain worth
   recording, a missing floor file, a floor file with rubbish in it (which must not
   read as zero and pass everything), and `update`'s refusal to go down.
-  <!-- sc: prio=med size=S labels=tests ver=unreleased -->
+  <!-- sc: prio=med size=S labels=tests ver=0.2.0 -->
 - [x] **SC-32 — Homebrew tap upload**: `skip_upload` is gone, so the next tag
   writes `Casks/segcheck.rb` into `Allan-Nava/homebrew-tap`. The credential is a
   fine-grained PAT scoped to that one repository with *Contents: read and
