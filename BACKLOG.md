@@ -208,10 +208,27 @@ the stream is healthy.
   measurement — timestamps that never advance measure nothing, and saying
   otherwise is the same false report by another route.
   <!-- sc: prio=high size=S labels=parser,check ver=unreleased -->
-- [ ] **SC-42 — AV1 and VP9 coded resolution**: `av1C` / `vpcC` sample entries,
-  and the OBU sequence header for AV1 in CMAF, so an AV1 ladder gets the same
-  resolution check as an H.264 one.
-  <!-- sc: prio=med size=L labels=parser -->
+- [x] **SC-42 — AV1 and VP9 coded resolution**: the item assumed a parser was
+  missing. Checked before writing one, and it was not: an `av01`, `vp09` or `vp08`
+  visual sample entry already reported both codec and resolution end to end,
+  because the resolution of every fMP4 codec comes from the sample entry rather
+  than from a bitstream reader — `av1C` and `vpcC` carry profile and level, not a
+  frame size. So the whole of it rested on the sample entry type being in
+  `isVisualSampleEntry`, which is exactly the kind of thing that works until
+  someone edits a list, and nothing asserted it.
+  What shipped is therefore the test rather than the parser, on the same reasoning
+  that gave `hvc1` one in SC-15: a codec missing from that list reports no
+  resolution, `resolution` has nothing to compare, and the rung is skipped in a
+  silence indistinguishable from a pass. The list is now stated as a contract —
+  every codec the tool names must be recognised as visual and must have a codec
+  name — and mutation-verified: dropping `av01` or `vp09` from it, or from the
+  codec table, is caught.
+  The OBU sequence header the item also asked for buys nothing here, because an
+  `av01` entry is required to carry width and height; reading `av1C`/`vpcC` for
+  **profile and level** is a real gap, and it belongs with SC-74 in M12 where the
+  codec string is already the subject. MPEG-TS AV1 is deliberately out: there is no
+  deployed stream type for it.
+  <!-- sc: prio=med size=L labels=parser ver=unreleased -->
 - [x] **SC-35 — Parser fuzzing**: six `go test -fuzz` targets — TS, MP4, SIDX,
   packed audio, the H.264/HEVC parameter sets, and `Parse` itself for the
   container detection in front of them. The seed corpus is **built from
@@ -519,7 +536,10 @@ not checking, and stays out.
   once by every device that believes the bitstream, and the two halves of the
   audience see different pictures of the same stream.
   <!-- sc: prio=high size=M labels=check,parser -->
-- [ ] **SC-74 — Codec string profile and level**: parse the whole string rather
+- [ ] **SC-74 — Codec string profile and level** (includes the `av1C`/`vpcC`
+  configuration boxes, moved here from SC-42: they carry profile and level, not a
+  resolution, so they belong with the codec string rather than with the frame
+  size): parse the whole string rather
   than its first component — `avc1.PPCCLL` against `profile_idc`,
   `constraint_set` flags and `level_idc` in the SPS; `hvc1.P.C.LX.B` against the
   profile-tier-level `skipHEVCProfileTierLevel` currently walks past;

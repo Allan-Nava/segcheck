@@ -9,6 +9,17 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **AV1, VP9 and VP8 are asserted, not assumed** (SC-42). The item assumed a
+  parser was missing; checking first showed it was not. Every fMP4 codec takes its
+  resolution from the visual sample entry rather than from a bitstream reader —
+  `av1C` and `vpcC` carry profile and level, not a frame size — so AV1 and VP9
+  already worked end to end. What was missing was the test: the whole of it rested
+  on the sample entry type appearing in one list, and a codec absent from that list
+  reports no resolution, leaving the rung skipped in a silence indistinguishable
+  from a pass. That list is now a stated contract, mutation-verified. Reading
+  `av1C`/`vpcC` for profile and level is a real gap and has moved to SC-74, where
+  the codec string already is.
+
 - **The reference streams are a test now, not a habit** (SC-36). Every false
   positive this project has shipped was found by running against a real stream
   rather than by a unit test — five of them in this release alone — and the step

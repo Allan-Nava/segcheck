@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**88 items · 39 shipped · 49 open · 13 milestones.**
+**88 items · 40 shipped · 48 open · 13 milestones.**
 
 ## At a glance
 
@@ -14,7 +14,7 @@
 |---|---|---|---|---|---|
 | **M1** — Core: read the segments | `v0.1.0` | shipped | `##########` 100% | 0 | 6 |
 | **M2** — The checks | `v0.1.0` | shipped | `##########` 100% | 0 | 8 |
-| **M3** — Codec and timing depth | `v0.2.0` | **now** | `#########.` 89% | 1 | 8 |
+| **M3** — Codec and timing depth | `v0.2.0` | **now** | `##########` 100% | 0 | 9 |
 | **M4** — Everything that is not the video track | `v0.3.0` | next | `..........` 0% | 6 | 0 |
 | **M5** — Live and delivery | `v0.4.0` | later | `..........` 0% | 6 | 0 |
 | **M9** — Wallclock and DVR correctness | `v0.4.0` | later | `..........` 0% | 5 | 0 |
@@ -35,9 +35,9 @@ The open items with the highest priority in the milestones that are in flight.
 - **SC-37** — CEA-608/708 captions · `high` · size `L` · check,parser (M4, target `v0.3.0`)
 - **SC-22** — Encrypted-segment support with a key · `med` · size `M` · cli,parser (M4, target `v0.3.0`)
 - **SC-38** — Subtitle renditions · `med` · size `L` · check,parser (M4, target `v0.3.0`)
-- **SC-42** — AV1 and VP9 coded resolution · `med` · size `L` · parser (M3, target `v0.2.0`)
 - **SC-64** — `scripts/backlog.sh` has no tests · `med` · size `S` · tests,project (M7, target `ongoing`)
 - **SC-65** — The published cask actually installs · `med` · size `S` · release,docs (M7, target `ongoing`)
+- **SC-21** — MP3 packed audio · `low` · size `S` · parser (M4, target `v0.3.0`)
 
 ## Milestones
 
@@ -71,11 +71,10 @@ Target `v0.1.0` · shipped · 0 open · 8 shipped · `##########` 100%
 
 ### M3 — Codec and timing depth
 
-Target `v0.2.0` · **now** · 1 open · 8 shipped · `#########.` 89%
+Target `v0.2.0` · **now** · 0 open · 9 shipped · `##########` 100%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
-| **SC-42** — AV1 and VP9 coded resolution | med | L | parser | open |
 | **SC-15** — HEVC/H.265 SPS | high | L | parser | done, unreleased |
 | **SC-16** — Keyframe alignment | high | L | check,parser | done, unreleased |
 | **SC-17** — Frame rate | high | M | check | done, unreleased |
@@ -84,6 +83,7 @@ Target `v0.2.0` · **now** · 1 open · 8 shipped · `#########.` 89%
 | **SC-79** — Encrypted fMP4 reported the wrong codec and no resolution | high | S | parser,check | done, unreleased |
 | **SC-87** — `trex` defaults were never read | high | S | parser,check | done, unreleased |
 | **SC-88** — Three defects the fuzzer found | high | S | parser | done, unreleased |
+| **SC-42** — AV1 and VP9 coded resolution | med | L | parser | done, unreleased |
 
 ### M4 — Everything that is not the video track
 
@@ -225,7 +225,7 @@ Target `ongoing` · ongoing · 3 open · 12 shipped · `########..` 80%
 | Label | Items | Open |
 |---|---|---|
 | `check` | 44 | 33 |
-| `parser` | 39 | 26 |
+| `parser` | 39 | 25 |
 | `cli` | 8 | 7 |
 | `delivery` | 5 | 4 |
 | `integration` | 4 | 4 |

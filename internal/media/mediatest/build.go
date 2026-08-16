@@ -202,7 +202,18 @@ func MP4Init(trackID, timescale uint32, kind string, width, height int) []byte {
 // assert that fMP4 HEVC reports its resolution from the container rather than
 // needing the bitstream reader MPEG-TS does.
 func MP4InitHEVC(trackID, timescale uint32, width, height int) []byte {
-	return mp4InitWith(trackID, timescale, "video", "hvc1", width, height)
+	return MP4InitCodec(trackID, timescale, "hvc1", width, height)
+}
+
+// MP4InitCodec is MP4Init with the visual sample entry type chosen by the caller
+// — `av01`, `vp09`, `avc1` and so on.
+//
+// The resolution of every one of them comes from the sample entry rather than
+// from a bitstream reader, so what a test built with this asserts is that the
+// codec is *recognised as visual*: a type missing from that list reports no
+// resolution at all, and the check then skips the rung in silence.
+func MP4InitCodec(trackID, timescale uint32, sampleEntryType string, width, height int) []byte {
+	return mp4InitWith(trackID, timescale, "video", sampleEntryType, width, height)
 }
 
 // MP4InitTrex is MP4Init with an `mvex`/`trex` stating default sample values, the
