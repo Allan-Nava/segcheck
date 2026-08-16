@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 
 	"github.com/Allan-Nava/segcheck/internal/finding"
@@ -673,6 +674,138 @@ func checkKeyframe(rends []*renditionData) []finding.Finding {
 		})
 	}
 	return out
+}
+
+// checkFrameRate measures the rate the pictures are actually shown at and asks
+// two things of it (SC-17).
+//
+// Against the manifest: `FRAME-RATE` / `@frameRate` is what a player consults to
+// decide whether it can decode a rendition *before* downloading any of it. A
+// 1080p60 rung declared as 30 will be selected by a device that can only manage
+// 30, and then stutter — while the manifest reads perfectly on the way down.
+//
+// Across the ladder: rungs running at unrelated rates make every switch visibly
+// uneven. The deliberate exception is an exact integer relation, because halving
+// the rate on the lower rungs is an ordinary and widespread way to save bitrate;
+// reporting that would flag a technique in wide use.
+func checkFrameRate(rends []*renditionData, opts Options) []finding.Finding {
+	var out []finding.Finding
+
+	type measured struct {
+		rd  *renditionData
+		fps float64
+	}
+	var seen []measured
+
+	for _, rd := range rends {
+		if rd.err != nil || rd.initErr != nil || rd.r.Kind == manifest.Audio {
+			continue
+		}
+		// The median of the per-segment rates: one odd segment should not decide
+		// what the rendition runs at.
+		var rates []float64
+		for _, sd := range parsedSegs(rd) {
+			t, ok := sd.info.Track(media.Video)
+			if !ok {
+				continue
+			}
+			if fps, ok := t.FrameRateFPS(); ok {
+				rates = append(rates, fps)
+			}
+		}
+		if len(rates) == 0 {
+			continue
+		}
+		fps := medianFloat(rates)
+		seen = append(seen, measured{rd, fps})
+
+		label := rendLabel(rd)
+		declared := rd.r.FrameRate
+		if declared <= 0 {
+			out = append(out, finding.Finding{
+				Check: "framerate", Target: label, Status: finding.OK,
+				Message: fmt.Sprintf("%s measured, no FRAME-RATE declared to compare against", humanFPS(fps)),
+				Value:   finding.Num(fps), Unit: "fps",
+			})
+			continue
+		}
+
+		// The tolerance has to absorb the NTSC rates: a manifest writes 29.97
+		// where the media runs at 30000/1001, and 23.976 for 24000/1001. Those are
+		// the same rate spelled two ways, and flagging them would fire on a large
+		// fraction of the world's content.
+		if math.Abs(fps-declared)/declared*100 > opts.FrameRateTolerancePct {
+			out = append(out, finding.Finding{
+				Check: "framerate", Target: label, Status: finding.WARN,
+				Message: fmt.Sprintf("media runs at %s but FRAME-RATE declares %s", humanFPS(fps), humanFPS(declared)),
+				Value:   finding.Num(fps), Unit: "fps",
+				Hint: "players use FRAME-RATE to decide what they can decode before downloading anything: a rung that runs faster than it admits gets chosen by devices that cannot sustain it",
+			})
+			continue
+		}
+		out = append(out, finding.Finding{
+			Check: "framerate", Target: label, Status: finding.OK,
+			Message: fmt.Sprintf("%s, as declared", humanFPS(fps)),
+			Value:   finding.Num(fps), Unit: "fps",
+		})
+	}
+
+	if len(seen) < 2 {
+		return out
+	}
+
+	// The ladder. Compare against the fastest rung: every other rate should be it
+	// or an exact fraction of it.
+	fastest := seen[0]
+	for _, m := range seen[1:] {
+		if m.fps > fastest.fps {
+			fastest = m
+		}
+	}
+	var odd []string
+	for _, m := range seen {
+		if !relatedRate(fastest.fps, m.fps, opts.FrameRateTolerancePct) {
+			odd = append(odd, fmt.Sprintf("%s %s", rendLabel(m.rd), humanFPS(m.fps)))
+		}
+	}
+	if len(odd) > 0 {
+		out = append(out, finding.Finding{
+			Check: "framerate", Target: "ladder", Status: finding.WARN,
+			Message: fmt.Sprintf("ladder mixes frame rates: %s against %s at %s",
+				strings.Join(odd, ", "), rendLabel(fastest.rd), humanFPS(fastest.fps)),
+			Hint: "switching between rungs at unrelated rates is visibly uneven; an exact fraction of the top rate is fine, an unrelated one is not",
+		})
+	}
+	return out
+}
+
+// relatedRate reports whether fps is the top rate or an exact integer fraction of
+// it — 30 against 60, 15 against 60 — within the tolerance.
+func relatedRate(top, fps, tolPct float64) bool {
+	if fps <= 0 || top <= 0 {
+		return false
+	}
+	ratio := top / fps
+	nearest := math.Round(ratio)
+	if nearest < 1 {
+		return false
+	}
+	return math.Abs(ratio-nearest)/nearest*100 <= tolPct
+}
+
+func medianFloat(xs []float64) float64 {
+	s := append([]float64{}, xs...)
+	sort.Float64s(s)
+	return s[len(s)/2]
+}
+
+// humanFPS drops the decimals a whole rate does not need, so 25 reads as "25fps"
+// and 29.97 keeps the part that distinguishes it from 30.
+func humanFPS(fps float64) string {
+	if math.Abs(fps-math.Round(fps)) < 0.005 {
+		return fmt.Sprintf("%.0ffps", fps)
+	}
+	return fmt.Sprintf("%.2ffps", fps)
 }
 
 // checkEncryption reports disagreements between the manifest's declared

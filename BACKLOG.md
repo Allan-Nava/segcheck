@@ -153,9 +153,25 @@ the stream is healthy.
   them passing for the wrong reason. Verified against Apple fMP4, Apple MPEG-TS and
   a public DASH manifest: zero findings above OK.
   <!-- sc: prio=high size=L labels=check,parser ver=unreleased -->
-- [ ] **SC-17 — Frame rate**: measured from the timestamp deltas, against
-  `FRAME-RATE` / `@frameRate`. Also catches a rung whose real frame rate differs
-  from the rest of the ladder. <!-- sc: prio=high size=M labels=check -->
+- [x] **SC-17 — Frame rate**: the `framerate` check measures the rate from the
+  median gap between presentation timestamps — the one measure that survives
+  B-frames, since the stream is not in presentation order and a mean would also be
+  dragged off by any discontinuity inside the segment — and asks two things of it.
+  Against the manifest: `FRAME-RATE` / `@frameRate` is what a player consults to
+  decide what it can decode *before* downloading anything, so a 1080p60 rung
+  declared as 30 gets chosen by a device that can only manage 30 and then stutters,
+  while the manifest reads perfectly on the way down. Across the ladder: rungs at
+  unrelated rates make every switch visibly uneven. The deliberate exception is an
+  exact integer relation — halving the rate on the lower rungs is an ordinary way
+  to save bitrate — so a ladder of 60/30/15 is left alone and one mixing 25 and 30
+  is not. The 2% tolerance exists to absorb the NTSC rates: a manifest writes 29.97
+  where the media runs at 30000/1001, and flagging that would fire on a large
+  fraction of the world's content — Apple's own reference stream declares 23.976
+  against a measured 23.98. The manifest side needed no work: `Rendition.FrameRate`
+  already carried both `FRAME-RATE` and `@frameRate`. Mutation-verified (nine
+  mutations, nine caught) and checked against Apple fMP4, Apple MPEG-TS and a
+  public DASH manifest with zero findings above OK.
+  <!-- sc: prio=high size=M labels=check ver=unreleased -->
 - [ ] **SC-19 — `sidx` and `SegmentBase`**: parse the index so single-file DASH
   representations can be sampled at all. Today they are reported as unsupported
   rather than checked. <!-- sc: prio=high size=M labels=parser -->

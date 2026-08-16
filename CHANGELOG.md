@@ -9,6 +9,21 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **`framerate`: the rate the pictures actually run at** (SC-17). Measured from
+  the median gap between presentation timestamps — the median because with
+  B-frames the stream is not in presentation order, and because one discontinuity
+  inside a segment would drag a mean off by however large the jump was — and asked
+  two questions. Against the manifest, since `FRAME-RATE` / `@frameRate` is what a
+  player consults to decide what it can decode before downloading anything: a
+  1080p60 rung declared as 30 gets selected by a device that can only manage 30,
+  and then stutters. And across the ladder, since rungs at unrelated rates make
+  every switch visibly uneven — with an exact integer relation left alone, because
+  halving the rate on the lower rungs is an ordinary way to save bitrate and
+  reporting it would flag a technique in wide use. The 2% tolerance absorbs the
+  NTSC rates, where a manifest writes 29.97 for media running at 30000/1001.
+  Verified against Apple fMP4, Apple MPEG-TS and a public DASH manifest with zero
+  findings above OK.
+
 - **`keyframe`: every segment must carry a random access point** (SC-16). A segment
   with none cannot be switched into at all — a decoder arriving mid-stream has no
   reference picture, so the switch shows nothing until the next keyframe. This is

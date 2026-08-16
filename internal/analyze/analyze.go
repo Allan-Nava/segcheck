@@ -44,6 +44,11 @@ type Options struct {
 	// BitrateTolerancePct is how far the measured bitrate may exceed the
 	// declared BANDWIDTH before it is reported.
 	BitrateTolerancePct float64
+	// FrameRateTolerancePct is how far the measured frame rate may differ from
+	// the declared FRAME-RATE. It has to absorb the NTSC rates: a manifest writes
+	// 29.97 where the media runs at 30000/1001, and those are the same rate
+	// spelled two ways.
+	FrameRateTolerancePct float64
 	// Now fixes the clock (live-edge maths, DASH template expansion).
 	Now func() time.Time
 }
@@ -51,15 +56,16 @@ type Options struct {
 // Defaults returns the option set the CLI starts from.
 func Defaults() Options {
 	return Options{
-		Segments:             6,
-		MaxRenditions:        0,
-		MaxAudio:             1,
-		From:                 FromAuto,
-		Concurrency:          6,
-		DurationTolerancePct: 5,
-		GapToleranceMS:       100,
-		BitrateTolerancePct:  10,
-		Now:                  time.Now,
+		Segments:              6,
+		MaxRenditions:         0,
+		MaxAudio:              1,
+		From:                  FromAuto,
+		Concurrency:           6,
+		DurationTolerancePct:  5,
+		GapToleranceMS:        100,
+		BitrateTolerancePct:   10,
+		FrameRateTolerancePct: 2,
+		Now:                   time.Now,
 	}
 }
 
@@ -134,6 +140,7 @@ func Run(ctx context.Context, c *fetch.Client, rawurl string, opts Options) find
 	res.Findings = append(res.Findings, checkBitrate(rends, opts)...)
 	res.Findings = append(res.Findings, checkResolution(rends)...)
 	res.Findings = append(res.Findings, checkKeyframe(rends)...)
+	res.Findings = append(res.Findings, checkFrameRate(rends, opts)...)
 	res.Findings = append(res.Findings, checkTracks(rends)...)
 	res.Findings = append(res.Findings, checkTimeline(rends, opts)...)
 	res.Findings = append(res.Findings, checkEncryption(rends)...)

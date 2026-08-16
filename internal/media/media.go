@@ -85,6 +85,27 @@ type Track struct {
 	KeyframeScanned bool `json:"keyframe_scanned,omitempty"`
 }
 
+// FrameRateFPS is the rate the pictures are actually shown at, in frames per
+// second (SC-17).
+//
+// It comes from FrameDur, the *median* gap between presentation timestamps, and
+// that choice is what makes it survive real content: with B-frames the stream is
+// not in presentation order, so anything derived from consecutive decode-order
+// timestamps is wrong, and a single discontinuity inside the segment would drag a
+// mean off by however large the jump was.
+//
+// The second return follows this package's protocol. A rate of zero, or one
+// derived from an unknown clock, would be compared against the manifest's
+// FRAME-RATE and reported as a defect in media nobody managed to measure.
+func (t Track) FrameRateFPS() (float64, bool) {
+	// Audio has a sample rate, not a frame rate. Answering would invite a check
+	// to compare it against a video rendition's declared FRAME-RATE.
+	if t.Kind != Video || t.Timescale == 0 || t.FrameDur <= 0 || !t.HasPTS {
+		return 0, false
+	}
+	return float64(t.Timescale) / float64(t.FrameDur), true
+}
+
 // ContainsKeyframe reports whether a random access point was found anywhere in the
 // segment's opening bytes, and whether the bitstream was walked at all.
 //
