@@ -54,6 +54,21 @@ type Rendition struct {
 	Segments []Segment `json:"segments,omitempty"`
 	// InitURI is the initialisation segment (DASH SegmentTemplate@initialization).
 	InitURI string `json:"init_uri,omitempty"`
+	// InitRange and IndexRange are set for a DASH SegmentBase representation,
+	// where the whole rendition is one file: the initialisation segment and the
+	// `sidx` are byte ranges of it rather than separate resources.
+	//
+	// IndexRange is what makes such a rendition checkable at all. Nothing in the
+	// MPD says where its subsegments begin — only the index does — so the
+	// analysis has to fetch this range and read it before it can sample anything.
+	InitRange  *ByteRange `json:"init_range,omitempty"`
+	IndexRange *ByteRange `json:"index_range,omitempty"`
+	// SingleFile marks a DASH representation that is one file with its index
+	// inside it. With SegmentBase@indexRange the location is stated and
+	// IndexRange is set; under the on-demand profile only a BaseURL is given and
+	// the index has to be found by reading the head of the file. Both are one
+	// file, so both are addressed by byte range.
+	SingleFile bool `json:"single_file,omitempty"`
 	// Unsupported explains why a rendition could not be expanded into segments
 	// (DASH SegmentBase, for instance). Empty when it was.
 	Unsupported string `json:"unsupported,omitempty"`

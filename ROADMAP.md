@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**86 items · 34 shipped · 52 open · 13 milestones.**
+**87 items · 36 shipped · 51 open · 13 milestones.**
 
 ## At a glance
 
@@ -14,7 +14,7 @@
 |---|---|---|---|---|---|
 | **M1** — Core: read the segments | `v0.1.0` | shipped | `##########` 100% | 0 | 6 |
 | **M2** — The checks | `v0.1.0` | shipped | `##########` 100% | 0 | 8 |
-| **M3** — Codec and timing depth | `v0.2.0` | **now** | `######....` 57% | 3 | 4 |
+| **M3** — Codec and timing depth | `v0.2.0` | **now** | `########..` 75% | 2 | 6 |
 | **M4** — Everything that is not the video track | `v0.3.0` | next | `..........` 0% | 6 | 0 |
 | **M5** — Live and delivery | `v0.4.0` | later | `..........` 0% | 6 | 0 |
 | **M9** — Wallclock and DVR correctness | `v0.4.0` | later | `..........` 0% | 5 | 0 |
@@ -31,13 +31,13 @@
 The open items with the highest priority in the milestones that are in flight.
 
 - **SC-18** — Audio sanity · `high` · size `M` · check (M4, target `v0.3.0`)
-- **SC-19** — `sidx` and `SegmentBase` · `high` · size `M` · parser (M3, target `v0.2.0`)
 - **SC-20** — SCTE-35 / `EXT-X-DATERANGE` · `high` · size `L` · check,parser (M4, target `v0.3.0`)
 - **SC-35** — Parser fuzzing · `high` · size `M` · tests,parser (M3, target `v0.2.0`)
 - **SC-36** — Real-stream smoke suite · `high` · size `S` · tests,release (M7, target `ongoing`)
 - **SC-37** — CEA-608/708 captions · `high` · size `L` · check,parser (M4, target `v0.3.0`)
 - **SC-22** — Encrypted-segment support with a key · `med` · size `M` · cli,parser (M4, target `v0.3.0`)
 - **SC-38** — Subtitle renditions · `med` · size `L` · check,parser (M4, target `v0.3.0`)
+- **SC-42** — AV1 and VP9 coded resolution · `med` · size `L` · parser (M3, target `v0.2.0`)
 
 ## Milestones
 
@@ -71,17 +71,18 @@ Target `v0.1.0` · shipped · 0 open · 8 shipped · `##########` 100%
 
 ### M3 — Codec and timing depth
 
-Target `v0.2.0` · **now** · 3 open · 4 shipped · `######....` 57%
+Target `v0.2.0` · **now** · 2 open · 6 shipped · `########..` 75%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
-| **SC-19** — `sidx` and `SegmentBase` | high | M | parser | open |
 | **SC-35** — Parser fuzzing | high | M | tests,parser | open |
 | **SC-42** — AV1 and VP9 coded resolution | med | L | parser | open |
 | **SC-15** — HEVC/H.265 SPS | high | L | parser | done, unreleased |
 | **SC-16** — Keyframe alignment | high | L | check,parser | done, unreleased |
 | **SC-17** — Frame rate | high | M | check | done, unreleased |
+| **SC-19** — `sidx` and `SegmentBase` | high | M | parser | done, unreleased |
 | **SC-79** — Encrypted fMP4 reported the wrong codec and no resolution | high | S | parser,check | done, unreleased |
+| **SC-87** — `trex` defaults were never read | high | S | parser,check | done, unreleased |
 
 ### M4 — Everything that is not the video track
 
@@ -222,8 +223,8 @@ Target `ongoing` · ongoing · 4 open · 11 shipped · `#######...` 73%
 
 | Label | Items | Open |
 |---|---|---|
-| `check` | 43 | 33 |
-| `parser` | 37 | 28 |
+| `check` | 44 | 33 |
+| `parser` | 38 | 27 |
 | `cli` | 8 | 7 |
 | `delivery` | 5 | 4 |
 | `integration` | 4 | 4 |

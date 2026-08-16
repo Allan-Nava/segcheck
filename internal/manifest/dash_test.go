@@ -131,7 +131,12 @@ func TestParseDASH_LiveEdgeFromWallClock(t *testing.T) {
 	}
 }
 
-func TestParseDASH_SegmentBaseIsFlaggedNotSilent(t *testing.T) {
+// SC-19 changed what this asserts. A SegmentBase representation used to be
+// reported unsupported, which was honest but skipped every check for the whole
+// rendition; it is now addressable, and what must never happen is the rendition
+// being dropped *silently* — either it carries the range to fetch, or it says why
+// it cannot be sampled.
+func TestParseDASH_SegmentBaseIsNeverSkippedSilently(t *testing.T) {
 	mpd := `<?xml version="1.0"?>
 <MPD type="static" mediaPresentationDuration="PT10S">
   <Period><AdaptationSet mimeType="video/mp4">
@@ -142,8 +147,15 @@ func TestParseDASH_SegmentBaseIsFlaggedNotSilent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseDASH: %v", err)
 	}
-	if pl.Renditions[0].Unsupported == "" {
-		t.Error("SegmentBase was skipped silently; an unsupported rendition must say so")
+	r := pl.Renditions[0]
+	if r.Unsupported != "" {
+		t.Errorf("a SegmentBase with an indexRange is addressable now, not unsupported: %q", r.Unsupported)
+	}
+	if r.IndexRange == nil {
+		t.Fatal("no index range, and no reason given: the rendition would be skipped silently")
+	}
+	if r.IndexRange.Offset != 0 || r.IndexRange.Length != 801 {
+		t.Errorf("index range = %+v, want offset 0 length 801 (both ends inclusive)", r.IndexRange)
 	}
 }
 

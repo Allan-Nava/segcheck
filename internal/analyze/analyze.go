@@ -120,6 +120,11 @@ func Run(ctx context.Context, c *fetch.Client, rawurl string, opts Options) find
 	rends, fs := selectRenditions(ctx, c, *pl, opts)
 	res.Findings = append(res.Findings, fs...)
 
+	// A single-file DASH representation states where its index is, not where its
+	// subsegments are. Reading the index needs a fetch, so it happens here rather
+	// than in the manifest package.
+	resolveSegmentBase(ctx, c, rends, opts)
+
 	// Sample every selected rendition's segments concurrently.
 	sampleAll(ctx, c, rends, opts)
 
@@ -232,6 +237,12 @@ func selectRenditions(ctx context.Context, c *fetch.Client, pl manifest.Playlist
 		case len(r.Segments) > 0: // DASH: the MPD already listed the segments
 			rd.live = pl.Live
 			rd.segs = toSegmentData(sampleSegments(r.Segments, pl.Live, opts))
+		case r.SingleFile:
+			// A single-file DASH representation. Its URI is the media file, not a
+			// playlist, and its segments come from the index that
+			// resolveSegmentBase fetches next — loading it as a media playlist
+			// would report the file's own bytes as an unparseable manifest.
+			rd.live = pl.Live
 		case r.URI != "": // HLS: load the variant's media playlist
 			sub, err := loadMediaPlaylist(ctx, c, r.URI)
 			if err != nil {

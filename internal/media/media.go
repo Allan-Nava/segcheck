@@ -164,7 +164,14 @@ func (t Track) DurationSec() (float64, bool) {
 	if !t.HasPTS || t.Samples < 2 {
 		return 0, false
 	}
-	return float64(t.MaxPTS-t.MinPTS+t.FrameDur) / float64(t.Timescale), true
+	ticks := t.MaxPTS - t.MinPTS + t.FrameDur
+	if ticks <= 0 {
+		// Timestamps that never advance measure nothing. Returning zero as though
+		// it were a measurement makes the duration check report the media as 100%
+		// shorter than declared, against a segment nobody managed to time.
+		return 0, false
+	}
+	return float64(ticks) / float64(t.Timescale), true
 }
 
 // SegmentInfo is everything a single parsed segment tells us.

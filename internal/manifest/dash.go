@@ -62,8 +62,14 @@ type mpdRepresentation struct {
 	FrameRate       string          `xml:"frameRate,attr"`
 	BaseURL         []string        `xml:"BaseURL"`
 	SegmentTemplate *mpdSegTemplate `xml:"SegmentTemplate"`
-	SegmentBase     *struct{}       `xml:"SegmentBase"`
-	SegmentList     *struct {
+	SegmentBase     *struct {
+		IndexRange     string `xml:"indexRange,attr"`
+		Timescale      int    `xml:"timescale,attr"`
+		Initialization struct {
+			Range string `xml:"range,attr"`
+		} `xml:"Initialization"`
+	} `xml:"SegmentBase"`
+	SegmentList *struct {
 		Duration       int `xml:"duration,attr"`
 		Timescale      int `xml:"timescale,attr"`
 		Initialization struct {
@@ -170,7 +176,31 @@ func ParseDASH(body []byte, baseURL string, now time.Time) (Playlist, error) {
 						})
 					}
 				case rep.SegmentBase != nil:
-					r.Unsupported = "SegmentBase (single-file representation indexed by sidx) not supported yet"
+					// One file: the init segment and the index are byte ranges of
+					// it. The subsegments cannot be listed here — only the `sidx`
+					// says where they are, and reading it needs a fetch — so the
+					// rendition carries the range to ask for instead.
+					idx, ok := parseByteRangeAttr(rep.SegmentBase.IndexRange)
+					if !ok {
+						r.Unsupported = "SegmentBase without a usable @indexRange: nothing states where the subsegments are"
+						break
+					}
+					r.URI = Resolve(rbase, "")
+					r.InitURI = r.URI
+					r.IndexRange = &idx
+					r.SingleFile = true
+					if init, ok := parseByteRangeAttr(rep.SegmentBase.Initialization.Range); ok {
+						r.InitRange = &init
+					}
+				case len(rep.BaseURL) > 0 || len(as.BaseURL) > 0:
+					// The on-demand profile: one file, a BaseURL and nothing else.
+					// The index is inside the file and its position is not stated,
+					// so it has to be found by reading the head — which needs a
+					// fetch, and happens in the analysis rather than here. This is
+					// the commonest shape of single-file DASH in the wild.
+					r.URI = Resolve(rbase, "")
+					r.InitURI = r.URI
+					r.SingleFile = true
 				default:
 					r.Unsupported = "representation has no SegmentTemplate, SegmentList or SegmentBase"
 				}
@@ -446,6 +476,23 @@ func dashName(rep mpdRepresentation, as mpdAdaptation, kind StreamKind, pi, ai, 
 		return rep.ID
 	}
 	return fmt.Sprintf("p%d-as%d-r%d", pi, ai, ri)
+}
+
+// parseByteRangeAttr reads a DASH byte-range attribute, "first-last", where both
+// ends are inclusive — 0-851 is 852 bytes, not 851. Getting that off by one
+// truncates every initialisation segment by a byte.
+func parseByteRangeAttr(s string) (ByteRange, bool) {
+	s = strings.TrimSpace(s)
+	first, last, ok := strings.Cut(s, "-")
+	if !ok {
+		return ByteRange{}, false
+	}
+	start, err1 := strconv.ParseInt(strings.TrimSpace(first), 10, 64)
+	end, err2 := strconv.ParseInt(strings.TrimSpace(last), 10, 64)
+	if err1 != nil || err2 != nil || start < 0 || end < start {
+		return ByteRange{}, false
+	}
+	return ByteRange{Offset: start, Length: end - start + 1}, true
 }
 
 func dashKeyMethod(protected bool) string {

@@ -404,7 +404,7 @@ func TestParseTraf_TfhdOptionalFieldOffsets(t *testing.T) {
 	traf := append(tfhd, trun...)
 
 	out := map[uint32]*fragTrack{}
-	parseTraf(traf, out)
+	parseTraf(traf, out, nil)
 
 	f := out[1]
 	if f == nil {
@@ -428,7 +428,7 @@ func TestParseTraf_FlaggedButTruncatedDefaults(t *testing.T) {
 	trun := mkbox("trun", trunBox(0, 0, 3, nil))
 
 	out := map[uint32]*fragTrack{}
-	parseTraf(append(tfhd, trun...), out)
+	parseTraf(append(tfhd, trun...), out, nil)
 
 	f := out[1]
 	if f == nil {
@@ -450,7 +450,7 @@ func TestParseTraf_TfdtVersionWidths(t *testing.T) {
 		traf := append(tfhdBox(0, 1), tfdt...)
 		traf = append(traf, mkbox("trun", trunBox(0, 0, 1, nil))...)
 		out := map[uint32]*fragTrack{}
-		parseTraf(traf, out)
+		parseTraf(traf, out, nil)
 		return out[1]
 	}
 
@@ -485,8 +485,8 @@ func TestParseTraf_EarliestDecodeTimeWinsAcrossTrafs(t *testing.T) {
 		return append(traf, mkbox("trun", trunBox(0, 0, 1, nil))...)
 	}
 	out := map[uint32]*fragTrack{}
-	parseTraf(mk(180000), out) // the later one first
-	parseTraf(mk(90000), out)
+	parseTraf(mk(180000), out, nil) // the later one first
+	parseTraf(mk(90000), out, nil)
 
 	if out[1].baseDecode != 90000 {
 		t.Errorf("baseDecode = %d, want the earliest, 90000", out[1].baseDecode)
@@ -504,7 +504,7 @@ func TestParseTraf_SencDoesNotDisturbTheParse(t *testing.T) {
 	traf = append(traf, mkbox("trun", trunBox(0, 0, 2, nil))...)
 
 	out := map[uint32]*fragTrack{}
-	parseTraf(traf, out)
+	parseTraf(traf, out, nil)
 	if out[1] == nil || out[1].samples != 2 || out[1].sumDuration != 6000 {
 		t.Errorf("a senc box disturbed the parse: %+v", out[1])
 	}
@@ -514,13 +514,13 @@ func TestParseTraf_SencDoesNotDisturbTheParse(t *testing.T) {
 // attribute anything to. Guessing an id would merge two tracks' samples.
 func TestParseTraf_WithoutAUsableTfhd(t *testing.T) {
 	out := map[uint32]*fragTrack{}
-	parseTraf(mkbox("trun", trunBox(0, 0, 5, nil)), out)
+	parseTraf(mkbox("trun", trunBox(0, 0, 5, nil)), out, nil)
 	if len(out) != 0 {
 		t.Errorf("a traf with no tfhd produced %d tracks", len(out))
 	}
 
 	short := append(mkbox("tfhd", []byte{0, 0, 0, 0}), mkbox("trun", trunBox(0, 0, 5, nil))...)
-	parseTraf(short, out)
+	parseTraf(short, out, nil)
 	if len(out) != 0 {
 		t.Errorf("a traf with a 4-byte tfhd produced %d tracks", len(out))
 	}

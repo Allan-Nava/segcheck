@@ -22,6 +22,13 @@ type initTrack struct {
 	height    int
 	timescale uint32
 	encrypted bool
+	// trexDuration and trexSize are the movie-extends defaults. A fragment may
+	// state no sample duration at all — not per sample, not in its tfhd — and rely
+	// on these, which is how a large share of on-demand DASH is packaged. Ignoring
+	// them makes every sample zero ticks long, so the segment reports a zero
+	// duration and every boundary after it looks like a gap.
+	trexDuration uint32
+	trexSize     uint32
 }
 
 // fragTrack is what the media fragments tell us about one track.
@@ -67,7 +74,13 @@ func ParseMP4(data, init []byte) (SegmentInfo, error) {
 		}
 	}
 
-	frags, sequence := parseMoofs(data)
+	// The movie-extends defaults have to be known before the fragments are read,
+	// because a fragment that states nothing inherits from them.
+	defaults := map[uint32]fragDefaults{}
+	for id, it := range inits {
+		defaults[id] = fragDefaults{duration: it.trexDuration, size: it.trexSize}
+	}
+	frags, sequence := parseMoofs(data, defaults)
 
 	info := SegmentInfo{Container: ContainerMP4, Bytes: int64(len(data)), Sequence: sequence}
 
@@ -154,6 +167,17 @@ func parseMoov(moov []byte, out map[uint32]*initTrack) {
 	// sample entries were not rewritten to encv/enca.
 	_, hasPSSH := findBox(moov, "pssh")
 
+	// mvex/trex states what a fragment may omit. There is one trex per track.
+	trex := map[uint32]fragDefaults{}
+	if mvex, ok := findBox(moov, "mvex"); ok {
+		for _, tx := range findBoxes(mvex, "trex") {
+			if len(tx) < 20 {
+				continue
+			}
+			trex[be32(tx[4:])] = fragDefaults{duration: be32(tx[12:]), size: be32(tx[16:])}
+		}
+	}
+
 	for _, trak := range findBoxes(moov, "trak") {
 		t := &initTrack{}
 		if tkhd, ok := findBox(trak, "tkhd"); ok {
@@ -188,6 +212,9 @@ func parseMoov(moov []byte, out map[uint32]*initTrack) {
 		}
 		if t.id == 0 {
 			t.id = uint32(len(out) + 1)
+		}
+		if d, ok := trex[t.id]; ok {
+			t.trexDuration, t.trexSize = d.duration, d.size
 		}
 		out[t.id] = t
 	}
@@ -344,7 +371,13 @@ func mp4Codec(typ string) string {
 
 // ---------- media fragments (moof) ----------
 
-func parseMoofs(data []byte) (map[uint32]*fragTrack, uint32) {
+// fragDefaults is what the initialisation segment says a fragment may leave out.
+type fragDefaults struct {
+	duration uint32
+	size     uint32
+}
+
+func parseMoofs(data []byte, defaults map[uint32]fragDefaults) (map[uint32]*fragTrack, uint32) {
 	out := map[uint32]*fragTrack{}
 	var sequence uint32
 	for _, moof := range findBoxes(data, "moof") {
@@ -354,13 +387,13 @@ func parseMoofs(data []byte) (map[uint32]*fragTrack, uint32) {
 			}
 		}
 		for _, traf := range findBoxes(moof, "traf") {
-			parseTraf(traf, out)
+			parseTraf(traf, out, defaults)
 		}
 	}
 	return out, sequence
 }
 
-func parseTraf(traf []byte, out map[uint32]*fragTrack) {
+func parseTraf(traf []byte, out map[uint32]*fragTrack, defaults map[uint32]fragDefaults) {
 	tfhd, ok := findBox(traf, "tfhd")
 	if !ok || len(tfhd) < 8 {
 		return
@@ -374,7 +407,12 @@ func parseTraf(traf []byte, out map[uint32]*fragTrack) {
 	if flags&0x000002 != 0 {
 		off += 4 // sample-description-index
 	}
+	// The trex defaults are the floor: whatever the tfhd states overrides them,
+	// and whatever a trun states overrides that.
 	var defaultDuration, defaultSize uint32
+	if d, ok := defaults[trackID]; ok {
+		defaultDuration, defaultSize = d.duration, d.size
+	}
 	if flags&0x000008 != 0 {
 		if len(tfhd) >= off+4 {
 			defaultDuration = be32(tfhd[off:])

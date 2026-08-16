@@ -9,6 +9,21 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **Single-file DASH is checked instead of skipped** (SC-19). A `SegmentBase` or
+  on-demand representation used to come back marked unsupported — honest, and
+  useless: one line saying so, and every other check skipped for the whole
+  rendition. It is sampled now. `ParseDASH` does no I/O, so the work is split
+  three ways: the manifest states which bytes hold the index, `internal/media`
+  reads it, and the analysis fetches the range.
+  Two shapes exist and only the second is common. `SegmentBase@indexRange` says
+  where the index is; the on-demand profile says nothing but a `BaseURL`, so the
+  index has to be found by reading the head of the file. Real streams then forced
+  two further corrections: the index is often **hierarchical**, a root `sidx`
+  whose every reference points at a leaf `sidx`, so a reader that stops at the top
+  finds no media at all; and the initialisation segment is the bytes before the
+  index, without which the fragments parse with no timescale. Sony's DASH-IF
+  vector went from 3 ERROR and 0 segments sampled to 25 checks, all OK.
+
 - **`framerate`: the rate the pictures actually run at** (SC-17). Measured from
   the median gap between presentation timestamps — the median because with
   B-frames the stream is not in presentation order, and because one discontinuity
@@ -186,6 +201,20 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   already rules out and nothing here reintroduces.
 
 ### Fixed
+
+- **`trex` defaults were never read** (SC-87), which made every sample zero ticks
+  long on a large share of real on-demand DASH. `mvex`/`trex` in the
+  initialisation segment states a track's default sample duration, size and flags,
+  and a fragment may state none of them itself — Sony's DASH-IF vector carries
+  `default_sample_duration=1001` there and nothing in its fragments. Ignoring it
+  did not fail loudly: the segment's stated duration became zero, so `duration`
+  reported the media as 100% shorter than declared and `continuity` reported a gap
+  before every segment, against a stream that is entirely correct. The defaults are
+  read per track now and used as the floor, with the `tfhd` overriding them and a
+  `trun` overriding that. This affects any CMAF stream packaged this way, not only
+  the single-file ones that surfaced it. `Track.DurationSec` also stopped reporting
+  a computed zero as a measurement: timestamps that never advance measure nothing,
+  and saying otherwise is the same false report by another route.
 
 - **An encrypted track reported the wrong codec and no resolution** (SC-79). When
   a sample entry is `encv` or `enca`, the original format is recovered from its

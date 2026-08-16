@@ -172,9 +172,42 @@ the stream is healthy.
   mutations, nine caught) and checked against Apple fMP4, Apple MPEG-TS and a
   public DASH manifest with zero findings above OK.
   <!-- sc: prio=high size=M labels=check ver=unreleased -->
-- [ ] **SC-19 — `sidx` and `SegmentBase`**: parse the index so single-file DASH
-  representations can be sampled at all. Today they are reported as unsupported
-  rather than checked. <!-- sc: prio=high size=M labels=parser -->
+- [x] **SC-19 — `sidx` and `SegmentBase`**: single-file DASH representations are
+  sampled now instead of being reported unsupported — an honest answer that
+  skipped every other check for the whole rendition. Three layers, because
+  `ParseDASH` does no I/O: the manifest says which bytes hold the index, the media
+  package reads it, and the analysis fetches. Two shapes had to be handled, and
+  only the second is common in the wild. `SegmentBase@indexRange` states where the
+  index is; the **on-demand profile states nothing but a `BaseURL`**, so the index
+  is found by reading the head of the file — which is the shape Sony's DASH-IF
+  vector uses, and the first implementation reported it as having no segment
+  description at all.
+  Two more things came from that stream rather than from the spec. Its index is
+  **hierarchical**: a root `sidx` whose every reference points at a leaf `sidx`, so
+  a reader that stops at the first level finds no media references and concludes
+  the file describes nothing — `ResolveSIDX` follows the tree to a bounded depth.
+  And its fragments state no sample durations at all, relying on `mvex`/`trex` in
+  the init segment (SC-87), without which every duration read as zero. Once both
+  were right the stream went from 3 ERROR and 0 segments to **25 checks, 25 OK**.
+  The offsets are the part to get right: a reference states a size, not a position,
+  so they accumulate from the end of the index box plus `first_offset`, and the
+  index's own position in the file has to be added because `@indexRange` addresses
+  it there. <!-- sc: prio=high size=M labels=parser ver=unreleased -->
+- [x] **SC-87 — `trex` defaults were never read**: `mvex`/`trex` in the
+  initialisation segment states the default sample duration, size and flags for a
+  track, and a fragment may state none of them itself. A large share of real
+  on-demand DASH is packaged that way — Sony's DASH-IF vector carries
+  `default_sample_duration=1001` in `trex` and nothing in its fragments — and
+  ignoring it made every sample zero ticks long. That did not fail loudly: the
+  segment's stated duration became zero, so `duration` reported the media as 100%
+  shorter than declared and `continuity` reported a gap before every segment,
+  against a stream that is entirely correct. The defaults are now read per track
+  and used as the floor, with the tfhd overriding them and a trun overriding that.
+  Found while closing SC-19 but not specific to it: it affects any CMAF stream
+  packaged this way. `DurationSec` also stopped reporting a computed zero as a
+  measurement — timestamps that never advance measure nothing, and saying
+  otherwise is the same false report by another route.
+  <!-- sc: prio=high size=S labels=parser,check ver=unreleased -->
 - [ ] **SC-42 — AV1 and VP9 coded resolution**: `av1C` / `vpcC` sample entries,
   and the OBU sequence header for AV1 in CMAF, so an AV1 ladder gets the same
   resolution check as an H.264 one.
