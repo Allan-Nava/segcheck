@@ -9,6 +9,21 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **The reference streams are a test now, not a habit** (SC-36). Every false
+  positive this project has shipped was found by running against a real stream
+  rather than by a unit test — five of them in this release alone — and the step
+  was manual, which is the kind of step that gets skipped on the day it would have
+  mattered. `internal/analyze/smoke_test.go`, behind a `smoke` build tag, runs the
+  built binary against Apple's fMP4 and MPEG-TS references, a DASH
+  `SegmentTemplate` manifest and a single-file on-demand one. The release workflow
+  depends on it; CI runs it on pushes to main but not on pull requests, so a flaky
+  CDN never blocks a contributor.
+  It does not assert "nothing above OK": Apple's advanced example legitimately
+  over-declares BANDWIDTH and ships an inverted ladder. Each stream carries a
+  baseline of the checks allowed to exceed OK, with the reason, plus a list of
+  checks that must not fall silent — and that second half is what catches a parser
+  which quietly stopped reading, since silence reads exactly like a pass.
+
 - **Fuzz targets for every parser** (SC-35): TS, MP4, `sidx`, packed audio, the
   H.264/HEVC parameter sets, and `Parse` itself for the container detection in
   front of them. The seed corpus is built from `mediatest` rather than checked in —

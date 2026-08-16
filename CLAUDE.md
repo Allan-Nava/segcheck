@@ -74,10 +74,22 @@ AGENTS.md wins and this file gets fixed.
    asserts nothing above OK. A checker that cries wolf on healthy media is worse
    than no checker.
 6. **`go test -race ./...`** — the segment fan-out writes into a shared slice.
-7. **Real streams before the tag**: Apple's fMP4 and MPEG-TS reference streams
-   plus a public DASH manifest must all come back with **zero findings above
-   OK**. Every false positive found so far was found this way, not by the unit
-   tests. (Automating this is SC-36.)
+7. **Real streams before the tag** — automated now (SC-36), but run it yourself
+   while writing a check, because it is where the design gets corrected:
+
+   ```
+   go build -o /tmp/segcheck ./cmd/segcheck
+   SEGCHECK_BIN=/tmp/segcheck go test -tags smoke -run TestSmokeReferenceStreams ./internal/analyze/ -v
+   ```
+
+   Apple's fMP4 and MPEG-TS references, a DASH `SegmentTemplate` manifest and a
+   single-file on-demand one. The assertion is **not** "nothing above OK" — Apple's
+   advanced example legitimately over-declares BANDWIDTH and ships an inverted
+   ladder — but a per-stream baseline of the checks allowed to exceed OK, plus a
+   list of checks that must not fall silent. A new finding outside the baseline is
+   a regression; so is a check that stops speaking, and that is the half that
+   catches a parser which quietly stopped reading. Every false positive this
+   project has shipped was found here rather than by a unit test.
 8. **Close the loop**: CHANGELOG entry referencing the `SC-n`, tick the backlog
    item with `ver=X.Y.Z`, regenerate the roadmap, tag. No push.
 

@@ -71,6 +71,24 @@ jobs:
             exit 1
           fi
 
+  # SC-36: the reference streams, run against the built binary. Not on pull
+  # requests — a contributor should not see a red build because a CDN was briefly
+  # unreachable — but on every push to main, so drift is caught between releases
+  # rather than at one. The suite skips a stream it cannot reach and fails only if
+  # none of them answered, so a single flaky origin degrades rather than blocks.
+  smoke:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - name: The reference streams
+        run: |
+          go build -o /tmp/segcheck ./cmd/segcheck
+          SEGCHECK_BIN=/tmp/segcheck go test -tags smoke -run TestSmokeReferenceStreams ./internal/analyze/ -v
+
   # SC-35: the parsers eat bytes from the open internet — a segment truncated by a
   # proxy, an HTML error page served with a 200, a file a packager wrote wrongly.
   # A panic on any of that is a crash in someone else's CI run. The seed corpus is

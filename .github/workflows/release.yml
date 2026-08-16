@@ -13,7 +13,24 @@ permissions:
   id-token: write
 
 jobs:
+  # SC-36. Every false positive this project has shipped was found by running
+  # against a reference stream rather than by a unit test, and the step was
+  # manual — which is exactly the kind of step that gets skipped on the day it
+  # would have mattered. A tag does not ship without it.
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - name: The reference streams
+        run: |
+          go build -o /tmp/segcheck ./cmd/segcheck
+          SEGCHECK_BIN=/tmp/segcheck go test -tags smoke -run TestSmokeReferenceStreams ./internal/analyze/ -v
+
   goreleaser:
+    needs: smoke
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

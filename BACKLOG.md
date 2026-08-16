@@ -683,11 +683,25 @@ checks roadmap and blocks nothing.
   file and regenerates [ROADMAP.md](ROADMAP.md) from it, with a CI gate that
   fails on a stale roadmap or a malformed item. Zero-dep, POSIX sh and awk.
   <!-- sc: prio=med size=M labels=project ver=0.1.1 -->
-- [ ] **SC-36 — Real-stream smoke suite**: a script with the reference streams
-  from AGENTS.md (Apple fMP4, Apple MPEG-TS, a public DASH manifest) that runs
-  the built binary against each and fails on anything above OK. Every false
-  positive so far was found this way and not by the unit tests, so the step
-  should not stay manual. <!-- sc: prio=high size=S labels=tests,release -->
+- [x] **SC-36 — Real-stream smoke suite**: `internal/analyze/smoke_test.go`
+  behind a `smoke` build tag, running the **built binary** against Apple's fMP4
+  and MPEG-TS references, a DASH `SegmentTemplate` manifest and a single-file
+  on-demand one — so what is under test is the thing that ships, `--output json`
+  and the exit-code contract included. The release workflow depends on it, so a
+  tag cannot go out without it, and CI runs it on every push to main but not on
+  pull requests: a contributor should not see a red build because a CDN was
+  briefly unreachable.
+  The item asked for "fails on anything above OK", and that rule does not survive
+  contact with the streams — Apple's advanced example legitimately over-declares
+  BANDWIDTH by about 2x and ships rungs where more bandwidth buys fewer pixels, and
+  a correct segcheck reports both. So each stream carries a **baseline** of the
+  checks allowed to exceed OK, with the reason written down; anything outside it is
+  a regression. The second half matters more: a list of checks that must produce
+  something at all, because the failure mode of this tool is a parser that quietly
+  stops reading, and silence reads exactly like a clean bill of health. Verified by
+  breaking things on purpose — reverting the `trex` fix is caught (as `continuity`
+  going silent), and so is a resolution reader that always refuses.
+  <!-- sc: prio=high size=S labels=tests,release ver=unreleased -->
 - [x] **SC-57 — `internal/fetch` tests** (was 0.0% of statements, now 94.1%).
   The truncation boundary is table-driven across under / exactly-at / one-over /
   far-over the cap, because `>` versus `>=` there is the difference between an

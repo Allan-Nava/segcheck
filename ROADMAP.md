@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**88 items · 38 shipped · 50 open · 13 milestones.**
+**88 items · 39 shipped · 49 open · 13 milestones.**
 
 ## At a glance
 
@@ -24,7 +24,7 @@
 | **M12** — Colour, HDR and the codec string | `v0.7.0` | later | `..........` 0% | 6 | 0 |
 | **M13** — Audio, past the sanity check | `v0.8.0` | later | `..........` 0% | 6 | 0 |
 | **M8** — Container image and supply chain | `v0.1.1` | shipped | `##########` 100% | 0 | 5 |
-| **M7** — Project and release | `ongoing` | ongoing | `#######...` 73% | 4 | 11 |
+| **M7** — Project and release | `ongoing` | ongoing | `########..` 80% | 3 | 12 |
 
 ## Next up
 
@@ -32,12 +32,12 @@ The open items with the highest priority in the milestones that are in flight.
 
 - **SC-18** — Audio sanity · `high` · size `M` · check (M4, target `v0.3.0`)
 - **SC-20** — SCTE-35 / `EXT-X-DATERANGE` · `high` · size `L` · check,parser (M4, target `v0.3.0`)
-- **SC-36** — Real-stream smoke suite · `high` · size `S` · tests,release (M7, target `ongoing`)
 - **SC-37** — CEA-608/708 captions · `high` · size `L` · check,parser (M4, target `v0.3.0`)
 - **SC-22** — Encrypted-segment support with a key · `med` · size `M` · cli,parser (M4, target `v0.3.0`)
 - **SC-38** — Subtitle renditions · `med` · size `L` · check,parser (M4, target `v0.3.0`)
 - **SC-42** — AV1 and VP9 coded resolution · `med` · size `L` · parser (M3, target `v0.2.0`)
 - **SC-64** — `scripts/backlog.sh` has no tests · `med` · size `S` · tests,project (M7, target `ongoing`)
+- **SC-65** — The published cask actually installs · `med` · size `S` · release,docs (M7, target `ongoing`)
 
 ## Milestones
 
@@ -200,14 +200,14 @@ Target `v0.1.1` · shipped · 0 open · 5 shipped · `##########` 100%
 
 ### M7 — Project and release
 
-Target `ongoing` · ongoing · 4 open · 11 shipped · `#######...` 73%
+Target `ongoing` · ongoing · 3 open · 12 shipped · `########..` 80%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
-| **SC-36** — Real-stream smoke suite | high | S | tests,release | open |
 | **SC-64** — `scripts/backlog.sh` has no tests | med | S | tests,project | open |
 | **SC-65** — The published cask actually installs | med | S | release,docs | open |
 | **SC-49** — Per-check reference pages | low | M | docs | open |
+| **SC-36** — Real-stream smoke suite | high | S | tests,release | done, unreleased |
 | **SC-57** — `internal/fetch` tests | high | M | tests | shipped `0.1.1` |
 | **SC-58** — `cmd/segcheck` tests | high | M | tests,cli | shipped `0.1.1` |
 | **SC-71** — The untested helpers behind the findings | high | M | tests | done, unreleased |
@@ -231,6 +231,6 @@ Target `ongoing` · ongoing · 4 open · 11 shipped · `#######...` 73%
 | `integration` | 4 | 4 |
 | `output` | 4 | 3 |
 | `docs` | 5 | 2 |
-| `release` | 8 | 2 |
-| `tests` | 10 | 2 |
 | `project` | 5 | 1 |
+| `release` | 8 | 1 |
+| `tests` | 10 | 1 |
