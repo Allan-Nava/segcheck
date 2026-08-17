@@ -110,6 +110,55 @@ func ParseHLS(body []byte, baseURL string) (Playlist, error) {
 				Channels: parseHLSChannels(attrs["CHANNELS"]),
 			})
 
+		case strings.HasPrefix(line, "#EXT-X-DATERANGE:"):
+			// A DATERANGE is only an ad break when it carries an SCTE35 attribute.
+			// Without one it is a chapter, a programme boundary, or anything else an
+			// operator chose to mark, and treating it as a break would have the check
+			// hunting a splice point nobody signalled.
+			attrs := parseAttrs(strings.TrimPrefix(line, "#EXT-X-DATERANGE:"))
+			_, hasOut := attrs["SCTE35-OUT"]
+			_, hasIn := attrs["SCTE35-IN"]
+			_, hasCmd := attrs["SCTE35-CMD"]
+			if hasOut || hasIn || hasCmd {
+				b := AdBreak{
+					ID:              attrs["ID"],
+					OutOfNetwork:    hasOut,
+					Duration:        attrFloat(attrs, "DURATION"),
+					PlannedDuration: attrFloat(attrs, "PLANNED-DURATION"),
+					Tag:             "EXT-X-DATERANGE",
+				}
+				if ts, err := parsePDT(attrs["START-DATE"]); err == nil {
+					b.Start, b.HasStart = ts, true
+				}
+				pl.AdBreaks = append(pl.AdBreaks, b)
+			}
+
+		case strings.HasPrefix(line, "#EXT-X-CUE-OUT"), line == "#EXT-X-CUE-IN":
+			// CUE-OUT and CUE-IN are not in the specification, but they are what
+			// most packagers emit. They sit between segments, so the segment that
+			// follows is where the break begins — no wall clock needed, and a
+			// boundary by construction. CUE-OUT-CONT only restates a break already
+			// under way.
+			if strings.HasPrefix(line, "#EXT-X-CUE-OUT-CONT") {
+				break
+			}
+			b := AdBreak{
+				OutOfNetwork: line != "#EXT-X-CUE-IN",
+				Sequence:     mediaSeq + len(pl.Segments),
+				HasSequence:  true,
+				Tag:          strings.SplitN(line, ":", 2)[0],
+			}
+			if rest := strings.TrimPrefix(line, "#EXT-X-CUE-OUT"); b.OutOfNetwork && rest != "" {
+				// The duration is written either bare or as DURATION=n.
+				rest = strings.TrimPrefix(rest, ":")
+				if d, err := strconv.ParseFloat(strings.TrimSpace(rest), 64); err == nil {
+					b.Duration = d
+				} else {
+					b.Duration = attrFloat(parseAttrs(rest), "DURATION")
+				}
+			}
+			pl.AdBreaks = append(pl.AdBreaks, b)
+
 		case strings.HasPrefix(line, "#EXT-X-TARGETDURATION:"):
 			pl.TargetDuration, _ = strconv.ParseFloat(strings.TrimPrefix(line, "#EXT-X-TARGETDURATION:"), 64)
 

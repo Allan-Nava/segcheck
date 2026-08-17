@@ -99,6 +99,9 @@ type renditionData struct {
 	// live and targetDuration come from the rendition's own media playlist.
 	live           bool
 	targetDuration float64
+	// adBreaks are the ad-break signals declared for this rendition: from its own
+	// media playlist in HLS, from the Period's EventStreams in DASH.
+	adBreaks []manifest.AdBreak
 }
 
 // Run performs the whole analysis and returns its findings, worst first.
@@ -148,6 +151,7 @@ func Run(ctx context.Context, c *fetch.Client, rawurl string, opts Options) find
 	res.Findings = append(res.Findings, checkFrameRate(rends, opts)...)
 	res.Findings = append(res.Findings, checkAudio(rends)...)
 	res.Findings = append(res.Findings, checkCaptions(rends)...)
+	res.Findings = append(res.Findings, checkAdBreak(rends, opts)...)
 	res.Findings = append(res.Findings, checkTracks(rends)...)
 	res.Findings = append(res.Findings, checkTimeline(rends, opts)...)
 	res.Findings = append(res.Findings, checkEncryption(rends)...)
@@ -238,6 +242,7 @@ func selectRenditions(ctx context.Context, c *fetch.Client, pl manifest.Playlist
 			rd.err = fmt.Errorf("%s", r.Unsupported)
 		case len(r.Segments) > 0: // DASH: the MPD already listed the segments
 			rd.live = pl.Live
+			rd.adBreaks = pl.AdBreaks
 			rd.segs = toSegmentData(sampleSegments(r.Segments, pl.Live, opts))
 		case r.SingleFile:
 			// A single-file DASH representation. Its URI is the media file, not a
@@ -252,6 +257,7 @@ func selectRenditions(ctx context.Context, c *fetch.Client, pl manifest.Playlist
 			} else {
 				rd.live = sub.Live
 				rd.targetDuration = sub.TargetDuration
+				rd.adBreaks = sub.AdBreaks
 				rd.segs = toSegmentData(sampleSegments(sub.Segments, sub.Live, opts))
 			}
 		default:

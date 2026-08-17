@@ -288,10 +288,20 @@ stream that break in production and that no manifest-only checker can see.
   `CODECS` value naming two audio codecs, or none, states nothing to compare.
   <!-- sc: prio=med size=S labels=check ver=0.3.0 -->
 
-- [ ] **SC-20 — SCTE-35 / `EXT-X-DATERANGE`**: ad-break signalling present in the
-  manifest and consistent with the segment boundaries. The check operators
-  actually want before a live event.
-  <!-- sc: prio=high size=L labels=check,parser -->
+- [x] **SC-20 — SCTE-35 / `EXT-X-DATERANGE`**: ad-break signalling read where it
+  really lives — a `splice_info_section` on an MPEG-TS PID of stream type 0x86, or a
+  DASH `emsg` — and compared against `EXT-X-DATERANGE`, `EXT-X-CUE-OUT`/`CUE-IN` and
+  DASH `EventStream`. The question is not whether the break is signalled but whether
+  a player can cut to it: a splice that does not land on a segment boundary is a
+  break nobody can take.
+  <!-- sc: prio=high size=L labels=check,parser ver=0.3.0 -->
+- [ ] **SC-92 — Splice descriptors and `EXT-X-DATERANGE` payloads**: the
+  `segmentation_descriptor` carries the UPID and the segmentation type that say what
+  kind of break this is (provider ad, chapter, distributor placement), and HLS puts
+  the same section in the `SCTE35-OUT` attribute as hex. Reading both would let the
+  manifest's own copy be compared against the inband one rather than only their
+  timings.
+  <!-- sc: prio=med size=M labels=parser -->
 - [x] **SC-37 — CEA-608/708 captions**: captions declared in the manifest
   (`CLOSED-CAPTIONS`, DASH `Accessibility`) against caption data actually carried in
   the bitstream — the ATSC A/53 SEI in H.264 and HEVC, in MPEG-TS and in fMP4, and a

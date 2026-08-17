@@ -44,6 +44,29 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   `CLOSED-CAPTIONS=NONE` over a bitstream that carries captions is a WARN: a player
   believes the manifest, so the toggle is never offered. An absent attribute is not
   the same claim, and is not treated as one.
+- **`adbreak` check — can a player actually cut to the break?** (SC-20). Whether
+  the break is *signalled* is a manifest question; whether it can be *taken* is not.
+  A splice point that does not land on a segment boundary is a break nobody can cut
+  to: the ad server fires and the transition lands mid-picture, or the switch never
+  happens — and the manifest describes it perfectly either way.
+
+  SCTE-35 is read where it really lives: a `splice_info_section` on an MPEG-TS PID
+  of stream type 0x86, carried as a private section rather than a PES, and a DASH
+  `emsg` box, whose binary scheme carries the same section verbatim. `pts_adjustment`
+  is added as the standard requires, so a section a downstream splicer shifted is
+  placed where it actually happens. Verified against livesim2's live SCTE-35 stream.
+
+  On the manifest side: `EXT-X-DATERANGE` with an `SCTE35-OUT`/`IN`/`CMD` attribute,
+  `EXT-X-CUE-OUT`/`CUE-IN` in both duration forms packagers write, and DASH
+  `EventStream` under either SCTE scheme. A `DATERANGE` without an SCTE35 attribute
+  is a chapter or a programme boundary, not a break, and is not treated as one.
+
+  Two things are deliberately not flagged. A splice that states no time —
+  `splice_immediate`, or a `splice_time` with its flag clear — means "now" and has
+  nothing to be compared against; judging it against the zero value would call every
+  one of them perfectly aligned. And inband signalling with nothing in the manifest
+  is reported, not flagged: server-side insertion downstream is a legitimate design,
+  and segcheck cannot tell it from a packager that forgot to translate the cue.
 - **Audio format read from where each container actually states it** (SC-18): the
   `AudioSampleEntry` in fMP4, the ADTS header in MPEG-TS and in packed audio, and
   the `dac3`/`dec3` box for AC-3 and E-AC-3. Muxed audio inside a video variant is
@@ -73,6 +96,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   on the whole of it. `dashKind` now falls back to the first Representation's
   `mimeType`, `codecs` and frame size, and the stream joins the smoke suite as a
   fifth baseline so the silence cannot come back unnoticed.
+- **A splice information PID is signalling, not media.** Many packagers include it
+  only in the segments that carry a cue, so the `tracks` check counted its
+  appearance as a mid-rendition track change and warned about a decoder reset on
+  every ad break in an otherwise healthy stream. `id3` was in the same position.
+- **A panic on a truncated `stsd`**, found by the fuzzer: the sample-entry walk
+  sliced past the end of a box shorter than its own header. The audio hook added in
+  SC-18 had the same unguarded slice.
 - A data race in `TestSampleAll_ByteRangeSegmentsSendTheRangeHeader`, which
   appended to a shared slice from concurrent HTTP handlers and failed under
   `-race` about one run in ten.

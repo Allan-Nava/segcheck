@@ -51,6 +51,9 @@ type segSpec struct {
 	// like.
 	captions608 []int
 	captions708 []int
+	// splices plants SCTE-35 sections on a splice information PID the PMT
+	// declares, which is how an encoder tells a packager where the breaks are.
+	splices []mediatest.SpliceSpec
 	// status, when non-zero, is served instead of the media.
 	status int
 	// body, when non-nil, is served instead of the media.
@@ -66,7 +69,14 @@ type variantSpec struct {
 	// captionIDs the INSTREAM-IDs of the EXT-X-MEDIA group it names.
 	captions   string
 	captionIDs []string
-	segments   []segSpec
+	// cueOutBefore, when non-zero, writes an EXT-X-CUE-OUT before that 1-based
+	// segment and an EXT-X-CUE-IN two segments later.
+	cueOutBefore int
+	// splicePID declares a splice information PID in every segment of the variant,
+	// which is what a real encoder does whether or not a given segment carries a
+	// cue. It is set automatically when any segment plants a splice.
+	splicePID bool
+	segments  []segSpec
 }
 
 // cleanSegments builds count consecutive 2s segments starting at t=0.
@@ -98,6 +108,17 @@ func newHLSOrigin(t *testing.T, variants []variantSpec) *httptest.Server {
 // 127.0.0.1 listener is not.
 func hlsOriginHandler(variants []variantSpec) *http.ServeMux {
 	mux := http.NewServeMux()
+
+	// A splice information PID is declared in the PMT of every segment, not only
+	// the ones carrying a section. Anything else is a fixture unlike any real
+	// stream, and the difference shows up as a spurious track-layout change.
+	for i := range variants {
+		for _, s := range variants[i].segments {
+			if len(s.splices) > 0 {
+				variants[i].splicePID = true
+			}
+		}
+	}
 
 	mux.HandleFunc("/master.m3u8", func(w http.ResponseWriter, _ *http.Request) {
 		var b strings.Builder
@@ -133,6 +154,12 @@ func hlsOriginHandler(variants []variantSpec) *http.ServeMux {
 				if s.discontinuity {
 					b.WriteString("#EXT-X-DISCONTINUITY\n")
 				}
+				if v.cueOutBefore > 0 && i == v.cueOutBefore-1 {
+					b.WriteString("#EXT-X-CUE-OUT:8.000\n")
+				}
+				if v.cueOutBefore > 0 && i == v.cueOutBefore+1 {
+					b.WriteString("#EXT-X-CUE-IN\n")
+				}
 				fmt.Fprintf(&b, "#EXTINF:%.3f,\nseg%d.ts\n", s.declaredDur, i)
 			}
 			b.WriteString("#EXT-X-ENDLIST\n")
@@ -155,6 +182,11 @@ func hlsOriginHandler(variants []variantSpec) *http.ServeMux {
 				}
 				w.Header().Set("Content-Type", "video/mp2t")
 				if s.codedWidth > 0 {
+					if v.splicePID {
+						_, _ = w.Write(mediatest.TSWithSplice(s.startPTS, frameDur, segFrames,
+							mediatest.SPSFor(s.codedWidth, s.codedHeight), s.splices...))
+						return
+					}
 					if len(s.captions608) > 0 || len(s.captions708) > 0 {
 						var pkts []mediatest.CCPacket
 						for _, f := range s.captions608 {

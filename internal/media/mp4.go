@@ -182,6 +182,20 @@ func ParseMP4(data, init []byte) (SegmentInfo, error) {
 		return info, fmt.Errorf("ISO-BMFF with no track")
 	}
 	foldCaptionTracks(&info, captionTracks)
+
+	// Event message boxes sit at the top level of the segment, beside the moof
+	// rather than inside it, so the fragment walk never reaches them. A version 0
+	// emsg states its time as a delta from the fragment's decode time, which is why
+	// this happens after the fragments are read rather than before.
+	base, haveBase := int64(0), false
+	for _, id := range sortedFragIDs(frags) {
+		if f := frags[id]; f.haveBase {
+			base, haveBase = f.baseDecode, true
+			break
+		}
+	}
+	info.Splices = parseEmsgs(data, base, haveBase)
+
 	return info, nil
 }
 
@@ -267,16 +281,21 @@ func parseMoov(moov []byte, out map[uint32]*initTrack) {
 				if stsd, ok := findBox(stbl, "stsd"); ok {
 					codec, w, h, enc := parseStsd(stsd)
 					t.codec = codec
-					if t.kind == Video {
-						if entries := boxesIn(stsd[8:]); len(entries) > 0 {
-							t.nalLengthSize = nalLengthSizeFrom(entries[0].payload)
-						}
+					// The sample entries follow stsd's version, flags and entry
+					// count. A truncated stsd has none, and slicing past its end
+					// panics — which is how the fuzzer found this.
+					var entries []mp4box
+					if len(stsd) > 8 {
+						entries = boxesIn(stsd[8:])
 					}
-					if t.kind == Audio {
-						// The AudioSampleEntry states the channel count and the
-						// sampling rate, in the same place a VisualSampleEntry
-						// states the frame size.
-						if entries := boxesIn(stsd[8:]); len(entries) > 0 {
+					if len(entries) > 0 {
+						switch t.kind {
+						case Video:
+							t.nalLengthSize = nalLengthSizeFrom(entries[0].payload)
+						case Audio:
+							// The AudioSampleEntry states the channel count and the
+							// sampling rate, in the same place a VisualSampleEntry
+							// states the frame size.
 							t.channels, t.sampleRate = audioSampleEntryFields(entries[0].typ, entries[0].payload)
 						}
 					}

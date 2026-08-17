@@ -114,6 +114,7 @@ segcheck check https://cdn.example/master.m3u8 --exit-on bad
 | `framerate` | The measured frame rate against the declared `FRAME-RATE` / `@frameRate`, and rungs whose rate is unrelated to the rest of the ladder | WARN |
 | `audio` | The sampling rate, channel layout and codec the media actually carries against `CHANNELS` / `@audioSamplingRate` / `AudioChannelConfiguration` / `CODECS`, and any of them changing part-way through a rendition | BAD |
 | `captions` | CEA-608/708 caption data actually in the video bitstream — an SEI message or a CMAF `c608`/`c708` track — against `CLOSED-CAPTIONS` / DASH `Accessibility` | BAD |
+| `adbreak` | SCTE-35 splice points in the media — a TS signalling PID or an `emsg` — against `EXT-X-DATERANGE`/`EXT-X-CUE-OUT`/DASH `EventStream`, and whether either lands on a segment boundary at all | BAD |
 | `tracks` | Expected video/audio present, codecs match `CODECS`, track layout stable across segments | BAD |
 | `alignment` | Segment boundaries across renditions, so ABR switching does not glitch | BAD |
 | `encryption` | Declared protection against what the segments carry | BAD |

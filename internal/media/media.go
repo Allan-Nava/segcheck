@@ -232,6 +232,11 @@ type SegmentInfo struct {
 	Sequence uint32 `json:"sequence,omitempty"`
 	// Channels is the channel configuration of packed audio, 0 when unknown.
 	Channels int `json:"channels,omitempty"`
+	// Splices are the SCTE-35 splice information sections the segment carries, in
+	// the order they appeared. They belong to the segment rather than to a track:
+	// the signalling rides on a PID or in an emsg of its own, and it describes the
+	// whole programme.
+	Splices []SplicePoint `json:"splices,omitempty"`
 }
 
 // Track returns the first track of the given kind.

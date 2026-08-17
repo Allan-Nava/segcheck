@@ -18,6 +18,9 @@ const maxESCapture = 1 << 20
 // streamTypeAAC is the PMT stream_type for AAC delivered as ADTS.
 const streamTypeAAC = 0x0F
 
+// streamTypeSCTE35 is the PMT stream_type of a splice information PID.
+const streamTypeSCTE35 = 0x86
+
 // adtsHeaderCapture bounds how much AAC payload we keep. Only the first frame
 // header is read, and holding a whole segment of audio per rendition to read
 // seven bytes of it would cost megabytes for nothing.
@@ -46,10 +49,12 @@ func ParseTS(data []byte) (SegmentInfo, error) {
 	}
 
 	var (
-		pmtPIDs  = map[uint16]bool{}
-		streams  = map[uint16]*tsStream{}
-		sections = map[uint16][]byte{} // PSI reassembly per PID
-		packets  int
+		pmtPIDs    = map[uint16]bool{}
+		splicePIDs = map[uint16]bool{}
+		streams    = map[uint16]*tsStream{}
+		sections   = map[uint16][]byte{} // PSI reassembly per PID
+		splices    []SplicePoint
+		packets    int
 	)
 
 	for off := start; off+TSPacketSize <= len(data); off += TSPacketSize {
@@ -103,6 +108,9 @@ func ParseTS(data []byte) (SegmentInfo, error) {
 					if _, seen := streams[pid]; !seen {
 						streams[pid] = &tsStream{pid: pid, streamType: stype, lastCC: -1}
 					}
+					if stype == streamTypeSCTE35 {
+						splicePIDs[pid] = true
+					}
 				}
 			}
 		case pid == 0x1FFF: // null packets
@@ -119,6 +127,18 @@ func ParseTS(data []byte) (SegmentInfo, error) {
 				s.scrambled = true
 			}
 			s.checkCC(cc, discontinuity)
+			if splicePIDs[pid] {
+				// Splice information is a private section, not a PES: it shares
+				// PSI's pointer_field framing. It stays in this branch so the PID's
+				// continuity counters are still followed and an operator can see
+				// the signalling is there at all.
+				if sec, done := psiAccumulate(sections, pid, payload, pusi); done {
+					if sp, ok := parseSpliceSection(sec); ok && len(splices) < maxSplicesPerSegment {
+						splices = append(splices, sp)
+					}
+				}
+				continue
+			}
 			if pusi {
 				if pts, ok := pesPTS(payload); ok {
 					s.pts = append(s.pts, pts)
@@ -136,7 +156,7 @@ func ParseTS(data []byte) (SegmentInfo, error) {
 		return SegmentInfo{}, ErrUnknownContainer
 	}
 
-	info := SegmentInfo{Container: ContainerTS, Bytes: int64(len(data))}
+	info := SegmentInfo{Container: ContainerTS, Bytes: int64(len(data)), Splices: splices}
 	for _, s := range sortedStreams(streams) {
 		info.Tracks = append(info.Tracks, s.track())
 	}
@@ -457,6 +477,8 @@ func streamCodec(t byte) string {
 		return "" // PES private data: could be AC-3, subtitles, or ID3
 	case 0x15:
 		return "id3"
+	case streamTypeSCTE35:
+		return "scte35"
 	default:
 		return ""
 	}

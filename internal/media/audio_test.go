@@ -311,3 +311,23 @@ func TestAudioFieldBounds(t *testing.T) {
 		t.Errorf("adtsHeaderFields after four stray bytes = %d/%d/%v, want 48000/2/true", rate, ch, ok)
 	}
 }
+
+// A truncated stsd has no sample entries at all, and slicing past its end panics.
+// The fuzzer found this on the audio hook and the caption one alike, which is the
+// second time a bounds guard has been the thing a real corpus caught.
+func TestParseMP4_TruncatedStsdDoesNotPanic(t *testing.T) {
+	// An stsd whose payload is shorter than its own version, flags and entry count.
+	stsd := []byte{0x00, 0x00, 0x00, 0x0A, 's', 't', 's', 'd', 0x00, 0x00}
+	if got := boxesInStsdEntries(stsd); got != 0 {
+		t.Errorf("a truncated stsd yielded %d entries, want 0", got)
+	}
+}
+
+// boxesInStsdEntries mirrors what parseMoov does, so the guard is asserted where a
+// reader can see it rather than only through a fuzz corpus entry.
+func boxesInStsdEntries(stsd []byte) int {
+	if len(stsd) <= 8 {
+		return 0
+	}
+	return len(boxesIn(stsd[8:]))
+}

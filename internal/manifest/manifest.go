@@ -160,6 +160,43 @@ type Playlist struct {
 	MediaSequence  int         `json:"media_sequence,omitempty"`
 	Renditions     []Rendition `json:"renditions,omitempty"`
 	Segments       []Segment   `json:"segments,omitempty"`
+	// AdBreaks are the SCTE-35 ad-break signals the manifest declares: HLS
+	// EXT-X-DATERANGE and EXT-X-CUE-OUT/CUE-IN in a media playlist, DASH
+	// EventStream events at Period level.
+	AdBreaks []AdBreak `json:"ad_breaks,omitempty"`
+}
+
+// AdBreak is one ad-break signal the manifest declares.
+//
+// Three different ways of saying when, because three different tags say it
+// differently, and converting between them needs information the manifest may not
+// carry. A check that collapsed them into one number would have to invent the
+// missing conversion.
+type AdBreak struct {
+	// ID pairs a break's start with its end (EXT-X-DATERANGE ID, Event@id).
+	ID string `json:"id,omitempty"`
+	// OutOfNetwork is true for the start of a break, false for the return.
+	OutOfNetwork bool `json:"out_of_network"`
+	// Start is the wall-clock time of an EXT-X-DATERANGE. Placing it on the media
+	// timeline needs EXT-X-PROGRAM-DATE-TIME, which a playlist need not carry.
+	Start    time.Time `json:"start,omitempty"`
+	HasStart bool      `json:"has_start,omitempty"`
+	// MediaTime is the break's position on the media timeline in seconds, which
+	// DASH states outright (Event@presentationTime over the stream's timescale).
+	MediaTime    float64 `json:"media_time,omitempty"`
+	HasMediaTime bool    `json:"has_media_time,omitempty"`
+	// Sequence is the media sequence number of the segment an EXT-X-CUE-OUT or
+	// EXT-X-CUE-IN precedes. Such a break is on a segment boundary by
+	// construction, which is exactly what makes it worth distinguishing.
+	Sequence    int  `json:"sequence,omitempty"`
+	HasSequence bool `json:"has_sequence,omitempty"`
+	// Duration and PlannedDuration are the break's length in seconds, 0 when the
+	// signal does not state one.
+	Duration        float64 `json:"duration,omitempty"`
+	PlannedDuration float64 `json:"planned_duration,omitempty"`
+	// Tag names which signal this came from, so a finding can quote what the
+	// operator actually wrote.
+	Tag string `json:"tag,omitempty"`
 }
 
 // VideoRenditions returns the renditions that carry video, in declared-bitrate

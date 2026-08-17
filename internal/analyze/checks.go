@@ -802,6 +802,252 @@ func medianFloat(xs []float64) float64 {
 
 // humanFPS drops the decimals a whole rate does not need, so 25 reads as "25fps"
 // and 29.97 keeps the part that distinguishes it from 30.
+// checkAdBreak compares ad-break signalling against the segmentation.
+//
+// The question an operator actually has is not "is the break signalled" — a
+// manifest checker answers that — but "can a player cut there at all". A splice
+// point that does not fall on a segment boundary is a break nobody can take: the
+// ad server fires and the transition lands mid-picture, or the switch never
+// happens. The manifest describes it perfectly either way.
+//
+// Two things are deliberately not reported. A splice that states no time —
+// splice_immediate, or a splice_time with its flag clear — means "now" and has
+// nothing to be compared against; judging it against the zero value would call
+// every one of them perfectly aligned. And inband signalling with nothing in the
+// manifest is not flagged: server-side insertion downstream is a legitimate design,
+// and segcheck cannot tell it from a packager that forgot to translate the cue.
+func checkAdBreak(rends []*renditionData, opts Options) []finding.Finding {
+	var out []finding.Finding
+
+	for _, rd := range rends {
+		if rd.err != nil || rd.initErr != nil {
+			continue
+		}
+		segs := parsedSegs(rd)
+		if len(segs) == 0 {
+			continue
+		}
+
+		splices := inbandSplices(segs)
+		declared := rd.adBreaks
+		if len(splices) == 0 && len(declared) == 0 {
+			// No advertising signalled anywhere. Most of the world's streams, and
+			// nothing to say about any of them.
+			continue
+		}
+
+		label := rendLabel(rd)
+		bounds, ok := segmentBoundaries(segs)
+		if !ok {
+			out = append(out, finding.Finding{
+				Check: "adbreak", Target: label, Status: finding.OK,
+				Message: fmt.Sprintf("%s, but the segments state no timeline to place it on", describeSignalling(splices, declared)),
+			})
+			continue
+		}
+		tolerance := opts.GapToleranceMS / 1000
+
+		// Inband splices, judged against the boundaries the media itself states.
+		var offBoundary []string
+		untimed := 0
+		for _, sp := range splices {
+			if !sp.HasPTS {
+				untimed++
+				continue
+			}
+			ts := float64(sp.Timescale)
+			if ts <= 0 {
+				ts = float64(media.TSTimescale)
+			}
+			at := float64(sp.PTS) / ts
+			off, within := nearestBoundary(bounds, at, tolerance)
+			if !within {
+				continue // the splice is outside the window we sampled
+			}
+			if off != 0 {
+				offBoundary = append(offBoundary, fmt.Sprintf("%s at %.3fs is %.3fs from the nearest segment boundary",
+					sp.Command, at, math.Abs(off)))
+			}
+		}
+
+		// Declared breaks that state a media time of their own — DASH events, and
+		// HLS cue-outs, whose position between segments *is* their time.
+		for _, b := range declared {
+			at, ok := declaredBreakTime(b, segs)
+			if !ok {
+				continue
+			}
+			off, within := nearestBoundary(bounds, at, tolerance)
+			if !within || off == 0 {
+				continue
+			}
+			offBoundary = append(offBoundary, fmt.Sprintf("%s at %.3fs is %.3fs from the nearest segment boundary",
+				b.Tag, at, math.Abs(off)))
+		}
+
+		if len(offBoundary) > 0 {
+			out = append(out, finding.Finding{
+				Check: "adbreak", Target: label, Status: finding.BAD,
+				Message: strings.Join(offBoundary, "; "),
+				Value:   finding.Num(float64(len(offBoundary))), Unit: "breaks",
+				Hint: "a player can only switch at a segment boundary: a break signalled anywhere else is either taken late, cutting into the content, or not taken at all",
+			})
+			continue
+		}
+
+		msg := describeSignalling(splices, declared)
+		if untimed > 0 {
+			msg += fmt.Sprintf(", %d of which states no time and cannot be placed", untimed)
+		} else {
+			msg += ", on segment boundaries"
+		}
+		out = append(out, finding.Finding{
+			Check: "adbreak", Target: label, Status: finding.OK, Message: msg,
+		})
+	}
+	return out
+}
+
+// inbandSplices collects the SCTE-35 sections found across the sampled segments.
+func inbandSplices(segs []segmentData) []media.SplicePoint {
+	var out []media.SplicePoint
+	for _, sd := range segs {
+		out = append(out, sd.info.Splices...)
+	}
+	return out
+}
+
+// describeSignalling counts what was found, so an OK finding still says what ran.
+func describeSignalling(splices []media.SplicePoint, declared []manifest.AdBreak) string {
+	var parts []string
+	if n := len(splices); n > 0 {
+		parts = append(parts, fmt.Sprintf("%d splice %s inband", n, plural(n, "point", "points")))
+	}
+	if n := len(declared); n > 0 {
+		parts = append(parts, fmt.Sprintf("%d declared in the manifest", n))
+	}
+	return strings.Join(parts, ", ")
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
+}
+
+// segmentBoundaries is where each sampled segment begins on the media timeline, in
+// seconds, plus where the last one ends. It reports false when the segments state
+// no timeline to place anything on: without one, every comparison here would be
+// against a number nobody measured.
+func segmentBoundaries(segs []segmentData) ([]float64, bool) {
+	var out []float64
+	var lastEnd float64
+	have := false
+	for _, sd := range segs {
+		t, ok := sd.info.Track(media.Video)
+		if !ok {
+			t, ok = sd.info.Track(media.Audio)
+		}
+		if !ok || !t.HasPTS || t.Timescale == 0 {
+			continue
+		}
+		start := float64(t.MinPTS) / float64(t.Timescale)
+		out = append(out, start)
+		if d, ok := t.DurationSec(); ok {
+			lastEnd = start + d
+		}
+		have = true
+	}
+	if !have {
+		return nil, false
+	}
+	if lastEnd > 0 {
+		out = append(out, lastEnd)
+	}
+	sort.Float64s(out)
+	return out, true
+}
+
+// nearestBoundary returns the signed distance from at to the closest boundary, and
+// whether at falls inside the sampled window at all. A break outside the window is
+// one nobody looked at, not one that is misplaced.
+func nearestBoundary(bounds []float64, at, tolerance float64) (float64, bool) {
+	if len(bounds) == 0 {
+		return 0, false
+	}
+	if at < bounds[0]-tolerance || at > bounds[len(bounds)-1]+tolerance {
+		return 0, false
+	}
+	best := at - bounds[0]
+	for _, b := range bounds[1:] {
+		if d := at - b; math.Abs(d) < math.Abs(best) {
+			best = d
+		}
+	}
+	if math.Abs(best) <= tolerance {
+		return 0, true
+	}
+	return best, true
+}
+
+// declaredBreakTime places a declared break on the media timeline.
+//
+// DASH states the time outright. An HLS cue-out states the segment it precedes,
+// and that segment's own first timestamp is where it begins — which is why a
+// cue-out is on a boundary by construction and a DATERANGE is not. A DATERANGE
+// states a wall-clock time, and mapping that onto the media needs
+// EXT-X-PROGRAM-DATE-TIME: without one there is nothing to compare, and SC-51 is
+// where that mapping gets checked in its own right.
+func declaredBreakTime(b manifest.AdBreak, segs []segmentData) (float64, bool) {
+	if b.HasMediaTime {
+		return b.MediaTime, true
+	}
+	if b.HasSequence {
+		for _, sd := range segs {
+			if sd.seg.Sequence != b.Sequence {
+				continue
+			}
+			t, ok := sd.info.Track(media.Video)
+			if !ok {
+				t, ok = sd.info.Track(media.Audio)
+			}
+			if ok && t.HasPTS && t.Timescale != 0 {
+				return float64(t.MinPTS) / float64(t.Timescale), true
+			}
+		}
+		return 0, false
+	}
+	if b.HasStart {
+		for _, sd := range segs {
+			if !sd.seg.HasPDT {
+				continue
+			}
+			t, ok := sd.info.Track(media.Video)
+			if !ok {
+				t, ok = sd.info.Track(media.Audio)
+			}
+			if !ok || !t.HasPTS || t.Timescale == 0 {
+				continue
+			}
+			// The segment's own PDT anchors the wall clock to its first timestamp.
+			offset := b.Start.Sub(sd.seg.PDT).Seconds()
+			return float64(t.MinPTS)/float64(t.Timescale) + offset, true
+		}
+	}
+	return 0, false
+}
+
+// isSignallingTrack reports whether a track carries signalling rather than media
+// a decoder has to be configured for.
+func isSignallingTrack(t media.Track) bool {
+	switch t.Codec {
+	case "scte35", "id3":
+		return true
+	}
+	return false
+}
+
 // checkAudio compares an audio rendition's actual format against what the
 // manifest claims and against itself. A player configures its decoder and its
 // output device from the manifest before it has fetched a byte of media, so a
@@ -1517,6 +1763,13 @@ func trackShape(info media.SegmentInfo) string {
 	for _, kind := range []media.TrackKind{media.Video, media.Audio, media.Other} {
 		n := 0
 		for _, t := range info.Tracks {
+			if isSignallingTrack(t) {
+				// A splice information PID is signalling, not media. Many packagers
+				// include it only in the segments that carry a cue, so counting it
+				// as part of the layout reports a decoder-resetting track change on
+				// every ad break in an otherwise healthy stream.
+				continue
+			}
 			if t.Kind == kind {
 				n++
 			}

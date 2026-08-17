@@ -28,12 +28,23 @@ type mpdDoc struct {
 }
 
 type mpdPeriod struct {
-	ID              string          `xml:"id,attr"`
-	Start           string          `xml:"start,attr"`
-	Duration        string          `xml:"duration,attr"`
-	BaseURL         []string        `xml:"BaseURL"`
-	AdaptationSets  []mpdAdaptation `xml:"AdaptationSet"`
-	SegmentTemplate *mpdSegTemplate `xml:"SegmentTemplate"`
+	ID              string           `xml:"id,attr"`
+	Start           string           `xml:"start,attr"`
+	Duration        string           `xml:"duration,attr"`
+	BaseURL         []string         `xml:"BaseURL"`
+	AdaptationSets  []mpdAdaptation  `xml:"AdaptationSet"`
+	SegmentTemplate *mpdSegTemplate  `xml:"SegmentTemplate"`
+	EventStreams    []mpdEventStream `xml:"EventStream"`
+}
+
+type mpdEventStream struct {
+	SchemeIDURI string `xml:"schemeIdUri,attr"`
+	Timescale   uint32 `xml:"timescale,attr"`
+	Events      []struct {
+		PresentationTime *int64 `xml:"presentationTime,attr"`
+		Duration         int64  `xml:"duration,attr"`
+		ID               string `xml:"id,attr"`
+	} `xml:"Event"`
 }
 
 type mpdAdaptation struct {
@@ -142,6 +153,7 @@ func ParseDASH(body []byte, baseURL string, now time.Time) (Playlist, error) {
 		if periodDur == 0 {
 			periodDur = mpdDur
 		}
+		pl.AdBreaks = append(pl.AdBreaks, dashAdBreaks(period.EventStreams, periodStart)...)
 
 		for ai, as := range period.AdaptationSets {
 			abase := applyBaseURLs(pbase, as.BaseURL)
@@ -623,6 +635,52 @@ func parseFrameRate(s string) float64 {
 	}
 	f, _ := strconv.ParseFloat(s, 64)
 	return f
+}
+
+// The SCTE-35 EventStream schemes. Both carry ad-break signalling; anything else
+// in an EventStream is some other kind of event, and reporting it as a break would
+// send the check hunting a splice point nobody signalled.
+var scte35EventSchemes = map[string]bool{
+	"urn:scte:scte35:2013:xml":     true,
+	"urn:scte:scte35:2014:xml+bin": true,
+	"urn:scte:scte35:2013:bin":     true,
+}
+
+// dashAdBreaks reads the ad-break signals out of a Period's EventStreams. Each
+// stream states its own timescale, which defaults to 1 — not to 90000, which is
+// what a reader borrowing MPEG-TS's habits would assume and be wrong about by five
+// orders of magnitude.
+func dashAdBreaks(streams []mpdEventStream, periodStart float64) []AdBreak {
+	var out []AdBreak
+	for _, es := range streams {
+		if !scte35EventSchemes[strings.ToLower(strings.TrimSpace(es.SchemeIDURI))] {
+			continue
+		}
+		ts := es.Timescale
+		if ts == 0 {
+			ts = 1
+		}
+		for _, e := range es.Events {
+			b := AdBreak{
+				ID:  e.ID,
+				Tag: "EventStream",
+				// An EventStream event marks a break; the section it carries says
+				// whether it opens or closes one, and this reader does not decode
+				// the XML form. Treating every one as an opening would be a guess,
+				// so the direction is left to the media.
+				OutOfNetwork: true,
+			}
+			if e.Duration > 0 {
+				b.Duration = float64(e.Duration) / float64(ts)
+			}
+			if e.PresentationTime != nil {
+				b.MediaTime = periodStart + float64(*e.PresentationTime)/float64(ts)
+				b.HasMediaTime = true
+			}
+			out = append(out, b)
+		}
+	}
+	return out
 }
 
 // The SCTE schemes DASH declares closed captions with. There is no other way to
