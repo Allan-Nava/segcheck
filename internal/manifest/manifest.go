@@ -51,6 +51,16 @@ type Rendition struct {
 	// manifest did not say, and an unstated claim is not a wrong one.
 	SampleRate int `json:"sample_rate,omitempty"`
 	Channels   int `json:"channels,omitempty"`
+	// Captions are the closed captions the manifest claims this rendition's video
+	// carries: HLS EXT-X-MEDIA TYPE=CLOSED-CAPTIONS entries in the group the
+	// variant names, DASH Accessibility descriptors on the AdaptationSet. They are
+	// claims about the bitstream, not renditions to fetch — there is nothing at
+	// the other end of a CLOSED-CAPTIONS entry.
+	Captions []Caption `json:"captions,omitempty"`
+	// CaptionsNone records HLS CLOSED-CAPTIONS=NONE, which is a positive claim
+	// that the video carries no captions. Absent the attribute entirely the
+	// manifest says nothing either way, which is not the same claim.
+	CaptionsNone bool `json:"captions_none,omitempty"`
 	// AudioGroup is the EXT-X-STREAM-INF AUDIO attribute, linking a video
 	// variant to its audio group.
 	AudioGroup string `json:"audio_group,omitempty"`
@@ -78,6 +88,18 @@ type Rendition struct {
 	// Unsupported explains why a rendition could not be expanded into segments
 	// (DASH SegmentBase, for instance). Empty when it was.
 	Unsupported string `json:"unsupported,omitempty"`
+}
+
+// Caption is one closed-caption service the manifest claims is in the video.
+type Caption struct {
+	// InstreamID names where in the bitstream it is: "CC1".."CC4" for the CEA-608
+	// channels, "SERVICE1".."SERVICE63" for the CEA-708 services. It is the HLS
+	// attribute name, and DASH Accessibility values are normalised onto it so the
+	// check has one vocabulary to compare against.
+	InstreamID string `json:"instream_id"`
+	Language   string `json:"language,omitempty"`
+	Name       string `json:"name,omitempty"`
+	GroupID    string `json:"group_id,omitempty"`
 }
 
 // Segment is one media segment as the manifest describes it.

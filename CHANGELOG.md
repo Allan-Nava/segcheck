@@ -23,6 +23,27 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   AAC happily, because `CODECS` is what a player checks before it commits. A
   `CODECS` value naming two audio codecs — which no single rendition can honour —
   or none at all states nothing to compare, and is not treated as a claim.
+- **`captions` check — the caption data that is really in the bitstream** (SC-37).
+  A manifest declares CC1, the encoder stops emitting it, and nothing in the
+  manifest changes: no manifest-level checker will ever notice, and in several
+  countries the obligation is legal rather than editorial. The check reads the
+  captions from every place they are actually carried — the ATSC A/53 SEI in H.264
+  and HEVC, in MPEG-TS and in fMP4's length-prefixed samples, and a CMAF
+  `c608`/`c708` caption track beside the video, which is how Apple's own reference
+  stream delivers CEA-608 — and compares it against HLS `CLOSED-CAPTIONS` and DASH
+  `Accessibility`.
+
+  What it reports is bounded by what can be known. CC1 and CC3 share CEA-608
+  field 1, and separating them needs the line-21 control codes decoded, so only an
+  *empty* field is a defect: a channel declared over a populated one is not
+  reported either way. CEA-708 names its services in the DTVCC packet layer, so a
+  declared service that is genuinely absent is a defect the reader can be sure of.
+  A caption track states its standard and no more (SC-91). And a bitstream nobody
+  could walk gets an ERROR saying the coverage has a hole, never a BAD.
+
+  `CLOSED-CAPTIONS=NONE` over a bitstream that carries captions is a WARN: a player
+  believes the manifest, so the toggle is never offered. An absent attribute is not
+  the same claim, and is not treated as one.
 - **Audio format read from where each container actually states it** (SC-18): the
   `AudioSampleEntry` in fMP4, the ADTS header in MPEG-TS and in packed audio, and
   the `dac3`/`dec3` box for AC-3 and E-AC-3. Muxed audio inside a video variant is

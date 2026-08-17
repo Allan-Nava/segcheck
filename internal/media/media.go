@@ -96,6 +96,10 @@ type Track struct {
 	// reveal it, because it states one value for the whole rendition.
 	SampleRate int `json:"sample_rate,omitempty"`
 	Channels   int `json:"channels,omitempty"`
+	// Captions is the closed-caption data found in a video track's bitstream.
+	// Its Scanned field is what separates "no captions here" from "nobody
+	// looked", which lead to opposite verdicts.
+	Captions CaptionPresence `json:"captions,omitempty"`
 	// Encrypted marks a track whose samples are protected (encv/enca sample
 	// entry, or a TS payload flagged scrambled).
 	Encrypted bool `json:"encrypted,omitempty"`

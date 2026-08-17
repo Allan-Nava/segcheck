@@ -31,6 +31,10 @@ type initTrack struct {
 	trexSize     uint32
 	sampleRate   int
 	channels     int
+	// nalLengthSize is how many bytes prefix each NAL unit in the mdat, from the
+	// avcC or hvcC box. fMP4 uses a length prefix where an elementary stream uses
+	// start codes, so a walk that assumes Annex-B finds nothing at all.
+	nalLengthSize int
 }
 
 // fragTrack is what the media fragments tell us about one track.
@@ -99,6 +103,17 @@ func ParseMP4(data, init []byte) (SegmentInfo, error) {
 		return info, nil
 	}
 
+	// Captions ride in the video samples, which live in the mdat rather than in
+	// any header. Read it once: a CMAF segment carries one track, so its mdat is
+	// that track's samples.
+	var mdat []byte
+	if b, ok := findBox(data, "mdat"); ok {
+		mdat = b
+	}
+	// captionTracks collects the CMAF caption tracks so their presence can be
+	// folded onto the video track, which is what every caller asks about.
+	var captionTracks []Track
+
 	for _, id := range sortedFragIDs(frags) {
 		f := frags[id]
 		var t Track
@@ -142,12 +157,62 @@ func ParseMP4(data, init []byte) (SegmentInfo, error) {
 				t.MaxPTS -= t.FrameDur
 			}
 		}
+		// A CMAF caption track is the captions: a c608 or c708 sample entry under
+		// the clcp handler, carrying samples of its own. Apple's fMP4 reference
+		// stream delivers CEA-608 this way rather than in the video SEI, so a
+		// reader that only walks the bitstream reports "could not look" on the most
+		// widely deployed caption delivery there is.
+		switch t.Codec {
+		case "c608", "c708":
+			captionTracks = append(captionTracks, t)
+		}
+		if t.Kind == Video && len(mdat) > 0 && len(frags) == 1 {
+			// Only for a single-track segment: a multiplexed mdat interleaves two
+			// tracks' samples, and walking it as one track's NAL units would read
+			// audio as video and report whatever it happened to find.
+			size := 4
+			if it, ok := inits[id]; ok && it.nalLengthSize > 0 {
+				size = it.nalLengthSize
+			}
+			t.Captions = lengthPrefixedCaptions(mdat, size, t.Codec == "hevc")
+		}
 		info.Tracks = append(info.Tracks, t)
 	}
 	if len(info.Tracks) == 0 {
 		return info, fmt.Errorf("ISO-BMFF with no track")
 	}
+	foldCaptionTracks(&info, captionTracks)
 	return info, nil
+}
+
+// foldCaptionTracks records a CMAF caption track's presence on the video track.
+// The check asks "does this rendition carry the captions it declares", and a
+// caption track beside the video is the same rendition — so the answer has to be
+// readable from the track a caller already looks at. A caption track present but
+// carrying no samples is what an encoder that stopped emitting captions leaves
+// behind, and it must not be mistaken for one that is working.
+func foldCaptionTracks(info *SegmentInfo, caption []Track) {
+	if len(caption) == 0 {
+		return
+	}
+	for i := range info.Tracks {
+		if info.Tracks[i].Kind != Video {
+			continue
+		}
+		c := &info.Tracks[i].Captions
+		c.Scanned = true
+		for _, ct := range caption {
+			if ct.Samples <= 0 {
+				continue
+			}
+			switch ct.Codec {
+			case "c608":
+				c.Track608 = true
+			case "c708":
+				c.Track708 = true
+			}
+		}
+	}
 }
 
 func (it *initTrack) track() Track {
@@ -202,6 +267,11 @@ func parseMoov(moov []byte, out map[uint32]*initTrack) {
 				if stsd, ok := findBox(stbl, "stsd"); ok {
 					codec, w, h, enc := parseStsd(stsd)
 					t.codec = codec
+					if t.kind == Video {
+						if entries := boxesIn(stsd[8:]); len(entries) > 0 {
+							t.nalLengthSize = nalLengthSizeFrom(entries[0].payload)
+						}
+					}
 					if t.kind == Audio {
 						// The AudioSampleEntry states the channel count and the
 						// sampling rate, in the same place a VisualSampleEntry
@@ -434,6 +504,25 @@ func parseStsd(b []byte) (codec string, width, height int, encrypted bool) {
 		}
 	}
 	return codec, width, height, encrypted
+}
+
+// nalLengthSizeFrom reads how many bytes prefix each NAL unit in the samples,
+// from the avcC or hvcC box inside a VisualSampleEntry. Both state it as a
+// two-bit field one less than the real size, and both put it in a different
+// place: byte 4 of avcC, byte 21 of hvcC. Zero means it could not be read, and a
+// caller that assumed 4 anyway would walk garbage.
+func nalLengthSizeFrom(payload []byte) int {
+	if len(payload) <= visualSampleEntrySize {
+		return 0
+	}
+	children := payload[visualSampleEntrySize:]
+	if avcC, ok := findBox(children, "avcC"); ok && len(avcC) >= 5 {
+		return int(avcC[4]&0x03) + 1
+	}
+	if hvcC, ok := findBox(children, "hvcC"); ok && len(hvcC) >= 22 {
+		return int(hvcC[21]&0x03) + 1
+	}
+	return 0
 }
 
 func isVisualSampleEntry(typ string) bool {

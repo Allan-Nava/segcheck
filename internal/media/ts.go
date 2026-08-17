@@ -245,11 +245,13 @@ func (s *tsStream) track() Track {
 			kf := hevcKeyframes(s.es)
 			t.OpensOnKeyframe, t.HasKeyframe = kf.Opens, kf.Present
 			t.KeyframeKnown, t.KeyframeScanned = kf.Known, kf.Scanned
+			t.Captions = hevcCaptions(s.es)
 		default:
 			w, h, ok = h264Resolution(s.es)
 			kf := h264Keyframes(s.es)
 			t.OpensOnKeyframe, t.HasKeyframe = kf.Opens, kf.Present
 			t.KeyframeKnown, t.KeyframeScanned = kf.Known, kf.Scanned
+			t.Captions = h264Captions(s.es)
 		}
 		if ok {
 			t.Width, t.Height = w, h

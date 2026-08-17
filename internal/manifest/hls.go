@@ -40,6 +40,12 @@ func ParseHLS(body []byte, baseURL string) (Playlist, error) {
 		// comes first in the playlist, the URI on the next line.
 		lastRangeEnd int64
 		lastRangeURI string
+		// ccGroups holds the CLOSED-CAPTIONS declarations by GROUP-ID, and
+		// ccGroupOf which group each variant named. Both are resolved after the
+		// scan: nothing in the spec requires the EXT-X-MEDIA entries to come
+		// before the variant that references them.
+		ccGroups  = map[string][]Caption{}
+		ccGroupOf = map[int]string{}
 	)
 
 	for sc.Scan() {
@@ -72,9 +78,24 @@ func ParseHLS(body []byte, baseURL string) (Playlist, error) {
 			case "VIDEO":
 				kind = Video
 			}
+			if strings.EqualFold(attrs["TYPE"], "CLOSED-CAPTIONS") {
+				// Captions are muxed into the video, so there is nothing to fetch
+				// and nothing to make a rendition of. The entry is a claim about
+				// what the variants that name its group already carry.
+				if id := attrs["INSTREAM-ID"]; id != "" {
+					g := attrs["GROUP-ID"]
+					ccGroups[g] = append(ccGroups[g], Caption{
+						InstreamID: strings.ToUpper(id),
+						Language:   attrs["LANGUAGE"],
+						Name:       attrs["NAME"],
+						GroupID:    g,
+					})
+				}
+				continue
+			}
 			uri := attrs["URI"]
 			if uri == "" {
-				continue // a CLOSED-CAPTIONS entry muxed into the variants
+				continue // an entry with nothing at the other end of it
 			}
 			name := attrs["NAME"]
 			if name == "" {
@@ -154,7 +175,13 @@ func ParseHLS(body []byte, baseURL string) (Playlist, error) {
 					Codecs:       pendingStream["CODECS"],
 					FrameRate:    attrFloat(pendingStream, "FRAME-RATE"),
 					AudioGroup:   pendingStream["AUDIO"],
+					// NONE is a positive claim that there are no captions; an
+					// absent attribute claims nothing either way.
+					CaptionsNone: strings.EqualFold(pendingStream["CLOSED-CAPTIONS"], "NONE"),
 				})
+				if g := pendingStream["CLOSED-CAPTIONS"]; g != "" && !strings.EqualFold(g, "NONE") {
+					ccGroupOf[len(pl.Renditions)-1] = g
+				}
 				pendingStream = nil
 
 			case expectSegment:
@@ -191,6 +218,11 @@ func ParseHLS(body []byte, baseURL string) (Playlist, error) {
 	}
 	if !pl.Master && len(pl.Segments) == 0 {
 		return pl, fmt.Errorf("playlist has neither variants nor segments")
+	}
+	// Attach the caption claims now that every group and every variant has been
+	// seen, whichever order they appeared in.
+	for i, g := range ccGroupOf {
+		pl.Renditions[i].Captions = ccGroups[g]
 	}
 	// A media playlist without EXT-X-ENDLIST is a sliding window: live.
 	pl.Live = !pl.Master && !endList

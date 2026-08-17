@@ -45,6 +45,12 @@ type segSpec struct {
 	// audioRate/audioChannels mux an AAC track alongside the video, which is how
 	// most transport-stream ladders are actually delivered.
 	audioRate, audioChannels int
+	// captions608 lists the CEA-608 fields, and captions708 the CEA-708 service
+	// numbers, planted in the segment's caption SEI. Empty means no caption SEI
+	// at all, which is what a stream that declares captions and lost them looks
+	// like.
+	captions608 []int
+	captions708 []int
 	// status, when non-zero, is served instead of the media.
 	status int
 	// body, when non-nil, is served instead of the media.
@@ -56,7 +62,11 @@ type variantSpec struct {
 	bandwidth     int
 	width, height int
 	codecs        string
-	segments      []segSpec
+	// captions is the raw CLOSED-CAPTIONS attribute for this variant, and
+	// captionIDs the INSTREAM-IDs of the EXT-X-MEDIA group it names.
+	captions   string
+	captionIDs []string
+	segments   []segSpec
 }
 
 // cleanSegments builds count consecutive 2s segments starting at t=0.
@@ -93,12 +103,22 @@ func hlsOriginHandler(variants []variantSpec) *http.ServeMux {
 		var b strings.Builder
 		b.WriteString("#EXTM3U\n#EXT-X-VERSION:4\n")
 		for _, v := range variants {
+			for _, id := range v.captionIDs {
+				fmt.Fprintf(&b, "#EXT-X-MEDIA:TYPE=CLOSED-CAPTIONS,GROUP-ID=\"cc\","+
+					"NAME=%q,LANGUAGE=\"en\",INSTREAM-ID=%q\n", id, id)
+			}
+		}
+		for _, v := range variants {
 			codecs := v.codecs
 			if codecs == "" {
 				codecs = "avc1.4d401f"
 			}
-			fmt.Fprintf(&b, "#EXT-X-STREAM-INF:BANDWIDTH=%d,RESOLUTION=%dx%d,CODECS=%q\n%s/index.m3u8\n",
-				v.bandwidth, v.width, v.height, codecs, v.name)
+			cc := ""
+			if v.captions != "" {
+				cc = "," + v.captions
+			}
+			fmt.Fprintf(&b, "#EXT-X-STREAM-INF:BANDWIDTH=%d,RESOLUTION=%dx%d,CODECS=%q%s\n%s/index.m3u8\n",
+				v.bandwidth, v.width, v.height, codecs, cc, v.name)
 		}
 		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
 		_, _ = w.Write([]byte(b.String()))
@@ -135,6 +155,19 @@ func hlsOriginHandler(variants []variantSpec) *http.ServeMux {
 				}
 				w.Header().Set("Content-Type", "video/mp2t")
 				if s.codedWidth > 0 {
+					if len(s.captions608) > 0 || len(s.captions708) > 0 {
+						var pkts []mediatest.CCPacket
+						for _, f := range s.captions608 {
+							pkts = append(pkts, mediatest.CC608(f)...)
+						}
+						for _, svc := range s.captions708 {
+							pkts = append(pkts, mediatest.CC708(svc)...)
+						}
+						_, _ = w.Write(mediatest.TSWithSEI(s.startPTS, frameDur, segFrames,
+							mediatest.SPSFor(s.codedWidth, s.codedHeight),
+							mediatest.H264SEICaptions(pkts)))
+						return
+					}
 					if s.audioRate > 0 {
 						_, _ = w.Write(mediatest.TSMuxed(s.startPTS, frameDur, segFrames,
 							mediatest.SPSFor(s.codedWidth, s.codedHeight), s.audioRate, s.audioChannels))

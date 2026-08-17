@@ -54,6 +54,35 @@ func TSWithSPS(startPTS, frameDur int64, frames int, sps []byte) []byte {
 // TSWithSPSOpening is TSWithSPS with the opening slice's NAL header chosen by the
 // caller, so a test can plant a segment that opens on a non-keyframe — the defect
 // behind "ABR switching stutters even though the boundaries line up".
+// tsWithExtraNALU builds a segment whose first access unit carries one extra NAL
+// unit ahead of the parameter set — an SEI, in practice — so a reader can be
+// asserted against data that only exists there.
+func tsWithExtraNALU(startPTS, frameDur int64, frames int, sps, extra []byte, streamType byte) []byte {
+	const (
+		pmtPID   = 0x1000
+		videoPID = 0x0100
+	)
+	var out []byte
+	out = append(out, tsPacket(0x0000, true, 0, pat(pmtPID))...)
+	out = append(out, tsPacket(pmtPID, true, 0, pmt(videoPID, streamType))...)
+
+	es := []byte{0x00, 0x00, 0x00, 0x01}
+	es = append(es, extra...)
+	es = append(es, 0x00, 0x00, 0x00, 0x01, 0x67)
+	es = append(es, sps...)
+	es = append(es, 0x00, 0x00, 0x00, 0x01, H264IDRSlice)
+
+	cc := 0
+	out = append(out, tsPacket(videoPID, true, cc, pes(0xE0, startPTS, es))...)
+	cc++
+	for i := 1; i < frames; i++ {
+		pts := startPTS + int64(i)*frameDur
+		out = append(out, tsPacket(videoPID, true, cc&0x0F, pes(0xE0, pts, []byte{0x00, 0x00, 0x00, 0x01, 0x41, 0x9A}))...)
+		cc++
+	}
+	return out
+}
+
 func TSWithSPSOpening(startPTS, frameDur int64, frames int, sps []byte, firstSlice byte) []byte {
 	const (
 		pmtPID   = 0x1000
@@ -346,6 +375,17 @@ func mp4InitWithExtra(trackID, timescale uint32, kind, sampleEntryType string, w
 }
 
 func mp4InitFrom(trackID, timescale uint32, handler string, sampleEntry, extra []byte, width, height int) []byte {
+	trak := mp4Trak(trackID, timescale, handler, sampleEntry, width, height)
+	mvhd := box("mvhd", concat(u32(0), make([]byte, 96)))
+	moov := box("moov", concat(mvhd, trak, extra))
+	ftyp := box("ftyp", concat([]byte("isom"), u32(0), []byte("isomiso5")))
+	return concat(ftyp, moov)
+}
+
+// mp4Trak builds one trak box, so an init can declare more than one track — a
+// CMAF segment that carries closed captions declares a c608 track alongside the
+// video one.
+func mp4Trak(trackID, timescale uint32, handler string, sampleEntry []byte, width, height int) []byte {
 	stsd := box("stsd", concat(
 		u32(0), // version + flags
 		u32(1), // entry_count
@@ -384,11 +424,7 @@ func mp4InitFrom(trackID, timescale uint32, handler string, sampleEntry, extra [
 		u32(uint32(width)<<16),
 		u32(uint32(height)<<16),
 	))
-	trak := box("trak", concat(tkhd, mdia))
-	mvhd := box("mvhd", concat(u32(0), make([]byte, 96)))
-	moov := box("moov", concat(mvhd, trak, extra))
-	ftyp := box("ftyp", concat([]byte("isom"), u32(0), []byte("isomiso5")))
-	return concat(ftyp, moov)
+	return box("trak", concat(tkhd, mdia))
 }
 
 // MP4Segment builds a media fragment whose decode time starts at baseDecodeTime
@@ -408,6 +444,19 @@ func MP4Segment(trackID uint32, sequence uint32, baseDecodeTime int64, sampleDur
 	mdat := box("mdat", make([]byte, payloadBytes))
 	styp := box("styp", concat([]byte("msdh"), u32(0), []byte("msdhmsix")))
 	return concat(styp, moof, mdat)
+}
+
+// mp4SegmentWithPayload is MP4Segment with the mdat contents chosen by the caller
+// rather than zero-filled.
+func mp4SegmentWithPayload(trackID, sequence uint32, baseDecodeTime int64, sampleDuration uint32, samples int, payload []byte) []byte {
+	mfhd := box("mfhd", concat(u32(0), u32(sequence)))
+	tfhd := box("tfhd", concat(u32(0x000008), u32(trackID), u32(sampleDuration)))
+	tfdt := box("tfdt", concat([]byte{0x01, 0x00, 0x00, 0x00}, u64(uint64(baseDecodeTime))))
+	trun := box("trun", concat(u32(0), u32(uint32(samples))))
+	traf := box("traf", concat(tfhd, tfdt, trun))
+	moof := box("moof", concat(mfhd, traf))
+	styp := box("styp", concat([]byte("msdh"), u32(0), []byte("msdhmsix")))
+	return concat(styp, moof, box("mdat", payload))
 }
 
 // MP4SegmentSync is MP4Segment that states, in trun's first-sample-flags,
@@ -456,7 +505,31 @@ func visualSampleEntry(typ string, width, height int) []byte {
 		make([]byte, 32), // compressorname
 		u16(0x0018),      // depth
 		[]byte{0xFF, 0xFF},
+		// Every real VisualSampleEntry carries a decoder configuration record, and
+		// it is the only place the NAL length prefix size is stated. Leaving it out
+		// made the builders unlike every stream in the world at exactly the point a
+		// caption reader depends on.
+		codecConfigFor(typ),
 	))
+}
+
+// codecConfigFor builds the decoder configuration record a sample entry type
+// carries: avcC for H.264, hvcC for HEVC, and nothing for a codec whose record
+// this package has no need to model.
+func codecConfigFor(typ string) []byte {
+	switch typ {
+	case "avc1", "avc3":
+		// configurationVersion, profile, compat, level, then 0xFF: three reserved
+		// bits set and lengthSizeMinusOne 3, so each NAL carries a 4-byte prefix.
+		return box("avcC", []byte{0x01, 0x64, 0x00, 0x28, 0xFF, 0xE0, 0x00})
+	case "hvc1", "hev1":
+		cfg := make([]byte, 23)
+		cfg[0] = 0x01
+		cfg[21] = 0xFF // lengthSizeMinusOne 3
+		cfg[22] = 0x00 // numOfArrays
+		return box("hvcC", cfg)
+	}
+	return nil
 }
 
 func audioSampleEntry(typ string) []byte {

@@ -147,6 +147,7 @@ func Run(ctx context.Context, c *fetch.Client, rawurl string, opts Options) find
 	res.Findings = append(res.Findings, checkKeyframe(rends)...)
 	res.Findings = append(res.Findings, checkFrameRate(rends, opts)...)
 	res.Findings = append(res.Findings, checkAudio(rends)...)
+	res.Findings = append(res.Findings, checkCaptions(rends)...)
 	res.Findings = append(res.Findings, checkTracks(rends)...)
 	res.Findings = append(res.Findings, checkTimeline(rends, opts)...)
 	res.Findings = append(res.Findings, checkEncryption(rends)...)

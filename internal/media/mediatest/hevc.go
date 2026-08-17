@@ -211,6 +211,17 @@ func TSWithHEVCSPS(startPTS, frameDur int64, frames int, sps []byte) []byte {
 // TSWithHEVCSPSOpening is TSWithHEVCSPS with the opening picture's NAL unit type
 // chosen by the caller.
 func TSWithHEVCSPSOpening(startPTS, frameDur int64, frames int, sps []byte, firstNAL byte) []byte {
+	return tsHEVC(startPTS, frameDur, frames, sps, nil, firstNAL)
+}
+
+// tsWithExtraHEVCNALU is TSWithHEVCSPS with one extra NAL unit — an SEI, in
+// practice — placed ahead of the parameter sets, already carrying its own two-byte
+// NAL header.
+func tsWithExtraHEVCNALU(startPTS, frameDur int64, frames int, sps, extra []byte) []byte {
+	return tsHEVC(startPTS, frameDur, frames, sps, extra, HEVCIDRWRadl)
+}
+
+func tsHEVC(startPTS, frameDur int64, frames int, sps, extra []byte, firstNAL byte) []byte {
 	const (
 		pmtPID   = 0x1000
 		videoPID = 0x0100
@@ -221,6 +232,10 @@ func TSWithHEVCSPSOpening(startPTS, frameDur int64, frames int, sps []byte, firs
 	out = append(out, tsPacket(pmtPID, true, 0, pmt(videoPID, hevcType))...)
 
 	var es []byte
+	if len(extra) > 0 {
+		es = append(es, startCode...)
+		es = append(es, extra...)
+	}
 	es = append(es, startCode...)
 	es = append(es, hevcNAL(32, []byte{0x0c, 0x01, 0xff, 0xff})...) // VPS
 	es = append(es, startCode...)

@@ -292,11 +292,19 @@ stream that break in production and that no manifest-only checker can see.
   manifest and consistent with the segment boundaries. The check operators
   actually want before a live event.
   <!-- sc: prio=high size=L labels=check,parser -->
-- [ ] **SC-37 — CEA-608/708 captions**: captions declared in the manifest
-  (`CLOSED-CAPTIONS`, DASH `Accessibility`) against caption data actually
-  carried in the bitstream (H.264 SEI user data, `cdat`/`cdt2` in CMAF). "The
-  captions are declared but the encoder stopped emitting them" is invisible to
-  every manifest checker. <!-- sc: prio=high size=L labels=check,parser -->
+- [x] **SC-37 — CEA-608/708 captions**: captions declared in the manifest
+  (`CLOSED-CAPTIONS`, DASH `Accessibility`) against caption data actually carried in
+  the bitstream — the ATSC A/53 SEI in H.264 and HEVC, in MPEG-TS and in fMP4, and a
+  CMAF `c608`/`c708` caption track beside the video, which is how Apple's own
+  reference stream delivers it. "The captions are declared but the encoder stopped
+  emitting them" is invisible to every manifest checker.
+  <!-- sc: prio=high size=L labels=check,parser ver=0.3.0 -->
+- [ ] **SC-91 — Attribute a CMAF caption track's field**: a `c608` track states the
+  standard, not which CEA-608 field or CEA-708 service it carries, so a channel
+  declared against one can be neither confirmed nor disproved. Locating the track's
+  samples — `trun` data offsets against the `mdat` — and reading their `cdat`/`cdt2`
+  boxes would make the comparison as exact as the SEI path already is.
+  <!-- sc: prio=med size=M labels=parser -->
 - [ ] **SC-38 — Subtitle renditions**: fetch WebVTT and TTML/IMSC segments,
   check they parse, that cue times are inside the segment window, and that the
   WebVTT `X-TIMESTAMP-MAP` lines up with the media timeline instead of drifting

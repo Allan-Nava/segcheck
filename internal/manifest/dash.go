@@ -49,6 +49,10 @@ type mpdAdaptation struct {
 		SchemeIDURI string `xml:"schemeIdUri,attr"`
 		Value       string `xml:"value,attr"`
 	} `xml:"AudioChannelConfiguration"`
+	Accessibility []struct {
+		SchemeIDURI string `xml:"schemeIdUri,attr"`
+		Value       string `xml:"value,attr"`
+	} `xml:"Accessibility"`
 	BaseURL           []string            `xml:"BaseURL"`
 	SegmentTemplate   *mpdSegTemplate     `xml:"SegmentTemplate"`
 	Representations   []mpdRepresentation `xml:"Representation"`
@@ -164,6 +168,7 @@ func ParseDASH(body []byte, baseURL string, now time.Time) (Playlist, error) {
 						dashChannels(rep.AudioChannelConfiguration),
 						dashChannels(as.AudioChannelConfiguration),
 					),
+					Captions: dashCaptions(as.Accessibility),
 				}
 
 				switch {
@@ -618,6 +623,63 @@ func parseFrameRate(s string) float64 {
 	}
 	f, _ := strconv.ParseFloat(s, 64)
 	return f
+}
+
+// The SCTE schemes DASH declares closed captions with. There is no other way to
+// state them: the captions themselves are in the video bitstream.
+const (
+	cea608Scheme = "urn:scte:dash:cc:cea-608:2015"
+	cea708Scheme = "urn:scte:dash:cc:cea-708:2015"
+)
+
+// dashCaptions reads the caption claims out of an Accessibility descriptor and
+// normalises them onto the HLS INSTREAM-ID vocabulary, so the check has one set of
+// names to compare the bitstream against.
+//
+// The value is a semicolon-separated list. Under the 608 scheme an entry is either
+// "CC1=eng" or a bare language, in which case position gives the channel: the
+// first is CC1, the second CC2. Under the 708 scheme it is "1=lang:eng", where the
+// number is a service. An entry naming neither is skipped rather than guessed at.
+func dashCaptions(descs []struct {
+	SchemeIDURI string `xml:"schemeIdUri,attr"`
+	Value       string `xml:"value,attr"`
+}) []Caption {
+	var out []Caption
+	for _, d := range descs {
+		scheme := strings.ToLower(strings.TrimSpace(d.SchemeIDURI))
+		if scheme != cea608Scheme && scheme != cea708Scheme {
+			continue
+		}
+		for i, entry := range strings.Split(d.Value, ";") {
+			entry = strings.TrimSpace(entry)
+			if entry == "" {
+				continue
+			}
+			key, lang := entry, ""
+			if j := strings.IndexByte(entry, '='); j >= 0 {
+				key, lang = strings.TrimSpace(entry[:j]), strings.TrimSpace(entry[j+1:])
+			} else if scheme == cea608Scheme {
+				// A bare language list: position is the channel.
+				key, lang = fmt.Sprintf("CC%d", i+1), entry
+			}
+			lang = strings.TrimPrefix(lang, "lang:")
+
+			id := ""
+			switch {
+			case scheme == cea708Scheme:
+				if n, err := strconv.Atoi(key); err == nil && n >= 1 && n <= 63 {
+					id = fmt.Sprintf("SERVICE%d", n)
+				}
+			case strings.HasPrefix(strings.ToUpper(key), "CC"):
+				id = strings.ToUpper(key)
+			}
+			if id == "" {
+				continue // a value shape this parser does not recognise
+			}
+			out = append(out, Caption{InstreamID: id, Language: lang})
+		}
+	}
+	return out
 }
 
 // mpegChannelConfigScheme is the one AudioChannelConfiguration scheme whose

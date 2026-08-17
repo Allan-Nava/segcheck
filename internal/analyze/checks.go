@@ -920,6 +920,207 @@ func checkAudio(rends []*renditionData) []finding.Finding {
 	return out
 }
 
+// checkCaptions compares the closed captions the manifest declares against the
+// caption data the video bitstream actually carries.
+//
+// This is the defect the check exists for: a manifest declares CC1, the encoder
+// stops emitting it, and nothing in the manifest changes — so no manifest-level
+// checker will ever notice, and in several countries the obligation is legal
+// rather than editorial.
+//
+// Two asymmetries shape the verdicts. CC1 and CC3 share CEA-608 field 1, and
+// separating them means decoding the line-21 control codes, so a channel declared
+// over a populated field cannot be confirmed and is not reported: only an empty
+// field is a defect. CEA-708 names its services in the DTVCC packet layer, so a
+// declared service that is genuinely not there is a defect a reader can be sure
+// of.
+func checkCaptions(rends []*renditionData) []finding.Finding {
+	var out []finding.Finding
+
+	for _, rd := range rends {
+		if rd.err != nil || rd.initErr != nil {
+			continue
+		}
+		declared := rd.r.Captions
+		if len(declared) == 0 && !rd.r.CaptionsNone && !anyCaptionsFound(rd) {
+			// Nothing claimed and nothing found: a finding per rendition saying
+			// "no captions" would be noise on most of the world's streams.
+			continue
+		}
+
+		label := rendLabel(rd)
+		got, scanned := captionsSeen(rd)
+		if !scanned {
+			if len(declared) == 0 {
+				continue // nothing claimed, so the hole in coverage costs nothing
+			}
+			out = append(out, finding.Finding{
+				Check: "captions", Target: label, Status: finding.ERROR,
+				Message: fmt.Sprintf("%s declared but segcheck could not read the video bitstream to verify it",
+					captionList(declared)),
+				Hint: "an unsupported or unreadable bitstream is a limit of this tool, not a defect in the stream — the captions may well be there",
+			})
+			continue
+		}
+
+		var missing []string
+		for _, c := range declared {
+			if !captionCouldBePresent(c.InstreamID, got) {
+				missing = append(missing, c.InstreamID)
+			}
+		}
+		switch {
+		case len(missing) > 0:
+			out = append(out, finding.Finding{
+				Check: "captions", Target: label, Status: finding.BAD,
+				Message: fmt.Sprintf("%s declared but the bitstream carries %s",
+					strings.Join(missing, ", "), humanCaptions(got)),
+				Value: finding.Num(float64(len(missing))), Unit: "services",
+				Hint: "a declared caption track that is not in the media is an accessibility failure a player cannot work around: it offers the option and nothing appears",
+			})
+		case rd.r.CaptionsNone && got.Any():
+			out = append(out, finding.Finding{
+				Check: "captions", Target: label, Status: finding.WARN,
+				Message: fmt.Sprintf("bitstream carries %s but the variant declares CLOSED-CAPTIONS=NONE", humanCaptions(got)),
+				Hint:    "a player believes the manifest: captions that are declared absent are never offered, so the toggle is not there to turn on",
+			})
+		case len(declared) > 0:
+			out = append(out, finding.Finding{
+				Check: "captions", Target: label, Status: finding.OK,
+				Message: fmt.Sprintf("%s declared, bitstream carries %s", captionList(declared), humanCaptions(got)),
+			})
+		case got.Any():
+			out = append(out, finding.Finding{
+				Check: "captions", Target: label, Status: finding.OK,
+				Message: fmt.Sprintf("bitstream carries %s, nothing declared to compare against", humanCaptions(got)),
+			})
+		default:
+			out = append(out, finding.Finding{
+				Check: "captions", Target: label, Status: finding.OK,
+				Message: "no captions declared and none in the bitstream, as declared",
+			})
+		}
+	}
+	return out
+}
+
+// captionsSeen unions the caption data found across the sampled segments, and
+// reports whether any of them could be walked at all. One segment out of six
+// carrying captions still means the rendition has them.
+func captionsSeen(rd *renditionData) (media.CaptionPresence, bool) {
+	var out media.CaptionPresence
+	scanned := false
+	for _, sd := range parsedSegs(rd) {
+		t, ok := sd.info.Track(media.Video)
+		if !ok {
+			continue
+		}
+		if !t.Captions.Scanned {
+			continue
+		}
+		scanned = true
+		out.Field1 = out.Field1 || t.Captions.Field1
+		out.Field2 = out.Field2 || t.Captions.Field2
+		out.Track608 = out.Track608 || t.Captions.Track608
+		out.Track708 = out.Track708 || t.Captions.Track708
+		for _, svc := range t.Captions.Services {
+			if !containsInt(out.Services, svc) {
+				out.Services = append(out.Services, svc)
+			}
+		}
+	}
+	sort.Ints(out.Services)
+	return out, scanned
+}
+
+func anyCaptionsFound(rd *renditionData) bool {
+	got, _ := captionsSeen(rd)
+	return got.Any()
+}
+
+// captionCouldBePresent reports whether an INSTREAM-ID may be satisfied by what
+// was found. For CEA-608 that is deliberately weaker than "is present": CC1 and
+// CC3 share field 1, so a populated field cannot be attributed to one of them and
+// must not be called a defect for the other.
+func captionCouldBePresent(id string, got media.CaptionPresence) bool {
+	switch strings.ToUpper(id) {
+	case "CC1", "CC3":
+		return got.Field1 || got.Track608
+	case "CC2", "CC4":
+		return got.Field2 || got.Track608
+	}
+	if n, ok := captionServiceNumber(id); ok {
+		return containsInt(got.Services, n) || got.Track708
+	}
+	// An INSTREAM-ID this check does not understand is not evidence of anything.
+	return true
+}
+
+// captionServiceNumber reads the number out of a CEA-708 INSTREAM-ID.
+func captionServiceNumber(id string) (int, bool) {
+	rest, ok := strings.CutPrefix(strings.ToUpper(id), "SERVICE")
+	if !ok {
+		return 0, false
+	}
+	n, err := strconv.Atoi(rest)
+	if err != nil || n < 1 || n > 63 {
+		return 0, false
+	}
+	return n, true
+}
+
+// captionList names the declared channels, in the manifest's own vocabulary.
+func captionList(cs []manifest.Caption) string {
+	ids := make([]string, 0, len(cs))
+	for _, c := range cs {
+		ids = append(ids, c.InstreamID)
+	}
+	return strings.Join(ids, ", ")
+}
+
+// humanCaptions describes what was found the way the standards name it: CEA-608
+// by field, because that is as far as a reader can honestly go, and CEA-708 by
+// service number, because the packet layer states it.
+func humanCaptions(got media.CaptionPresence) string {
+	var parts []string
+	switch {
+	case got.Field1 && got.Field2:
+		parts = append(parts, "CEA-608 fields 1 and 2")
+	case got.Field1:
+		parts = append(parts, "CEA-608 field 1 (CC1/CC3)")
+	case got.Field2:
+		parts = append(parts, "CEA-608 field 2 (CC2/CC4)")
+	}
+	if len(got.Services) > 0 {
+		svcs := make([]string, 0, len(got.Services))
+		for _, n := range got.Services {
+			svcs = append(svcs, fmt.Sprintf("SERVICE%d", n))
+		}
+		parts = append(parts, "CEA-708 "+strings.Join(svcs, "/"))
+	}
+	// A CMAF caption track names its standard and no more. Saying which channel it
+	// carries would be inventing a measurement, so the report says what is known.
+	if got.Track608 && !got.Attributable() {
+		parts = append(parts, "a populated CEA-608 caption track (channel not attributable)")
+	}
+	if got.Track708 && !got.Attributable() {
+		parts = append(parts, "a populated CEA-708 caption track (service not attributable)")
+	}
+	if len(parts) == 0 {
+		return "no caption data"
+	}
+	return strings.Join(parts, " and ")
+}
+
+func containsInt(xs []int, n int) bool {
+	for _, x := range xs {
+		if x == n {
+			return true
+		}
+	}
+	return false
+}
+
 // audioCodecNames maps the RFC 6381 CODECS prefixes to the names the media
 // readers report. A CODECS value carries a profile the bitstream does not state
 // ("mp4a.40.2"), so only the sample-entry-shaped prefix is comparable.
