@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -215,5 +218,93 @@ func TestUseColor_HonoursNoColorAndTheEnvironment(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	if useColor(false) {
 		t.Error("NO_COLOR is set and colour was still enabled")
+	}
+}
+
+// SC-22: the content key is given by name, never by value. A key in argv lands in
+// shell history, in the process list and in every CI log that echoes its own
+// invocation — and unlike a password it cannot be rotated without re-encrypting the
+// content.
+func TestResolveKeyMaterial(t *testing.T) {
+	raw := bytes.Repeat([]byte{0x2A}, 16)
+	dir := t.TempDir()
+
+	write := func(name string, b []byte) string {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, b, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+
+	// Sixteen raw bytes, and the same key written as hex the way a key server hands
+	// it out — with and without a prefix, and with the trailing newline a file that
+	// came out of a shell will carry.
+	for _, tc := range []struct {
+		name string
+		body []byte
+	}{
+		{"raw", raw},
+		{"hex", []byte("2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a")},
+		{"hex with a prefix", []byte("0x2A2A2A2A2A2A2A2A2A2A2A2A2A2A2A2A")},
+		{"hex with a newline", []byte("2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a\n")},
+	} {
+		t.Run("file/"+tc.name, func(t *testing.T) {
+			got, err := resolveKeyMaterial(write(tc.name, tc.body), "")
+			if err != nil {
+				t.Fatalf("resolveKeyMaterial: %v", err)
+			}
+			if !bytes.Equal(got, raw) {
+				t.Errorf("key = %x, want %x", got, raw)
+			}
+		})
+	}
+
+	t.Setenv("SEGCHECK_TEST_KEY", "2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a")
+	if got, err := resolveKeyMaterial("", "SEGCHECK_TEST_KEY"); err != nil || !bytes.Equal(got, raw) {
+		t.Errorf("from the environment: %x/%v", got, err)
+	}
+
+	// Neither given is not an error: most runs are of unencrypted streams.
+	if got, err := resolveKeyMaterial("", ""); err != nil || got != nil {
+		t.Errorf("with neither flag: %x/%v", got, err)
+	}
+
+	for _, tc := range []struct {
+		name      string
+		file, env string
+	}{
+		{"both flags", write("both", raw), "SEGCHECK_TEST_KEY"},
+		{"a file that is not there", filepath.Join(dir, "absent"), ""},
+		{"an unset variable", "", "SEGCHECK_TEST_KEY_ABSENT"},
+		{"a file of the wrong length", write("short", []byte("abc")), ""},
+		{"32 characters that are not hex", write("nothex", []byte(strings.Repeat("z", 32))), ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := resolveKeyMaterial(tc.file, tc.env)
+			if err == nil {
+				t.Fatal("accepted something that is not a key")
+			}
+			// The message must never quote the material it rejected: one that echoed
+			// the key would put it in the very logs these flags exist to keep it out of.
+			for _, secret := range []string{"2a2a", "2A2A", string(raw)} {
+				if strings.Contains(err.Error(), secret) {
+					t.Errorf("the error quotes the key material: %v", err)
+				}
+			}
+		})
+	}
+}
+
+// A key that cannot be read is a usage error, and the message must not quote what it
+// tried to read.
+func TestRun_UnreadableKeyIsAUsageError(t *testing.T) {
+	var stdout, stderr strings.Builder
+	code := run([]string{"check", "https://example.test/master.m3u8", "--key-file", "/nonexistent/key.bin"}, &stdout, &stderr)
+	if code != 2 {
+		t.Errorf("exit code = %d, want 2 for a usage error", code)
+	}
+	if !strings.Contains(stderr.String(), "--key-file") {
+		t.Errorf("stderr does not name the flag: %q", stderr.String())
 	}
 }

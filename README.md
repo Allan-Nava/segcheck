@@ -104,7 +104,23 @@ segcheck check https://cdn.example/master.m3u8 --output markdown > report.md
 
 # Gate CI on the result
 segcheck check https://cdn.example/master.m3u8 --exit-on bad
+
+# An AES-128 stream: without the key every content check is blind
+segcheck check https://cdn.example/master.m3u8 --key-env SEGCHECK_KEY
+segcheck check https://cdn.example/master.m3u8 --key-file /run/secrets/content.key
+
+# Or let segcheck fetch it from the URI EXT-X-KEY names — off by default,
+# because pointing a checker at a key server is a request to a system that
+# logs, rate-limits and sometimes bills
+segcheck check https://cdn.example/master.m3u8 --fetch-keys
 ```
+
+**The content key is never a flag value.** `--key-env` names an environment
+variable and `--key-file` a path; a key in `argv` lands in shell history, in the
+process list and in every CI log that echoes its own invocation, and unlike a
+password it cannot be rotated without re-encrypting the content. The same rule
+governs credentials, which go in `--header` values the caller reads from the
+environment.
 
 **Exit status is 0 whenever the check ran**, findings or not — a check that ran *is* a success. Use `--exit-on warn|bad|error` when you want a non-zero exit for CI.
 
@@ -129,7 +145,7 @@ segcheck check https://cdn.example/master.m3u8 --exit-on bad
 | `subtitles` | WebVTT and TTML segments actually parse, and their cue times overlap the segment the manifest put them in — the `X-TIMESTAMP-MAP` drift no manifest checker can see | BAD |
 | `tracks` | Expected video/audio present, codecs match `CODECS`, track layout stable across segments | BAD |
 | `alignment` | Segment boundaries across renditions, so ABR switching does not glitch | BAD |
-| `encryption` | Declared protection against what the segments carry | BAD |
+| `encryption` | Declared protection against what the segments carry, and whether a supplied key actually decrypts them | BAD |
 | `ladder` | Duplicate rungs, inverted rungs, dangling `AUDIO` groups, missing `CODECS` | BAD |
 
 Containers understood: **MPEG-TS** (PAT/PMT, PES timestamps, continuity counters, H.264 and HEVC/H.265 parameter sets for the real resolution), **fragmented MP4 / CMAF** (`moov` for timescale, codec and coded size; `mvex`/`trex` defaults; `tfdt`/`trun` for the timeline; `sidx` for single-file DASH, addressed by byte range), **packed audio** (ADTS AAC with the ID3 `transportStreamTimestamp` that gives audio-only renditions a timeline), and **WebVTT and TTML/IMSC** subtitle segments. Audio format is read where each container actually states it: the `AudioSampleEntry` in fMP4, the `dac3`/`dec3` box for AC-3 and E-AC-3 (whose `channelcount` field is not to be trusted), and the ADTS header everywhere else.

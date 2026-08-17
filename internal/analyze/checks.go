@@ -1708,13 +1708,26 @@ func checkEncryption(rends []*renditionData) []finding.Finding {
 		if rd.err != nil {
 			continue
 		}
-		var declared, observed, total int
-		for _, sd := range parsedSegs(rd) {
+		// Every sampled segment, not only the parsed ones: a segment a wrong key
+		// turned into noise parses as nothing, and counting only what parsed would
+		// leave this check silent on exactly the run that needs it most.
+		var declared, observed, total, decrypted, failed int
+		for i := range rd.segs {
+			sd := &rd.segs[i]
+			if sd.fetchErr != nil {
+				continue
+			}
 			total++
 			if sd.seg.KeyMethod != "" {
 				declared++
 			}
-			if sd.info.Encrypted() {
+			if sd.decrypted {
+				decrypted++
+			}
+			if sd.decryptErr != nil {
+				failed++
+			}
+			if sd.parsed && sd.info.Encrypted() {
 				observed++
 			}
 		}
@@ -1722,6 +1735,36 @@ func checkEncryption(rends []*renditionData) []finding.Finding {
 			continue
 		}
 		label := rendLabel(rd)
+
+		// A key that does not decrypt is a fact about the key, not about the stream.
+		// Reporting it as unreadable media would send an operator hunting a defect in
+		// media that is very likely fine.
+		if failed > 0 {
+			out = append(out, finding.Finding{
+				Check: "encryption", Target: label, Status: finding.ERROR,
+				Message: fmt.Sprintf("%d/%d segments did not decrypt with the key supplied", failed, total),
+				Value:   finding.Num(float64(failed)), Unit: "segments",
+				Hint: "this is a finding about the key, not the media: check that it is the right one for this stream, and that EXT-X-KEY's IV is being honoured",
+			})
+			continue
+		}
+
+		switch {
+		case decrypted == total && declared == total:
+			out = append(out, finding.Finding{
+				Check: "encryption", Target: label, Status: finding.OK,
+				Message: fmt.Sprintf("all %d sampled segments declare a key and decrypted with the one supplied", total),
+			})
+		case decrypted > 0:
+			out = append(out, finding.Finding{
+				Check: "encryption", Target: label, Status: finding.OK,
+				Message: fmt.Sprintf("%d/%d sampled segments decrypted with the key supplied", decrypted, total),
+			})
+		}
+		if decrypted > 0 {
+			continue
+		}
+
 		switch {
 		case declared == 0 && observed > 0:
 			out = append(out, finding.Finding{

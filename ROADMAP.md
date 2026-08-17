@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**94 items · 47 shipped · 47 open · 13 milestones.**
+**96 items · 48 shipped · 48 open · 13 milestones.**
 
 ## At a glance
 
@@ -15,7 +15,7 @@
 | **M1** — Core: read the segments | `v0.1.0` | shipped | `##########` 100% | 0 | 6 |
 | **M2** — The checks | `v0.1.0` | shipped | `##########` 100% | 0 | 8 |
 | **M3** — Codec and timing depth | `v0.2.0` | shipped | `##########` 100% | 0 | 9 |
-| **M4** — Everything that is not the video track | `v0.3.0` | **now** | `#####.....` 55% | 5 | 6 |
+| **M4** — Everything that is not the video track | `v0.3.0` | **now** | `#####.....` 54% | 6 | 7 |
 | **M5** — Live and delivery | `v0.4.0` | next | `..........` 0% | 6 | 0 |
 | **M9** — Wallclock and DVR correctness | `v0.4.0` | next | `..........` 0% | 5 | 0 |
 | **M6** — Integration | `v0.5.0` | later | `..........` 0% | 6 | 0 |
@@ -35,9 +35,9 @@ The open items with the highest priority in the milestones that are in flight.
 - **SC-51** — `EXT-X-PROGRAM-DATE-TIME` against the media · `high` · size `M` · check (M9, target `v0.4.0`)
 - **SC-52** — DASH `availabilityStartTime` and `UTCTiming` · `high` · size `M` · check,parser (M9, target `v0.4.0`)
 - **SC-53** — The DVR window is real · `high` · size `M` · check,delivery (M9, target `v0.4.0`)
-- **SC-22** — Encrypted-segment support with a key · `med` · size `M` · cli,parser (M4, target `v0.3.0`)
 - **SC-23** — Cache behaviour · `med` · size `M` · delivery,check (M5, target `v0.4.0`)
 - **SC-24** — Multi-POP comparison · `med` · size `L` · delivery,cli (M5, target `v0.4.0`)
+- **SC-40** — Multi-period DASH · `med` · size `L` · check,parser (M5, target `v0.4.0`)
 
 ## Milestones
 
@@ -87,19 +87,21 @@ Target `v0.2.0` · shipped · 0 open · 9 shipped · `##########` 100%
 
 ### M4 — Everything that is not the video track
 
-Target `v0.3.0` · **now** · 5 open · 6 shipped · `#####.....` 55%
+Target `v0.3.0` · **now** · 6 open · 7 shipped · `#####.....` 54%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
-| **SC-22** — Encrypted-segment support with a key | med | M | cli,parser | open |
 | **SC-91** — Attribute a CMAF caption track's field | med | M | parser | open |
 | **SC-92** — Splice descriptors and `EXT-X-DATERANGE` payloads | med | M | parser | open |
 | **SC-93** — Cues inside an fMP4 subtitle track | med | M | parser | open |
+| **SC-95** — SAMPLE-AES and CENC | med | L | parser | open |
+| **SC-96** — Verify against a real encrypted stream | med | S | tests | open |
 | **SC-21** — MP3 packed audio | low | S | parser | open |
 | **SC-18** — Audio sanity | high | M | check | shipped `0.3.0` |
 | **SC-20** — SCTE-35 / `EXT-X-DATERANGE` | high | L | check,parser | shipped `0.3.0` |
 | **SC-37** — CEA-608/708 captions | high | L | check,parser | shipped `0.3.0` |
 | **SC-89** — DASH kind from the Representation | high | S | parser | shipped `0.3.0` |
+| **SC-22** — Encrypted-segment support with a key | med | M | cli,parser | shipped `0.3.0` |
 | **SC-38** — Subtitle renditions | med | L | check,parser | shipped `0.3.0` |
 | **SC-90** — Audio codec against `CODECS` | med | S | check | shipped `0.3.0` |
 
@@ -231,12 +233,12 @@ Target `ongoing` · ongoing · 3 open · 13 shipped · `########..` 81%
 | Label | Items | Open |
 |---|---|---|
 | `check` | 45 | 29 |
-| `parser` | 43 | 25 |
-| `cli` | 8 | 7 |
+| `parser` | 44 | 25 |
+| `cli` | 8 | 6 |
 | `delivery` | 5 | 4 |
 | `integration` | 4 | 4 |
 | `output` | 4 | 3 |
+| `tests` | 11 | 2 |
 | `docs` | 5 | 1 |
 | `project` | 5 | 1 |
 | `release` | 9 | 1 |
-| `tests` | 10 | 1 |

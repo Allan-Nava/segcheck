@@ -330,10 +330,25 @@ stream that break in production and that no manifest-only checker can see.
 - [ ] **SC-21 — MP3 packed audio**: frame-size tables so the duration can be
   measured, instead of recognising the container and stopping.
   <!-- sc: prio=low size=S labels=parser -->
-- [ ] **SC-22 — Encrypted-segment support with a key**: `--key` / `--key-file`
-  for AES-128 so the content checks can run on protected streams. The key never
-  goes on the command line as a literal.
-  <!-- sc: prio=med size=M labels=cli,parser -->
+- [x] **SC-22 — Encrypted-segment support with a key**: `--key-file` / `--key-env`
+  for AES-128 so the content checks can run on protected streams, and `--fetch-keys`
+  to take the key from the URI `EXT-X-KEY` names. The key is given by name, never as
+  a literal. The IV defaults to the media sequence number as the specification
+  requires, which is the difference between reading a stream that omits the attribute
+  and decrypting all of it to noise.
+  <!-- sc: prio=med size=M labels=cli,parser ver=0.3.0 -->
+- [ ] **SC-95 — SAMPLE-AES and CENC**: `METHOD=SAMPLE-AES` encrypts parts of the
+  media rather than the whole segment, and MPEG-CENC (`cenc`/`cbcs`) does the same in
+  fMP4 through `senc`/`saiz`/`saio`. Both leave the container readable and the samples
+  not, so the timing checks already work and the bitstream ones do not — a different
+  shape of partial blindness from AES-128, and worth reporting as such.
+  <!-- sc: prio=med size=L labels=parser -->
+- [ ] **SC-96 — Verify against a real encrypted stream**: SC-22 is asserted against a
+  synthetic origin whose plaintext is known by construction, which is the only way to
+  tell a working decrypter from one producing plausible noise — but no public AES-128
+  test stream was reachable to confirm it end to end, and every other reader in this
+  project had a design error that only a real stream found.
+  <!-- sc: prio=med size=S labels=tests -->
 
 ## M5 — Live and delivery <!-- ms: target=v0.4.0 phase=next -->
 

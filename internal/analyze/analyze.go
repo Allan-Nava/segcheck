@@ -31,6 +31,16 @@ type Options struct {
 	MaxRenditions int
 	// MaxAudio caps how many audio renditions are inspected.
 	MaxAudio int
+	// Key is the AES-128 content key for a full-segment-encrypted stream. It never
+	// arrives on the command line: the CLI reads it from a file or from the
+	// environment, because a key in argv lands in shell history and in every CI log
+	// that echoes its own invocation.
+	Key []byte
+	// FetchKeys allows the key to be fetched from the URI EXT-X-KEY states. It is
+	// off by default and deliberately so: pointing a checker at a key server is a
+	// request to a system that logs, rate-limits and sometimes bills, and it is not
+	// something to do because a manifest mentioned a URL.
+	FetchKeys bool
 	// MaxText caps how many subtitle renditions are inspected. They are cheap —
 	// a subtitle segment is kilobytes where a video one is megabytes — but a
 	// presentation can carry forty languages, and sampling all of them by default
@@ -88,6 +98,11 @@ type segmentData struct {
 	fetchErr error
 	parseErr error
 	parsed   bool
+	// decryptErr is set when a key was available but did not decrypt this segment.
+	// It is kept apart from parseErr because the two point at different things: a
+	// parse failure is about the stream, a decrypt failure is about the key.
+	decryptErr error
+	decrypted  bool
 }
 
 // renditionData is one rendition and its sampled segments.
@@ -398,6 +413,11 @@ func sampleAll(ctx context.Context, c *fetch.Client, rends []*renditionData, opt
 	// which surfaced as a rendition that appeared to carry no video at all.
 	inits := resolveInits(ctx, c, rends, conc)
 
+	// Content keys are resolved before the fan-out for the same reason: a key
+	// fetched from inside it would be fetched once per segment, and a failure
+	// cached as "no key" would silently leave later segments undecrypted.
+	keys := resolveKeys(ctx, c, rends, opts)
+
 	sem := make(chan struct{}, conc)
 	var wg sync.WaitGroup
 	for _, rd := range rends {
@@ -419,7 +439,17 @@ func sampleAll(ctx context.Context, c *fetch.Client, rends []*renditionData, opt
 					sd.fetchErr = err
 					return
 				}
-				info, perr := media.Parse(resp.Body, inits[initFor(rd, *sd)].body)
+				body := resp.Body
+				if key, ok := keys[keyFor(*sd)]; ok {
+					plain, derr := media.DecryptAES128(body, key, segmentIV(*sd))
+					if derr != nil {
+						sd.decryptErr = derr
+						return
+					}
+					body = plain
+					sd.decrypted = true
+				}
+				info, perr := media.Parse(body, inits[initFor(rd, *sd)].body)
 				if perr != nil {
 					sd.parseErr = perr
 					return
@@ -529,4 +559,79 @@ func indexOfAny(s, chars string) int {
 		}
 	}
 	return -1
+}
+
+// keyRef identifies a content key: the URI it comes from, or the empty string for
+// the one supplied on the command line, which applies to every segment.
+type keyRef struct {
+	uri string
+}
+
+// keyFor is the key a segment needs, or a zero keyRef when it needs none.
+func keyFor(sd segmentData) keyRef {
+	if !isFullSegmentEncryption(sd.seg.KeyMethod) {
+		return keyRef{}
+	}
+	return keyRef{uri: sd.seg.KeyURI}
+}
+
+// segmentIV is the initialisation vector for a segment: the one EXT-X-KEY states,
+// or the media sequence number as a 128-bit big-endian value when it states none.
+// That default is a specific instruction in the specification, not a missing value
+// to fill with zeroes — a stream that omits the attribute decrypts to noise under a
+// zero IV, and noise is indistinguishable from a wrong key.
+func segmentIV(sd segmentData) []byte {
+	if len(sd.seg.KeyIV) == media.AESBlockSize {
+		return sd.seg.KeyIV
+	}
+	return media.SequenceIV(sd.seg.Sequence)
+}
+
+// resolveKeys works out which content key decrypts which segment, once for the whole
+// run.
+//
+// A key supplied by the caller applies to every encrypted segment. Otherwise the URI
+// EXT-X-KEY states is fetched, but only when the caller asked for that: pointing a
+// checker at a key server is a request to a system that logs, rate-limits and
+// sometimes bills, and a manifest mentioning a URL is not a reason to do it.
+func resolveKeys(ctx context.Context, c *fetch.Client, rends []*renditionData, opts Options) map[keyRef][]byte {
+	out := map[keyRef][]byte{}
+
+	// Which keys are actually needed, so nothing is fetched for a stream that turns
+	// out not to be encrypted.
+	needed := map[keyRef]bool{}
+	for _, rd := range rends {
+		for _, sd := range rd.segs {
+			if ref := keyFor(sd); ref != (keyRef{}) || isFullSegmentEncryption(sd.seg.KeyMethod) {
+				needed[ref] = true
+			}
+		}
+	}
+	if len(needed) == 0 {
+		return out
+	}
+
+	if len(opts.Key) == 16 {
+		for ref := range needed {
+			out[ref] = opts.Key
+		}
+		return out
+	}
+	if !opts.FetchKeys {
+		return out
+	}
+	for ref := range needed {
+		if ref.uri == "" {
+			continue
+		}
+		resp, err := c.Get(ctx, ref.uri, "")
+		if err != nil || len(resp.Body) != 16 {
+			// A key that will not fetch, or is not sixteen bytes, is not a key. The
+			// encryption check reports the segments as unreadable, which is the
+			// truth: segcheck could not look.
+			continue
+		}
+		out[ref] = resp.Body
+	}
+	return out
 }

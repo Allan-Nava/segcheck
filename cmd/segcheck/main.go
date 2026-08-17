@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"io"
@@ -46,6 +47,17 @@ HTTP:
   --header 'K: V'     extra request header, repeatable
   --max-bytes N       cap on a single response body (default 67108864)
   --insecure          skip TLS verification
+
+Encrypted streams (AES-128):
+  --key-file PATH     read the 16-byte content key from a file (raw or hex)
+  --key-env NAME      read it from an environment variable, as hex
+  --fetch-keys        fetch the key from the URI EXT-X-KEY states
+
+The key is never a flag value: one in argv lands in shell history, in the
+process list and in every CI log that echoes its own invocation, and unlike a
+password it cannot be rotated without re-encrypting the content. --fetch-keys
+is off by default because pointing a checker at a key server is a request to a
+system that logs, rate-limits and sometimes bills.
 
 Output:
   --output FORMAT     text|json|markdown (default text)
@@ -120,6 +132,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 	timeout := fs.Duration("timeout", 15*time.Second, "")
 	maxBytes := fs.Int64("max-bytes", fetch.DefaultMaxBytes, "")
 	insecure := fs.Bool("insecure", false, "")
+	keyFile := fs.String("key-file", "", "")
+	keyEnv := fs.String("key-env", "", "")
+	fs.BoolVar(&opts.FetchKeys, "fetch-keys", false, "")
 	format := fs.String("output", "text", "")
 	noColor := fs.Bool("no-color", false, "")
 	exitOn := fs.String("exit-on", "", "")
@@ -151,6 +166,16 @@ func run(args []string, stdout, stderr io.Writer) int {
 	// Ctrl-C cancels in-flight downloads instead of leaving them to the timeout.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// The content key never arrives as a flag value. A key in argv lands in shell
+	// history, in `ps` output, and in every CI log that echoes its own invocation —
+	// and unlike a password it cannot be rotated without re-encrypting the content.
+	key, err := resolveKeyMaterial(*keyFile, *keyEnv)
+	if err != nil {
+		fmt.Fprintf(stderr, "segcheck: %v\n", err)
+		return 2
+	}
+	opts.Key = key
 
 	fetch.Version = version
 	client := fetch.New(fetch.Options{
@@ -234,4 +259,51 @@ func useColor(noColor bool) bool {
 		return false
 	}
 	return fi.Mode()&os.ModeCharDevice != 0
+}
+
+// resolveKeyMaterial reads the AES-128 content key from a file or from the
+// environment. Both are given by name rather than by value, which is the whole
+// point: a key on the command line is recorded everywhere the command is.
+//
+// A file may hold the sixteen raw bytes or the same thing as hex, because both are
+// what key servers hand out and asking a caller to convert is asking them to leave
+// the key in a shell pipeline.
+func resolveKeyMaterial(file, env string) ([]byte, error) {
+	switch {
+	case file != "" && env != "":
+		return nil, fmt.Errorf("--key-file and --key-env are alternatives; give one")
+	case file != "":
+		b, err := os.ReadFile(file)
+		if err != nil {
+			return nil, fmt.Errorf("reading --key-file: %w", err)
+		}
+		return parseKeyMaterial(b, "--key-file "+file)
+	case env != "":
+		v := os.Getenv(env)
+		if v == "" {
+			return nil, fmt.Errorf("--key-env %s is empty or unset", env)
+		}
+		return parseKeyMaterial([]byte(v), "--key-env "+env)
+	}
+	return nil, nil
+}
+
+// parseKeyMaterial accepts sixteen raw bytes or their hexadecimal spelling, with or
+// without an 0x prefix and with trailing whitespace a file is likely to carry.
+//
+// The error names the flag, never the value: a message that echoed the key would put
+// it in the very logs the flags exist to keep it out of.
+func parseKeyMaterial(b []byte, source string) ([]byte, error) {
+	if len(b) == 16 {
+		return b, nil
+	}
+	t := strings.TrimSpace(string(b))
+	t = strings.TrimPrefix(strings.TrimPrefix(t, "0x"), "0X")
+	if len(t) == 32 {
+		out, err := hex.DecodeString(t)
+		if err == nil {
+			return out, nil
+		}
+	}
+	return nil, fmt.Errorf("%s is not a 16-byte AES-128 key: expected 16 raw bytes or 32 hex digits", source)
 }

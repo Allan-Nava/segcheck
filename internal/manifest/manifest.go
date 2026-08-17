@@ -133,6 +133,15 @@ type Segment struct {
 	// KeyMethod and KeyURI are the encryption in force (EXT-X-KEY / ContentProtection).
 	KeyMethod string `json:"key_method,omitempty"`
 	KeyURI    string `json:"key_uri,omitempty"`
+	// KeyIV is the initialisation vector EXT-X-KEY states, when it states one.
+	// When it does not, the IV is the segment's media sequence number as a 128-bit
+	// big-endian value — so the absence of this field is a specific instruction,
+	// not a missing value to default to zeroes.
+	KeyIV []byte `json:"key_iv,omitempty"`
+	// KeyFormat is EXT-X-KEYFORMAT. Its absence means "identity": the key URI
+	// resolves to sixteen raw bytes. Anything else is a DRM system whose key this
+	// tool cannot fetch.
+	KeyFormat string `json:"key_format,omitempty"`
 }
 
 // ByteRange is an HLS EXT-X-BYTERANGE.

@@ -32,6 +32,8 @@ func ParseHLS(body []byte, baseURL string) (Playlist, error) {
 		currentMapRange *ByteRange
 		keyMethod       string
 		keyURI          string
+		keyFormat       string
+		keyIV           []byte
 		mediaSeq        int
 		seqSet          bool
 		// lastRangeEnd is where the previous byte-range segment ended inside
@@ -190,9 +192,16 @@ func ParseHLS(body []byte, baseURL string) (Playlist, error) {
 		case strings.HasPrefix(line, "#EXT-X-KEY:"):
 			attrs := parseAttrs(strings.TrimPrefix(line, "#EXT-X-KEY:"))
 			keyMethod = strings.ToUpper(attrs["METHOD"])
-			keyURI = attrs["URI"]
+			// Resolved against the playlist, like every other URI here: stored raw it
+			// is unfetchable from anywhere but the playlist's own directory.
+			keyURI = ""
+			if u := attrs["URI"]; u != "" {
+				keyURI = Resolve(base, u)
+			}
+			keyFormat = attrs["KEYFORMAT"]
+			keyIV = parseHexIV(attrs["IV"])
 			if keyMethod == "NONE" {
-				keyMethod, keyURI = "", ""
+				keyMethod, keyURI, keyFormat, keyIV = "", "", "", nil
 			}
 
 		case strings.HasPrefix(line, "#EXT-X-BYTERANGE:"):
@@ -246,6 +255,8 @@ func ParseHLS(body []byte, baseURL string) (Playlist, error) {
 					HasPDT:        havePendingPDT,
 					KeyMethod:     keyMethod,
 					KeyURI:        keyURI,
+					KeyFormat:     keyFormat,
+					KeyIV:         keyIV,
 				}
 				if pendingRange != nil {
 					br := pendingRange.resolve(uri, lastRangeURI, lastRangeEnd)
@@ -418,4 +429,42 @@ func parseHLSChannels(v string) int {
 		return 0
 	}
 	return n
+}
+
+// parseHexIV reads the EXT-X-KEY IV attribute, a 0x-prefixed hexadecimal number of
+// exactly sixteen bytes. Anything else is not an IV, and returning a short or
+// mis-sized one would decrypt every segment to noise.
+func parseHexIV(v string) []byte {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return nil
+	}
+	if len(v) > 2 && (v[:2] == "0x" || v[:2] == "0X") {
+		v = v[2:]
+	}
+	if len(v) != 32 {
+		return nil
+	}
+	out := make([]byte, 16)
+	for i := 0; i < 16; i++ {
+		hi, ok1 := hexDigit(v[i*2])
+		lo, ok2 := hexDigit(v[i*2+1])
+		if !ok1 || !ok2 {
+			return nil
+		}
+		out[i] = hi<<4 | lo
+	}
+	return out
+}
+
+func hexDigit(c byte) (byte, bool) {
+	switch {
+	case c >= '0' && c <= '9':
+		return c - '0', true
+	case c >= 'a' && c <= 'f':
+		return c - 'a' + 10, true
+	case c >= 'A' && c <= 'F':
+		return c - 'A' + 10, true
+	}
+	return 0, false
 }

@@ -86,6 +86,34 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   readable segment is empty is a WARN with the count — a gap in the dialogue is
   legitimate, so it is not proof. Subtitle renditions are sampled with a new
   `--subtitles N` (default 1); they were previously not sampled at all.
+- **AES-128 decryption, so the content checks can run on a protected stream**
+  (SC-22). Every check in this tool reads the media, so on an encrypted stream every
+  one of them is blind and the honest report was "segcheck could not look". Given the
+  key it can look, and the point is that the *content* checks then run — not that
+  decryption happened.
+
+  The key is given by name, never as a value: `--key-file PATH` or `--key-env NAME`,
+  accepting sixteen raw bytes or their hex spelling. A key in `argv` lands in shell
+  history, in the process list and in every CI log that echoes its own invocation,
+  and unlike a password it cannot be rotated without re-encrypting the content. The
+  error for an unreadable key names the flag and never quotes what it read.
+  `--fetch-keys` takes the key from the URI `EXT-X-KEY` names, and is off by default
+  because pointing a checker at a key server is a request to a system that logs,
+  rate-limits and sometimes bills.
+
+  The initialisation vector is the trap. `EXT-X-KEY` need not state one, and when it
+  does not the IV is the segment's media sequence number as a 128-bit big-endian
+  value — so a decrypter defaulting to zeroes produces noise on the large share of
+  streams that omit the attribute, and noise is indistinguishable from a wrong key.
+  A key that does not decrypt is reported as an ERROR about the *key*, not as
+  unreadable media: it points at the right thing instead of sending an operator
+  hunting a defect in a healthy stream.
+
+  Verified against a synthetic origin whose plaintext is known by construction —
+  which is the only way to tell a working decrypter from one producing plausible
+  noise — but *not* against a real encrypted stream, because no public AES-128 test
+  stream was reachable. SC-96 tracks that, and it matters: every other reader in this
+  project had a design error that only a real stream found.
 - **Audio format read from where each container actually states it** (SC-18): the
   `AudioSampleEntry` in fMP4, the ADTS header in MPEG-TS and in packed audio, and
   the `dac3`/`dec3` box for AC-3 and E-AC-3. Muxed audio inside a video variant is
@@ -127,6 +155,9 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   on the whole of it. `dashKind` now falls back to the first Representation's
   `mimeType`, `codecs` and frame size, and the stream joins the smoke suite as a
   fifth baseline so the silence cannot come back unnoticed.
+- **`EXT-X-KEY`'s URI was stored unresolved**, so it was unfetchable from anywhere
+  but the playlist's own directory. Every other URI in the parser was already
+  resolved against the playlist.
 - **`continuity`, `duration` and `keyframe` spoke nonsense about subtitles.** A
   subtitle track's timestamps are the span its cues cover, not the extent of the
   segment: cues do not fill a segment, and one crossing a boundary appears in both.

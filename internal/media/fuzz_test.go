@@ -1,6 +1,7 @@
 package media
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/Allan-Nava/segcheck/internal/media/mediatest"
@@ -223,5 +224,37 @@ func FuzzParseTTML(f *testing.F) {
 			return
 		}
 		sane(t, info)
+	})
+}
+
+// Decryption takes bytes off the network and hands the result to a container reader,
+// so a padding check that ran off the end would turn a hostile segment into a panic
+// rather than a finding. The key and the IV are fuzzed too: both arrive from a file,
+// an environment variable or a key server, none of which this tool controls.
+func FuzzDecryptAES128(f *testing.F) {
+	key := bytes.Repeat([]byte{0x2A}, 16)
+	iv := bytes.Repeat([]byte{0x11}, 16)
+	f.Add(mediatest.EncryptAES128([]byte("hello"), key, iv), key, iv)
+	f.Add([]byte{}, key, iv)
+	f.Add(make([]byte, 16), key, iv)
+	f.Add(make([]byte, 16), []byte{}, iv)
+	f.Add(make([]byte, 16), key, []byte{})
+	f.Add(bytes.Repeat([]byte{0xFF}, 32), key, iv)
+
+	f.Fuzz(func(t *testing.T, data, key, iv []byte) {
+		plain, err := DecryptAES128(data, key, iv)
+		if err != nil {
+			return
+		}
+		// A successful decrypt must return strictly less than it was given: the
+		// padding is always at least one byte, and never more than a block.
+		if len(plain) >= len(data) || len(data)-len(plain) > AESBlockSize {
+			t.Fatalf("decrypted %d bytes into %d", len(data), len(plain))
+		}
+		// And whatever came out is safe to hand to the readers, which is the whole
+		// point of doing this at all.
+		if info, err := Parse(plain, nil); err == nil {
+			sane(t, info)
+		}
 	})
 }
