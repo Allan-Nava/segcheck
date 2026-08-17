@@ -148,7 +148,7 @@ environment.
 | `encryption` | Declared protection against what the segments carry, and whether a supplied key actually decrypts them | BAD |
 | `ladder` | Duplicate rungs, inverted rungs, dangling `AUDIO` groups, missing `CODECS` | BAD |
 
-Containers understood: **MPEG-TS** (PAT/PMT, PES timestamps, continuity counters, H.264 and HEVC/H.265 parameter sets for the real resolution), **fragmented MP4 / CMAF** (`moov` for timescale, codec and coded size; `mvex`/`trex` defaults; `tfdt`/`trun` for the timeline; `sidx` for single-file DASH, addressed by byte range), **packed audio** (ADTS AAC with the ID3 `transportStreamTimestamp` that gives audio-only renditions a timeline), and **WebVTT and TTML/IMSC** subtitle segments. Audio format is read where each container actually states it: the `AudioSampleEntry` in fMP4, the `dac3`/`dec3` box for AC-3 and E-AC-3 (whose `channelcount` field is not to be trusted), and the ADTS header everywhere else.
+Containers understood: **MPEG-TS** (PAT/PMT, PES timestamps, continuity counters, H.264 and HEVC/H.265 parameter sets for the real resolution), **fragmented MP4 / CMAF** (`moov` for timescale, codec and coded size; `mvex`/`trex` defaults; `tfdt`/`trun` for the timeline; `sidx` for single-file DASH, addressed by byte range), **packed audio** (ADTS AAC and MPEG-1/2 audio, with the ID3 `transportStreamTimestamp` that gives audio-only renditions a timeline), and **WebVTT and TTML/IMSC** subtitle segments. Audio format is read where each container actually states it: the `AudioSampleEntry` in fMP4, the `dac3`/`dec3` box for AC-3 and E-AC-3 (whose `channelcount` field is not to be trusted), and the ADTS header everywhere else.
 
 ## When *not* to use it
 

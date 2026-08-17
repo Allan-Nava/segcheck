@@ -114,6 +114,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   noise — but *not* against a real encrypted stream, because no public AES-128 test
   stream was reachable. SC-96 tracks that, and it matters: every other reader in this
   project had a design error that only a real stream found.
+- **Packed MP3 renditions are measured, not skipped** (SC-21). Recognising the format
+  and stopping was honest, but it left the duration check with nothing to compare
+  against, so a rendition declaring six seconds a segment and shipping four went
+  unreported. A frame's length follows from its version, layer, bitrate index and
+  sampling rate together — and MPEG-2 Layer III halves the samples per frame, which a
+  reader that missed it would report at twice the real duration. A header stating a
+  reserved or free-format field is refused rather than guessed at: a length computed
+  from one walks into the next frame.
 - **Audio format read from where each container actually states it** (SC-18): the
   `AudioSampleEntry` in fMP4, the ADTS header in MPEG-TS and in packed audio, and
   the `dac3`/`dec3` box for AC-3 and E-AC-3. Muxed audio inside a video variant is

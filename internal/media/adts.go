@@ -104,9 +104,33 @@ func ParsePackedAudio(data []byte) (SegmentInfo, error) {
 		return info, nil
 
 	case isMPEGAudio(body):
-		// MP3 frame sizes need the full bitrate tables; recognising the format
-		// is enough to keep it out of the defect list.
-		return info, fmt.Errorf("%w: MPEG audio (MP3) packed audio", ErrUnsupportedContainer)
+		frames, samples, rate, channels, ok := scanMP3(body)
+		if !ok {
+			// A frame carrying a field this reader will not guess at — a free-format
+			// or reserved bitrate, a reserved sampling rate. Recognising the format
+			// and refusing to measure it beats a duration of zero, which the duration
+			// check would report as a stream eight seconds short.
+			return info, fmt.Errorf("%w: MPEG audio frame states no measurable length", ErrUnsupportedContainer)
+		}
+		track := Track{
+			ID:         1,
+			Kind:       Audio,
+			Codec:      "mp3",
+			Timescale:  TSTimescale, // report on the 90kHz clock, like MPEG-TS
+			Samples:    frames,
+			SampleRate: rate,
+			Channels:   channels,
+			HasPTS:     havePTS,
+			MinPTS:     startPTS,
+		}
+		track.StatedDur = int64(samples) * int64(TSTimescale) / int64(rate)
+		if frames > 0 {
+			track.FrameDur = track.StatedDur / int64(frames)
+		}
+		track.MaxPTS = startPTS + track.StatedDur - track.FrameDur
+		info.Tracks = append(info.Tracks, track)
+		info.Channels = channels
+		return info, nil
 
 	case len(body) == 0:
 		return info, fmt.Errorf("packed audio segment is an ID3 tag with no audio frames")

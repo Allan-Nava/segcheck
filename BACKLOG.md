@@ -327,9 +327,12 @@ stream that break in production and that no manifest-only checker can see.
   them — `trun` offsets against the `mdat`, as SC-91 needs for captions — would make
   a CMAF subtitle rendition as checkable as a text one.
   <!-- sc: prio=med size=M labels=parser -->
-- [ ] **SC-21 — MP3 packed audio**: frame-size tables so the duration can be
-  measured, instead of recognising the container and stopping.
-  <!-- sc: prio=low size=S labels=parser -->
+- [x] **SC-21 — MP3 packed audio**: the frame-size tables for every version and layer,
+  so a packed MP3 rendition's duration can be measured instead of the container being
+  recognised and skipped. A header stating a reserved or free-format field is refused
+  rather than guessed at: a length computed from one walks into the next frame and
+  counts a plausible wrong number of them.
+  <!-- sc: prio=low size=S labels=parser ver=0.3.0 -->
 - [x] **SC-22 — Encrypted-segment support with a key**: `--key-file` / `--key-env`
   for AES-128 so the content checks can run on protected streams, and `--fetch-keys`
   to take the key from the URI `EXT-X-KEY` names. The key is given by name, never as
