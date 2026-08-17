@@ -107,8 +107,13 @@ jobs:
           go-version: "1.25"
       - name: Fuzz the parsers
         run: |
-          for target in FuzzParseTS FuzzParseMP4 FuzzParseSIDX \
-                        FuzzParsePackedAudio FuzzParseSPS FuzzParse; do
+          # The targets are discovered rather than listed: a hardcoded list means a
+          # new parser is never fuzzed and nothing says so, which is the same
+          # silent-coverage-hole this project treats as worse than a failure.
+          targets=$(grep -ho '^func Fuzz[A-Za-z0-9_]*' internal/media/*_test.go | sed 's/^func //' | sort)
+          if [ -z "$targets" ]; then echo "no fuzz targets found"; exit 1; fi
+          echo "fuzzing: $(echo $targets)"
+          for target in $targets; do
             echo "::group::$target"
             go test ./internal/media/ -run "^$target$" -fuzz "^$target$" -fuzztime=60s
             echo "::endgroup::"

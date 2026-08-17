@@ -31,6 +31,11 @@ type Options struct {
 	MaxRenditions int
 	// MaxAudio caps how many audio renditions are inspected.
 	MaxAudio int
+	// MaxText caps how many subtitle renditions are inspected. They are cheap —
+	// a subtitle segment is kilobytes where a video one is megabytes — but a
+	// presentation can carry forty languages, and sampling all of them by default
+	// would multiply the request count for something most runs do not need.
+	MaxText int
 	// From is where in the playlist to sample: FromEdge, FromStart or FromAuto.
 	From string
 	// Concurrency bounds simultaneous segment downloads.
@@ -59,6 +64,7 @@ func Defaults() Options {
 		Segments:              6,
 		MaxRenditions:         0,
 		MaxAudio:              1,
+		MaxText:               1,
 		From:                  FromAuto,
 		Concurrency:           6,
 		DurationTolerancePct:  5,
@@ -152,6 +158,7 @@ func Run(ctx context.Context, c *fetch.Client, rawurl string, opts Options) find
 	res.Findings = append(res.Findings, checkAudio(rends)...)
 	res.Findings = append(res.Findings, checkCaptions(rends)...)
 	res.Findings = append(res.Findings, checkAdBreak(rends, opts)...)
+	res.Findings = append(res.Findings, checkSubtitles(rends, opts)...)
 	res.Findings = append(res.Findings, checkTracks(rends)...)
 	res.Findings = append(res.Findings, checkTimeline(rends, opts)...)
 	res.Findings = append(res.Findings, checkEncryption(rends)...)
@@ -224,13 +231,15 @@ func selectRenditions(ctx context.Context, c *fetch.Client, pl manifest.Playlist
 
 	video := pick(byKind(pl.Renditions, manifest.Video), opts.MaxRenditions)
 	audio := pick(byKind(pl.Renditions, manifest.Audio), opts.MaxAudio)
-	chosen := append(append([]manifest.Rendition{}, video...), audio...)
+	text := pick(byKind(pl.Renditions, manifest.Text), opts.MaxText)
+	chosen := append(append(append([]manifest.Rendition{}, video...), audio...), text...)
 
 	if skipped := len(pl.Renditions) - len(chosen); skipped > 0 {
 		findings = append(findings, finding.Finding{
 			Check: "manifest", Target: shortTarget(pl.URL), Status: finding.OK,
-			Message: fmt.Sprintf("sampling %d of %d renditions (%d video, %d audio)", len(chosen), len(pl.Renditions), len(video), len(audio)),
-			Hint:    "raise --renditions / --audio to cover the rest",
+			Message: fmt.Sprintf("sampling %d of %d renditions (%d video, %d audio, %d subtitle)",
+				len(chosen), len(pl.Renditions), len(video), len(audio), len(text)),
+			Hint: "raise --renditions / --audio / --subtitles to cover the rest",
 		})
 	}
 

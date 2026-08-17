@@ -315,10 +315,18 @@ stream that break in production and that no manifest-only checker can see.
   samples — `trun` data offsets against the `mdat` — and reading their `cdat`/`cdt2`
   boxes would make the comparison as exact as the SEI path already is.
   <!-- sc: prio=med size=M labels=parser -->
-- [ ] **SC-38 — Subtitle renditions**: fetch WebVTT and TTML/IMSC segments,
-  check they parse, that cue times are inside the segment window, and that the
-  WebVTT `X-TIMESTAMP-MAP` lines up with the media timeline instead of drifting
-  away from it. <!-- sc: prio=med size=L labels=check,parser -->
+- [x] **SC-38 — Subtitle renditions**: WebVTT and TTML/IMSC segments are fetched and
+  parsed, and their cue times compared against the window the manifest put them in —
+  overlap rather than containment, because a cue crossing a boundary appears in both
+  segments. The comparison is anchored to the media timeline the video states, not to
+  accumulated `EXTINF`, which is the difference between reading Apple's advanced
+  example correctly and reporting all of it ten seconds adrift.
+  <!-- sc: prio=med size=L labels=check,parser ver=0.3.0 -->
+- [ ] **SC-93 — Cues inside an fMP4 subtitle track**: a `stpp` or `wvtt` track states
+  its timing in the wrapper, and the cues themselves are in the samples. Locating
+  them — `trun` offsets against the `mdat`, as SC-91 needs for captions — would make
+  a CMAF subtitle rendition as checkable as a text one.
+  <!-- sc: prio=med size=M labels=parser -->
 - [ ] **SC-21 — MP3 packed audio**: frame-size tables so the duration can be
   measured, instead of recognising the container and stopping.
   <!-- sc: prio=low size=S labels=parser -->

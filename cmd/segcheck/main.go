@@ -32,6 +32,7 @@ Sampling:
   --segments N        segments to sample per rendition (default 6)
   --renditions N      video renditions to inspect, 0 = all (default 0)
   --audio N           audio renditions to inspect (default 1)
+  --subtitles N       subtitle renditions to inspect (default 1)
   --from MODE         where to sample: auto|edge|start (default auto: edge for live, start for VOD)
 
 Thresholds:
@@ -110,6 +111,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	fs.IntVar(&opts.Segments, "segments", opts.Segments, "")
 	fs.IntVar(&opts.MaxRenditions, "renditions", opts.MaxRenditions, "")
 	fs.IntVar(&opts.MaxAudio, "audio", opts.MaxAudio, "")
+	fs.IntVar(&opts.MaxText, "subtitles", opts.MaxText, "")
 	fs.StringVar(&opts.From, "from", opts.From, "")
 	fs.Float64Var(&opts.DurationTolerancePct, "duration-tolerance", opts.DurationTolerancePct, "")
 	fs.Float64Var(&opts.GapToleranceMS, "gap-tolerance", opts.GapToleranceMS, "")

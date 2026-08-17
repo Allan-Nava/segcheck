@@ -181,6 +181,14 @@ func checkContinuity(rends []*renditionData, opts Options) []finding.Finding {
 		if rd.err != nil {
 			continue
 		}
+		// A subtitle rendition's timestamps are the span its cues cover, not the
+		// extent of the segment: cues do not fill a segment, and one continuing across
+		// a boundary appears in both. Reading them as a segment extent reports gaps
+		// and overlaps on correct media — six of them on Apple's own reference
+		// stream. The `subtitles` check reads them for what they are.
+		if rd.r.Kind == manifest.Text {
+			continue
+		}
 		label := rendLabel(rd)
 
 		// Transport-level packet loss, before any timeline reasoning.
@@ -273,6 +281,14 @@ func checkDuration(rends []*renditionData, opts Options) []finding.Finding {
 	var out []finding.Finding
 	for _, rd := range rends {
 		if rd.err != nil {
+			continue
+		}
+		// A subtitle rendition's timestamps are the span its cues cover, not the
+		// extent of the segment: cues do not fill a segment, and one continuing across
+		// a boundary appears in both. Reading them as a segment extent reports gaps
+		// and overlaps on correct media — six of them on Apple's own reference
+		// stream. The `subtitles` check reads them for what they are.
+		if rd.r.Kind == manifest.Text {
 			continue
 		}
 		label := rendLabel(rd)
@@ -595,9 +611,9 @@ func checkKeyframe(rends []*renditionData) []finding.Finding {
 		if rd.err != nil || rd.initErr != nil {
 			continue
 		}
-		// Audio is independently decodable frame by frame, so the question does
-		// not apply.
-		if rd.r.Kind == manifest.Audio {
+		// Audio is independently decodable frame by frame, and a subtitle segment
+		// has no pictures at all, so the question applies to neither.
+		if rd.r.Kind == manifest.Audio || rd.r.Kind == manifest.Text {
 			continue
 		}
 		segs := parsedSegs(rd)
@@ -802,6 +818,184 @@ func medianFloat(xs []float64) float64 {
 
 // humanFPS drops the decimals a whole rate does not need, so 25 reads as "25fps"
 // and 29.97 keeps the part that distinguishes it from 30.
+// checkSubtitles compares a subtitle rendition's cues against the segment they
+// arrived in.
+//
+// A subtitle rendition rarely fails by being malformed. It fails by being perfectly
+// valid and pointing somewhere else: the cues parse, the segments are the right
+// size, the manifest is impeccable, and the subtitles are hours away from the
+// picture because X-TIMESTAMP-MAP was written from the wrong clock. Nothing that
+// reads only the manifest can see that, because the manifest says nothing about
+// where the cues are.
+//
+// The test is overlap, not containment. A cue that continues across a segment
+// boundary appears in both segments and overhangs one of them at each end, so
+// demanding containment would flag correct media; demanding overlap catches real
+// drift and nothing else.
+func checkSubtitles(rends []*renditionData, opts Options) []finding.Finding {
+	var out []finding.Finding
+
+	// Where the media timeline begins. Accumulating EXTINF gives a position on the
+	// *playlist's* timeline, counted from zero; the cues are on the *media*
+	// timeline, which begins wherever the video's first timestamp is. Apple's
+	// advanced example starts its video ten seconds in, so comparing the two
+	// directly reports every one of its correct subtitle segments as ten seconds
+	// adrift. Without a video rendition sampled there is no origin, and the cues
+	// cannot be placed against anything.
+	origin, haveOrigin := mediaOrigin(rends)
+
+	for _, rd := range rends {
+		if rd.err != nil || rd.initErr != nil || rd.r.Kind != manifest.Text {
+			continue
+		}
+		segs := parsedSegs(rd)
+		if len(segs) == 0 {
+			continue
+		}
+		label := rendLabel(rd)
+
+		// Where the manifest says each segment sits, accumulated over *every*
+		// segment rather than the parsed ones: a segment that failed to parse still
+		// occupies its place on the timeline, and skipping it would shift every
+		// segment after it earlier and report the shift as cue drift.
+		starts := map[int]float64{}
+		at := 0.0
+		for _, sd := range rd.segs {
+			starts[sd.seg.Sequence] = at
+			at += sd.seg.Duration
+		}
+
+		var (
+			readable   int
+			cues       int
+			unmapped   int
+			wrapped    int
+			unanchored int
+			drifted    []string
+			declared   = len(rd.segs)
+		)
+		for _, sd := range segs {
+			t, ok := sd.info.Track(media.Text)
+			if !ok {
+				continue
+			}
+			readable++
+			cues += t.Samples
+
+			switch {
+			case sd.info.Container == media.ContainerMP4:
+				// The wrapper states the timing and the cues are inside the samples,
+				// which SC-93 would read. The fragment's own timeline is already
+				// checked by `timeline` and `continuity`.
+				wrapped++
+			case !t.HasPTS:
+				// A WebVTT segment whose cues could not be placed on the media
+				// timeline, which means it carried no X-TIMESTAMP-MAP. A segment with
+				// no cues needs no map and is not counted here — it has nothing that
+				// wanted placing.
+				if t.Samples > 0 {
+					unmapped++
+				}
+			case !haveOrigin:
+				// Nothing sampled states where the media timeline begins, so the cues
+				// have no frame of reference. Counting them is still worth something.
+				unanchored++
+			default:
+				// Where the manifest says this segment sits, against where its cues
+				// actually are.
+				segStart := origin + starts[sd.seg.Sequence]
+				segEnd := segStart + sd.seg.Duration
+				cueStart := float64(t.MinPTS) / float64(t.Timescale)
+				cueEnd := float64(t.MaxPTS) / float64(t.Timescale)
+				tol := opts.GapToleranceMS / 1000
+				if t.Samples > 0 && (cueEnd < segStart-tol || cueStart > segEnd+tol) {
+					drifted = append(drifted, fmt.Sprintf("segment %d covers %.3f–%.3fs but its cues are at %.3f–%.3fs",
+						sd.seg.Sequence, segStart, segEnd, cueStart, cueEnd))
+				}
+			}
+		}
+
+		if readable == 0 {
+			// Nothing in this rendition was a subtitle document. The container check
+			// has already said so segment by segment; repeating it here would be
+			// noise, and claiming the cues are missing would blame the stream for a
+			// segment nobody could read.
+			continue
+		}
+
+		switch {
+		case len(drifted) > 0:
+			out = append(out, finding.Finding{
+				Check: "subtitles", Target: label, Status: finding.BAD,
+				Message: fmt.Sprintf("cue timing does not overlap the segment it arrived in: %s", strings.Join(drifted, "; ")),
+				Value:   finding.Num(float64(len(drifted))), Unit: "segments",
+				Hint: "a subtitle rendition can be valid in itself and still be in the wrong place: check X-TIMESTAMP-MAP against the media timeline it is meant to anchor to",
+			})
+		case unmapped > 0:
+			out = append(out, finding.Finding{
+				Check: "subtitles", Target: label, Status: finding.WARN,
+				Message: fmt.Sprintf("%d/%d segments carry no X-TIMESTAMP-MAP, so their %d cues cannot be placed on the media timeline",
+					unmapped, readable, cues),
+				Hint: "without the map a player has nothing to anchor the cue clock to, and segcheck cannot tell a correctly aligned rendition from a drifting one",
+			})
+		case unanchored == readable:
+			out = append(out, finding.Finding{
+				Check: "subtitles", Target: label, Status: finding.OK,
+				Message: fmt.Sprintf("%d cues across %d segments, but no video rendition was sampled to place them against",
+					cues, readable),
+				Hint: "raise --renditions above 0 so the media timeline the cues are anchored to is known",
+			})
+		case cues == 0:
+			out = append(out, finding.Finding{
+				Check: "subtitles", Target: label, Status: finding.WARN,
+				Message: fmt.Sprintf("no cues in any of %d readable segments", readable),
+				Value:   finding.Num(0), Unit: "cues",
+				Hint: "a gap in the dialogue is legitimate, so this is not proof — but a rendition that offers a language and never says anything in it is the usual shape of a broken subtitle pipeline",
+			})
+		case wrapped == readable:
+			out = append(out, finding.Finding{
+				Check: "subtitles", Target: label, Status: finding.OK,
+				Message: fmt.Sprintf("%d fMP4-wrapped segments carrying %d samples; the cues themselves are inside them and not read",
+					readable, cues),
+			})
+		default:
+			msg := fmt.Sprintf("%d cues across %d segments, on the media timeline", cues, readable)
+			if readable < declared {
+				msg = fmt.Sprintf("%d cues across %d/%d readable segments, on the media timeline", cues, readable, declared)
+			}
+			out = append(out, finding.Finding{
+				Check: "subtitles", Target: label, Status: finding.OK,
+				Message: msg, Value: finding.Num(float64(cues)), Unit: "cues",
+			})
+		}
+	}
+	return out
+}
+
+// mediaOrigin is where the sampled media timeline begins, in seconds: the earliest
+// first timestamp across the video renditions that were sampled. A subtitle
+// rendition's cues are anchored to that clock, while accumulated EXTINF counts from
+// zero, so it is the offset between the two.
+func mediaOrigin(rends []*renditionData) (float64, bool) {
+	best, have := 0.0, false
+	for _, rd := range rends {
+		if rd.err != nil || rd.r.Kind != manifest.Video {
+			continue
+		}
+		for _, sd := range parsedSegs(rd) {
+			t, ok := sd.info.Track(media.Video)
+			if !ok || !t.HasPTS || t.Timescale == 0 {
+				continue
+			}
+			at := float64(t.MinPTS) / float64(t.Timescale)
+			if !have || at < best {
+				best, have = at, true
+			}
+		}
+	}
+	return best, have
+}
+
 // checkAdBreak compares ad-break signalling against the segmentation.
 //
 // The question an operator actually has is not "is the break signalled" — a

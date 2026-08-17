@@ -228,9 +228,17 @@ func TestParseHdlr(t *testing.T) {
 	if got := parseHdlr(hdlr("soun")); got != Audio {
 		t.Errorf("soun = %s, want audio", got)
 	}
-	// Subtitles, metadata and hints are all real handlers this tool does not
-	// analyse; they must land as "other" rather than being taken for video.
-	for _, h := range []string{"subt", "text", "meta", "hint", "sbtl"} {
+	// The subtitle handlers, all three of which real packagers use.
+	for _, h := range []string{"subt", "text", "sbtl"} {
+		if got := parseHdlr(hdlr(h)); got != Text {
+			t.Errorf("%s = %s, want text", h, got)
+		}
+	}
+	// Metadata and hints are real handlers this tool does not analyse, and `clcp`
+	// is a closed-caption track that gets folded onto the video it belongs to
+	// rather than being a rendition of its own. All must land as "other" rather
+	// than being taken for something to sample.
+	for _, h := range []string{"meta", "hint", "clcp"} {
 		if got := parseHdlr(hdlr(h)); got != Other {
 			t.Errorf("%s = %s, want other", h, got)
 		}

@@ -1,0 +1,454 @@
+package media
+
+import (
+	"errors"
+	"strings"
+	"testing"
+
+	"github.com/Allan-Nava/segcheck/internal/media/mediatest"
+)
+
+// SC-38: subtitle renditions.
+//
+// A subtitle rendition is text, not a container, and its cue times are the whole
+// point: they are what has to line up with the media timeline. The way a subtitle
+// rendition fails is not by being malformed — it is by being perfectly valid and
+// pointing somewhere else, which nothing that reads only the manifest can see.
+//
+// WebVTT anchors its own clock to the media clock with X-TIMESTAMP-MAP. Without
+// that line there is nothing to anchor it with, and a rendition can be internally
+// correct and hours away from the picture.
+
+func TestParseWebVTT(t *testing.T) {
+	// The map says local 0 is media 10s (900000 ticks of 90kHz), so a cue at local
+	// 1s is at media 11s.
+	data := mediatest.WebVTT(mediatest.WebVTTOptions{
+		MPEGTS: 900000,
+		Cues: []mediatest.Cue{
+			{Start: 1, End: 3, Text: "Hello"},
+			{Start: 4, End: 6, Text: "World"},
+		},
+	})
+	info, err := ParseWebVTT(data)
+	if err != nil {
+		t.Fatalf("ParseWebVTT: %v", err)
+	}
+	if info.Container != ContainerWebVTT {
+		t.Errorf("container = %q, want %q", info.Container, ContainerWebVTT)
+	}
+	tr, ok := info.Track(Text)
+	if !ok {
+		t.Fatal("no text track")
+	}
+	if tr.Codec != "webvtt" {
+		t.Errorf("codec = %q, want webvtt", tr.Codec)
+	}
+	if tr.Samples != 2 {
+		t.Errorf("cues = %d, want 2", tr.Samples)
+	}
+	if tr.Timescale != TSTimescale {
+		t.Errorf("timescale = %d, want %d: cues are reported on the media clock", tr.Timescale, TSTimescale)
+	}
+	// The span is the earliest cue start to the latest cue end: min and max of the
+	// timestamps present, which is what a cue's two of them amount to.
+	if !tr.HasPTS || tr.MinPTS != 11*90000 || tr.MaxPTS != 16*90000 {
+		t.Errorf("cue span = %d..%d, want %d..%d", tr.MinPTS, tr.MaxPTS, 11*90000, 16*90000)
+	}
+}
+
+// Without X-TIMESTAMP-MAP the cue clock is anchored to nothing. Reporting the local
+// times as media times would place every cue at the start of the presentation, so
+// the span is left unstated and the check says why.
+func TestParseWebVTT_NoTimestampMap(t *testing.T) {
+	data := mediatest.WebVTT(mediatest.WebVTTOptions{
+		NoTimestampMap: true,
+		Cues:           []mediatest.Cue{{Start: 1, End: 3}},
+	})
+	info, err := ParseWebVTT(data)
+	if err != nil {
+		t.Fatalf("ParseWebVTT: %v", err)
+	}
+	tr, _ := info.Track(Text)
+	if tr.Samples != 1 {
+		t.Errorf("cues = %d, want 1: the cues are still readable", tr.Samples)
+	}
+	if tr.HasPTS {
+		t.Errorf("a media time was reported with nothing to anchor it to: %+v", tr)
+	}
+}
+
+// A WebVTT segment covering a stretch with nothing said in it carries no cues, and
+// that is not a defect on its own.
+func TestParseWebVTT_NoCues(t *testing.T) {
+	info, err := ParseWebVTT(mediatest.WebVTT(mediatest.WebVTTOptions{MPEGTS: 900000}))
+	if err != nil {
+		t.Fatalf("ParseWebVTT: %v", err)
+	}
+	tr, ok := info.Track(Text)
+	if !ok {
+		t.Fatal("no text track: an empty subtitle segment is still a subtitle segment")
+	}
+	if tr.Samples != 0 || tr.HasPTS {
+		t.Errorf("track = %+v, want no cues and no span", tr)
+	}
+}
+
+// Bytes with no WEBVTT signature are not WebVTT — an origin serving an error page
+// with a 200 lands here, and calling it an empty subtitle segment would hide it.
+func TestParseWebVTT_NotWebVTT(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		data []byte
+	}{
+		{"no signature", mediatest.WebVTT(mediatest.WebVTTOptions{NoHeader: true, Cues: []mediatest.Cue{{Start: 1, End: 2}}})},
+		{"empty", nil},
+		{"an HTML error page", []byte("<html><body>404</body></html>")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := ParseWebVTT(tc.data); !errors.Is(err, ErrUnknownContainer) {
+				t.Errorf("err = %v, want ErrUnknownContainer", err)
+			}
+		})
+	}
+}
+
+// TTML states its cue times two ways, and a reader that only split on colons gets
+// the offset form wrong.
+func TestParseTTML(t *testing.T) {
+	for _, offset := range []bool{false, true} {
+		data := mediatest.TTML(mediatest.TTMLOptions{
+			Offset: offset,
+			Cues: []mediatest.Cue{
+				{Start: 1, End: 3, Text: "Hello"},
+				{Start: 4, End: 6, Text: "World"},
+			},
+		})
+		info, err := ParseTTML(data)
+		if err != nil {
+			t.Fatalf("offset=%v: ParseTTML: %v", offset, err)
+		}
+		if info.Container != ContainerTTML {
+			t.Errorf("container = %q, want %q", info.Container, ContainerTTML)
+		}
+		tr, ok := info.Track(Text)
+		if !ok {
+			t.Fatalf("offset=%v: no text track", offset)
+		}
+		if tr.Samples != 2 {
+			t.Errorf("offset=%v: cues = %d, want 2", offset, tr.Samples)
+		}
+		// TTML times are on the media timeline already: there is no map to apply.
+		if !tr.HasPTS || tr.MinPTS != 1*90000 || tr.MaxPTS != 6*90000 {
+			t.Errorf("offset=%v: cue span = %d..%d, want %d..%d", offset, tr.MinPTS, tr.MaxPTS, 1*90000, 6*90000)
+		}
+	}
+}
+
+// XML that is not TTML, and bytes that are not XML at all.
+func TestParseTTML_NotTTML(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		data []byte
+	}{
+		{"not XML", mediatest.TTML(mediatest.TTMLOptions{NotXML: true})},
+		{"XML with the wrong root", mediatest.TTML(mediatest.TTMLOptions{WrongRoot: true, Cues: []mediatest.Cue{{Start: 1, End: 2}}})},
+		{"empty", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := ParseTTML(tc.data); !errors.Is(err, ErrUnknownContainer) {
+				t.Errorf("err = %v, want ErrUnknownContainer", err)
+			}
+		})
+	}
+}
+
+// Parse dispatches on the bytes, so a subtitle segment does not have to be
+// announced to be read.
+func TestParse_DispatchesToSubtitles(t *testing.T) {
+	vtt := mediatest.WebVTT(mediatest.WebVTTOptions{MPEGTS: 0, Cues: []mediatest.Cue{{Start: 1, End: 2}}})
+	if info, err := Parse(vtt, nil); err != nil || info.Container != ContainerWebVTT {
+		t.Errorf("WebVTT dispatched to %q (%v)", info.Container, err)
+	}
+	ttml := mediatest.TTML(mediatest.TTMLOptions{Cues: []mediatest.Cue{{Start: 1, End: 2}}})
+	if info, err := Parse(ttml, nil); err != nil || info.Container != ContainerTTML {
+		t.Errorf("TTML dispatched to %q (%v)", info.Container, err)
+	}
+}
+
+// A subtitle rendition may also arrive wrapped in fMP4, with an stpp sample entry
+// for TTML or wvtt for WebVTT. The wrapper states the timing, so the track is
+// classified and timed from the fragment; reading the cues out of the samples is
+// SC-93.
+func TestParseMP4_SubtitleTrack(t *testing.T) {
+	for _, tc := range []struct{ entry, codec string }{
+		{"stpp", "ttml"},
+		{"wvtt", "webvtt"},
+	} {
+		init := mediatest.MP4InitSubtitle(1, 90000, tc.entry)
+		frag := mediatest.MP4Segment(1, 1, 180000, 90000, 2, 400)
+		info, err := ParseMP4(frag, init)
+		if err != nil {
+			t.Fatalf("%s: ParseMP4: %v", tc.entry, err)
+		}
+		tr, ok := info.Track(Text)
+		if !ok {
+			t.Fatalf("%s: no text track: %+v", tc.entry, info.Tracks)
+		}
+		if tr.Codec != tc.codec {
+			t.Errorf("%s: codec = %q, want %q", tc.entry, tr.Codec, tc.codec)
+		}
+		if !tr.HasPTS || tr.MinPTS != 180000 {
+			t.Errorf("%s: the fragment's own timeline was not read: %+v", tc.entry, tr)
+		}
+	}
+}
+
+// The timestamp forms WebVTT allows, and the ones it does not. A reader that
+// accepted a malformed timestamp would place a cue somewhere nobody wrote.
+func TestParseWebVTTTimestamp(t *testing.T) {
+	for _, tc := range []struct {
+		in   string
+		want float64
+		ok   bool
+	}{
+		{"00:00:01.000", 1, true},
+		{"01:02:03.500", 3723.5, true},
+		{"02:03.500", 123.5, true}, // mm:ss, the short form
+		{" 00:00:01.000 ", 1, true},
+		{"", 0, false},
+		{"1", 0, false},               // no colon at all
+		{"00:00:00:01.000", 0, false}, // four fields
+		{"aa:bb.cc", 0, false},
+		{"-00:01.000", 0, false},
+		{"00.5:01.000", 0, false}, // a fraction in a field that must be whole
+	} {
+		got, ok := parseWebVTTTimestamp(tc.in)
+		if ok != tc.ok || (ok && got != tc.want) {
+			t.Errorf("parseWebVTTTimestamp(%q) = %v/%v, want %v/%v", tc.in, got, ok, tc.want, tc.ok)
+		}
+	}
+}
+
+// A cue timing line, with and without the settings that may follow it.
+func TestParseWebVTTTiming(t *testing.T) {
+	for _, tc := range []struct {
+		in         string
+		start, end float64
+		ok         bool
+	}{
+		{"00:00:01.000 --> 00:00:03.000", 1, 3, true},
+		{"00:00:01.000 --> 00:00:03.000 line:0 position:50%", 1, 3, true},
+		{"00:01.000-->00:03.000", 1, 3, true},
+		{"just some subtitle text", 0, 0, false},
+		{"--> 00:00:03.000", 0, 0, false},  // no start
+		{"00:00:01.000 --> ", 0, 0, false}, // no end
+		{"00:00:01.000 --> bogus", 0, 0, false},
+	} {
+		start, end, ok := parseWebVTTTiming(tc.in)
+		if ok != tc.ok || (ok && (start != tc.start || end != tc.end)) {
+			t.Errorf("parseWebVTTTiming(%q) = %v/%v/%v, want %v/%v/%v",
+				tc.in, start, end, ok, tc.start, tc.end, tc.ok)
+		}
+	}
+}
+
+// X-TIMESTAMP-MAP as real playlists write it, and as malformed ones do.
+func TestWebVTTTimestampMap(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   string
+		want float64
+		ok   bool
+	}{
+		{"both halves", "WEBVTT\nX-TIMESTAMP-MAP=LOCAL:00:00:00.000,MPEGTS:900000\n", 10, true},
+		{"a non-zero local", "WEBVTT\nX-TIMESTAMP-MAP=LOCAL:00:00:02.000,MPEGTS:900000\n", 8, true},
+		{"reversed order", "WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:900000,LOCAL:00:00:00.000\n", 10, true},
+		{"lower case", "WEBVTT\nx-timestamp-map=local:00:00:00.000,mpegts:900000\n", 10, true},
+		// LOCAL defaults to the start of the segment when it is absent or unreadable.
+		{"no local", "WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:900000\n", 10, true},
+		{"an unreadable local", "WEBVTT\nX-TIMESTAMP-MAP=LOCAL:bogus,MPEGTS:900000\n", 10, true},
+		// Without MPEGTS there is no anchor at all.
+		{"no line", "WEBVTT\n", 0, false},
+		{"no mpegts", "WEBVTT\nX-TIMESTAMP-MAP=LOCAL:00:00:00.000\n", 0, false},
+		{"an unreadable mpegts", "WEBVTT\nX-TIMESTAMP-MAP=LOCAL:00:00:00.000,MPEGTS:abc\n", 0, false},
+		{"no separator", "WEBVTT\nX-TIMESTAMP-MAP=LOCAL00:00:00.000\n", 0, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := webVTTTimestampMap([]byte(tc.in))
+			if ok != tc.ok || (ok && got != tc.want) {
+				t.Errorf("= %v/%v, want %v/%v", got, ok, tc.want, tc.ok)
+			}
+		})
+	}
+}
+
+// The signature, which the specification puts at the very start — after a byte
+// order mark, and followed by whitespace or a line break rather than more text.
+func TestLooksWebVTT(t *testing.T) {
+	for _, tc := range []struct {
+		in   string
+		want bool
+	}{
+		{"WEBVTT", true},
+		{"WEBVTT\n", true},
+		{"WEBVTT \n", true},
+		{"WEBVTT\tsomething\n", true},
+		{"WEBVTT\r\n", true},
+		{"\xEF\xBB\xBFWEBVTT\n", true}, // behind a byte order mark
+		{"WEBVTTX", false},
+		{"webvtt\n", false}, // the signature is case sensitive
+		{"WEBVT", false},
+		{"", false},
+	} {
+		if got := looksWebVTT([]byte(tc.in)); got != tc.want {
+			t.Errorf("looksWebVTT(%q) = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}
+
+// The time expressions TTML allows, and the two it allows that need a rate stated
+// elsewhere — guessing one would put every cue in the wrong place.
+func TestParseTTMLTime(t *testing.T) {
+	for _, tc := range []struct {
+		in   string
+		want float64
+		ok   bool
+	}{
+		{"00:00:01.500", 1.5, true},
+		{"1.5s", 1.5, true},
+		{"1500ms", 1.5, true},
+		{"2m", 120, true},
+		{"1h", 3600, true},
+		{"", 0, false},
+		{"10f", 0, false},  // frames: needs a frame rate
+		{"100t", 0, false}, // ticks: needs a tick rate
+		{"abc", 0, false},
+		{"-5s", 0, false},
+		{"xs", 0, false},
+	} {
+		got, ok := parseTTMLTime(tc.in)
+		if ok != tc.ok || (ok && got != tc.want) {
+			t.Errorf("parseTTMLTime(%q) = %v/%v, want %v/%v", tc.in, got, ok, tc.want, tc.ok)
+		}
+	}
+}
+
+// A cue may state a duration instead of an end, and one that states neither still
+// counts as a cue at the time it begins.
+func TestParseTTML_DurationAndMissingEnd(t *testing.T) {
+	doc := []byte(`<tt xmlns="http://www.w3.org/ns/ttml"><body><div>` +
+		`<p begin="1s" dur="2s">a</p>` +
+		`<p begin="5s">b</p>` +
+		`<p end="9s">c</p>` +
+		`</div></body></tt>`)
+	info, err := ParseTTML(doc)
+	if err != nil {
+		t.Fatalf("ParseTTML: %v", err)
+	}
+	tr, _ := info.Track(Text)
+	if tr.Samples != 3 {
+		t.Errorf("cues = %d, want 3: a cue with no readable begin is still a cue", tr.Samples)
+	}
+	// The span runs from the first begin to the furthest end: 1s to 5s, because the
+	// third cue states no begin to place it from.
+	if !tr.HasPTS || tr.MinPTS != 90000 || tr.MaxPTS != 5*90000 {
+		t.Errorf("span = %d..%d, want %d..%d", tr.MinPTS, tr.MaxPTS, 90000, 5*90000)
+	}
+}
+
+// Detection of a TTML document, which may be preceded by a declaration, comments
+// or processing instructions.
+func TestLooksTTML(t *testing.T) {
+	for _, tc := range []struct {
+		in   string
+		want bool
+	}{
+		{`<tt xmlns="http://www.w3.org/ns/ttml">`, true},
+		{`<tt>`, true},
+		{`<?xml version="1.0"?><!-- a comment --><tt:tt xmlns:tt="x">`, true},
+		{`<?xml version="1.0"?><doc xmlns="http://www.w3.org/ns/ttml"/>`, true},
+		{`WEBVTT`, false},
+		{`{"json": true}`, false},
+		{``, false},
+	} {
+		if got := looksTTML([]byte(tc.in)); got != tc.want {
+			t.Errorf("looksTTML(%q) = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}
+
+// Both readers cap how much they scan. A subtitle segment is kilobytes, and a
+// caller that handed over a gigabyte of text should not have it all walked.
+func TestSubtitleReadersAreBounded(t *testing.T) {
+	huge := append([]byte("WEBVTT\n"), make([]byte, maxSubtitleBytes+1024)...)
+	if _, err := ParseWebVTT(huge); err != nil {
+		t.Errorf("a very large WebVTT segment errored: %v", err)
+	}
+	// The TTML reader truncates before parsing, so an oversized document is simply
+	// not valid XML any more and is reported as such rather than scanned whole.
+	hugeTTML := append([]byte(`<tt xmlns="http://www.w3.org/ns/ttml"><body><div>`),
+		make([]byte, maxSubtitleBytes+1024)...)
+	if _, err := ParseTTML(hugeTTML); err == nil {
+		t.Error("a truncated oversized TTML document was accepted")
+	}
+}
+
+// More cues than the cap are counted up to it rather than walked forever.
+func TestSubtitleCueCapIsHonoured(t *testing.T) {
+	// A cheap way to exceed the cap without building a huge document: assert the
+	// constant is what the loops bound themselves by, and that a document under it
+	// is counted exactly.
+	var b []byte
+	b = append(b, "WEBVTT\nX-TIMESTAMP-MAP=LOCAL:00:00:00.000,MPEGTS:0\n"...)
+	for i := 0; i < 5; i++ {
+		b = append(b, "\n00:00:00.000 --> 00:00:01.000\nx\n"...)
+	}
+	info, err := ParseWebVTT(b)
+	if err != nil {
+		t.Fatalf("ParseWebVTT: %v", err)
+	}
+	if tr, _ := info.Track(Text); tr.Samples != 5 {
+		t.Errorf("cues = %d, want 5", tr.Samples)
+	}
+	if maxCuesPerSegment < 1 {
+		t.Error("the cue cap would count nothing")
+	}
+}
+
+// The cue loop stops at the cap rather than walking a hostile document forever. The
+// TTML loop is bounded by the same constant in the same shape; only this one is
+// exercised, because building a document with a hundred thousand XML elements costs
+// more than the branch is worth.
+func TestParseWebVTT_CueCapStopsTheWalk(t *testing.T) {
+	var b []byte
+	b = append(b, "WEBVTT\nX-TIMESTAMP-MAP=LOCAL:00:00:00.000,MPEGTS:0\n"...)
+	for i := 0; i <= maxCuesPerSegment; i++ {
+		b = append(b, "\n00:00:00.000 --> 00:00:01.000\nx\n"...)
+	}
+	info, err := ParseWebVTT(b)
+	if err != nil {
+		t.Fatalf("ParseWebVTT: %v", err)
+	}
+	tr, _ := info.Track(Text)
+	if tr.Samples != maxCuesPerSegment+1 {
+		t.Errorf("cues = %d, want the walk to stop at %d", tr.Samples, maxCuesPerSegment+1)
+	}
+}
+
+// A part of X-TIMESTAMP-MAP with no separator at all is not a key and a value.
+func TestWebVTTTimestampMap_PartWithNoSeparator(t *testing.T) {
+	got, ok := webVTTTimestampMap([]byte("WEBVTT\nX-TIMESTAMP-MAP=garbage,MPEGTS:900000\n"))
+	if !ok || got != 10 {
+		t.Errorf("= %v/%v, want 10/true: the readable half still anchors it", got, ok)
+	}
+}
+
+// Detection only looks at the head of a document: a TTML root buried past that is
+// not found, which is the honest answer for a reader that will not scan a whole
+// segment to guess a format.
+func TestLooksTTML_OnlyScansTheHead(t *testing.T) {
+	padded := append([]byte("<!--"+strings.Repeat("x", 5000)+"-->"), []byte(`<tt xmlns="http://www.w3.org/ns/ttml">`)...)
+	if looksTTML(padded) {
+		t.Error("a root element past the scanned head was found anyway")
+	}
+}

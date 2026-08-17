@@ -369,6 +369,11 @@ func parseHdlr(b []byte) TrackKind {
 		return Video
 	case "soun":
 		return Audio
+	case "subt", "sbtl", "text":
+		// A subtitle track. `clcp` is deliberately not here: a closed-caption track
+		// is folded onto the video it belongs to rather than being a rendition of
+		// its own, which is what the captions check needs.
+		return Text
 	default:
 		return Other
 	}
@@ -568,6 +573,10 @@ func mp4Codec(typ string) string {
 		return "vp9"
 	case "av01":
 		return "av1"
+	case "stpp":
+		return "ttml"
+	case "wvtt":
+		return "webvtt"
 	case "mp4v":
 		return "mpeg4video"
 	case "mp4a":

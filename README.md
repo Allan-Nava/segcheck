@@ -115,12 +115,13 @@ segcheck check https://cdn.example/master.m3u8 --exit-on bad
 | `audio` | The sampling rate, channel layout and codec the media actually carries against `CHANNELS` / `@audioSamplingRate` / `AudioChannelConfiguration` / `CODECS`, and any of them changing part-way through a rendition | BAD |
 | `captions` | CEA-608/708 caption data actually in the video bitstream — an SEI message or a CMAF `c608`/`c708` track — against `CLOSED-CAPTIONS` / DASH `Accessibility` | BAD |
 | `adbreak` | SCTE-35 splice points in the media — a TS signalling PID or an `emsg` — against `EXT-X-DATERANGE`/`EXT-X-CUE-OUT`/DASH `EventStream`, and whether either lands on a segment boundary at all | BAD |
+| `subtitles` | WebVTT and TTML segments actually parse, and their cue times overlap the segment the manifest put them in — the `X-TIMESTAMP-MAP` drift no manifest checker can see | BAD |
 | `tracks` | Expected video/audio present, codecs match `CODECS`, track layout stable across segments | BAD |
 | `alignment` | Segment boundaries across renditions, so ABR switching does not glitch | BAD |
 | `encryption` | Declared protection against what the segments carry | BAD |
 | `ladder` | Duplicate rungs, inverted rungs, dangling `AUDIO` groups, missing `CODECS` | BAD |
 
-Containers understood: **MPEG-TS** (PAT/PMT, PES timestamps, continuity counters, H.264 and HEVC/H.265 parameter sets for the real resolution), **fragmented MP4 / CMAF** (`moov` for timescale, codec and coded size; `mvex`/`trex` defaults; `tfdt`/`trun` for the timeline; `sidx` for single-file DASH, addressed by byte range), and **packed audio** (ADTS AAC with the ID3 `transportStreamTimestamp` that gives audio-only renditions a timeline). Audio format is read where each container actually states it: the `AudioSampleEntry` in fMP4, the `dac3`/`dec3` box for AC-3 and E-AC-3 (whose `channelcount` field is not to be trusted), and the ADTS header everywhere else.
+Containers understood: **MPEG-TS** (PAT/PMT, PES timestamps, continuity counters, H.264 and HEVC/H.265 parameter sets for the real resolution), **fragmented MP4 / CMAF** (`moov` for timescale, codec and coded size; `mvex`/`trex` defaults; `tfdt`/`trun` for the timeline; `sidx` for single-file DASH, addressed by byte range), **packed audio** (ADTS AAC with the ID3 `transportStreamTimestamp` that gives audio-only renditions a timeline), and **WebVTT and TTML/IMSC** subtitle segments. Audio format is read where each container actually states it: the `AudioSampleEntry` in fMP4, the `dac3`/`dec3` box for AC-3 and E-AC-3 (whose `channelcount` field is not to be trusted), and the ADTS header everywhere else.
 
 ## When *not* to use it
 

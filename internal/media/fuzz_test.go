@@ -186,3 +186,42 @@ func FuzzParse(f *testing.F) {
 		sane(t, info)
 	})
 }
+
+// A subtitle segment is text off the network, which makes it the most directly
+// attacker-shaped input any of these readers takes: no length prefixes, no sync
+// bytes, just bytes an origin chose.
+func FuzzParseWebVTT(f *testing.F) {
+	f.Add(mediatest.WebVTT(mediatest.WebVTTOptions{
+		MPEGTS: 900000,
+		Cues:   []mediatest.Cue{{Start: 1, End: 3, Text: "Hello"}},
+	}))
+	f.Add(mediatest.WebVTT(mediatest.WebVTTOptions{NoTimestampMap: true, Cues: []mediatest.Cue{{Start: 0, End: 1}}}))
+	f.Add([]byte("WEBVTT\n"))
+	f.Add([]byte("WEBVTT\nX-TIMESTAMP-MAP=LOCAL:,MPEGTS:\n"))
+	f.Add([]byte("WEBVTT\n\n-->\n"))
+	f.Add([]byte("WEBVTT\n\n00:00:00.000 --> 99:99:99.999 line:0\n"))
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		info, err := ParseWebVTT(data)
+		if err != nil {
+			return
+		}
+		sane(t, info)
+	})
+}
+
+func FuzzParseTTML(f *testing.F) {
+	f.Add(mediatest.TTML(mediatest.TTMLOptions{Cues: []mediatest.Cue{{Start: 1, End: 3}}}))
+	f.Add(mediatest.TTML(mediatest.TTMLOptions{Offset: true, Cues: []mediatest.Cue{{Start: 1, End: 3}}}))
+	f.Add([]byte(`<tt/>`))
+	f.Add([]byte(`<tt><body><div><p begin="1f" end="2t"/></div></body></tt>`))
+	f.Add([]byte(`<tt><body><div><p begin="" end="" dur="5s"/></div></body></tt>`))
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		info, err := ParseTTML(data)
+		if err != nil {
+			return
+		}
+		sane(t, info)
+	})
+}

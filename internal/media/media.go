@@ -21,6 +21,8 @@ const (
 	// ContainerPackedAudio is a bare audio elementary stream (ADTS AAC or MP3),
 	// which HLS permits for audio-only renditions.
 	ContainerPackedAudio = "packed-audio"
+	ContainerWebVTT      = "webvtt"
+	ContainerTTML        = "ttml"
 )
 
 // TrackKind is the broad type of an elementary stream.
@@ -29,6 +31,9 @@ type TrackKind string
 const (
 	Video TrackKind = "video"
 	Audio TrackKind = "audio"
+	// Text is a subtitle or caption track: a WebVTT or TTML segment, or an fMP4
+	// track with a wvtt or stpp sample entry.
+	Text  TrackKind = "text"
 	Other TrackKind = "other"
 )
 
@@ -307,6 +312,10 @@ func Parse(data, init []byte) (SegmentInfo, error) {
 		return ParseTS(data)
 	case looksPackedAudio(data):
 		return ParsePackedAudio(data)
+	case looksWebVTT(data):
+		return ParseWebVTT(data)
+	case looksTTML(data):
+		return ParseTTML(data)
 	default:
 		return SegmentInfo{}, ErrUnknownContainer
 	}

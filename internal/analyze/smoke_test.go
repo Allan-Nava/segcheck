@@ -67,7 +67,7 @@ var smokeStreams = []smokeStream{
 		// Byte-range segments off one main.ts, which is what made the first
 		// keyframe rule report this stream three times over.
 		allowed: map[string]string{},
-		expect:  []string{"container", "resolution", "keyframe", "framerate", "continuity", "audio", "captions"},
+		expect:  []string{"container", "resolution", "keyframe", "framerate", "continuity", "audio", "captions", "subtitles"},
 	},
 	{
 		name:    "dash-segment-template",

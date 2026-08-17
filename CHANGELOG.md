@@ -67,6 +67,25 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   one of them perfectly aligned. And inband signalling with nothing in the manifest
   is reported, not flagged: server-side insertion downstream is a legitimate design,
   and segcheck cannot tell it from a packager that forgot to translate the cue.
+- **`subtitles` check, and readers for WebVTT and TTML/IMSC** (SC-38). A subtitle
+  rendition rarely fails by being malformed. It fails by being perfectly valid and
+  pointing somewhere else: the cues parse, the segments are the right size, the
+  manifest is impeccable, and the subtitles are hours from the picture because
+  `X-TIMESTAMP-MAP` was written from the wrong clock. The manifest says nothing about
+  where the cues are, so nothing that reads only the manifest can tell.
+
+  The comparison is *overlap*, not containment — a cue continuing across a boundary
+  appears in both segments and overhangs one of them at each end, so demanding
+  containment would flag correct media. And it is anchored to the media timeline the
+  video states rather than to accumulated `EXTINF`: the cues count on the media
+  clock, which begins wherever the video's first timestamp is, and Apple's advanced
+  example starts its video ten seconds in.
+
+  Without `X-TIMESTAMP-MAP` there is nothing to anchor the cue clock to, and that is
+  a WARN saying so rather than a guess in either direction. A rendition whose every
+  readable segment is empty is a WARN with the count — a gap in the dialogue is
+  legitimate, so it is not proof. Subtitle renditions are sampled with a new
+  `--subtitles N` (default 1); they were previously not sampled at all.
 - **Audio format read from where each container actually states it** (SC-18): the
   `AudioSampleEntry` in fMP4, the ADTS header in MPEG-TS and in packed audio, and
   the `dac3`/`dec3` box for AC-3 and E-AC-3. Muxed audio inside a video variant is
@@ -96,6 +115,16 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   on the whole of it. `dashKind` now falls back to the first Representation's
   `mimeType`, `codecs` and frame size, and the stream joins the smoke suite as a
   fifth baseline so the silence cannot come back unnoticed.
+- **`continuity`, `duration` and `keyframe` spoke nonsense about subtitles.** A
+  subtitle track's timestamps are the span its cues cover, not the extent of the
+  segment: cues do not fill a segment, and one crossing a boundary appears in both.
+  Read as a segment extent they produced six BAD gap-and-overlap findings and a
+  26% duration mismatch on Apple's own reference stream. All three now leave text
+  renditions to the check that reads their timestamps for what they are.
+- **The CI fuzz targets are discovered, not listed.** The hardcoded list meant a new
+  parser was never fuzzed and nothing said so — the same silent coverage hole this
+  project treats as worse than a failure. WebVTT and TTML, being text straight off
+  the network, got targets of their own in the same commit.
 - **A splice information PID is signalling, not media.** Many packagers include it
   only in the segments that carry a cue, so the `tracks` check counted its
   appearance as a mid-rendition track change and warned about a decoder reset on
