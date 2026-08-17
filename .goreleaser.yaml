@@ -98,7 +98,11 @@ docker_signs:
 #
 # A cask, not a formula: `brews` is deprecated, and Homebrew wants a cask for a
 # prebuilt binary anyway — a formula describes something built from source.
-# Casks are macOS-only, so Linux users go through `go install` or the archives.
+# Casks are macOS-only. SC-65 decided not to carry a formula alongside for Linux
+# Homebrew: `go install`, the archives and the image already cover that audience,
+# and a second packaging path exists to be the one that goes stale. goreleaser
+# emits `on_linux` URLs into the cask regardless; Homebrew on Linux refuses casks
+# outright, so those blocks are inert rather than a working install.
 homebrew_casks:
   - name: segcheck
     binaries: [segcheck]
@@ -109,6 +113,29 @@ homebrew_casks:
     homepage: "https://github.com/Allan-Nava/segcheck"
     description: "Check what HLS/DASH segments really contain, not just what the manifest says"
     license: "PolyForm-Noncommercial-1.0.0"
+
+    # SC-65: Homebrew Cask stamps com.apple.quarantine on everything it stages,
+    # and the binary is ad-hoc signed — the Go linker does that on arm64, it is
+    # not a Developer ID signature — so Gatekeeper rejects it. The failure mode is
+    # the reason this is worth fixing rather than documenting: `brew install
+    # --cask` reports success, and then the first run dies on SIGKILL, exit 137,
+    # with no output at all. Not the "developer cannot be verified" dialog a GUI
+    # app gets — nothing. From a terminal that reads as a broken build, and the
+    # person who reports it will report the wrong bug. SC-94 is the real fix and
+    # needs a paid Developer ID; stripping the attribute makes the cask work now.
+    #
+    # `/usr/bin/xattr` by absolute path, never bare `xattr`: a Homebrew or conda
+    # Python `xattr` earlier on PATH does not accept `-r` and the hook would fail
+    # on exactly the machines most likely to have one. `-dr` rather than `-d`
+    # because it exits 0 when the attribute is already absent — a reinstall, or
+    # HOMEBREW_NO_QUARANTINE — whereas `-d` exits 1 with "No such xattr", and a
+    # postflight that fails on a clean install is worse than the problem it fixes.
+    hooks:
+      post:
+        install: |
+          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/segcheck"]
+          end
 
 changelog:
   # CHANGELOG.md is written by hand and is the source of truth; the release notes

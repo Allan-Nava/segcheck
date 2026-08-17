@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**93 items · 46 shipped · 47 open · 13 milestones.**
+**94 items · 47 shipped · 47 open · 13 milestones.**
 
 ## At a glance
 
@@ -24,7 +24,7 @@
 | **M12** — Colour, HDR and the codec string | `v0.7.0` | later | `..........` 0% | 6 | 0 |
 | **M13** — Audio, past the sanity check | `v0.8.0` | later | `..........` 0% | 6 | 0 |
 | **M8** — Container image and supply chain | `v0.1.1` | shipped | `##########` 100% | 0 | 5 |
-| **M7** — Project and release | `ongoing` | ongoing | `########..` 80% | 3 | 12 |
+| **M7** — Project and release | `ongoing` | ongoing | `########..` 81% | 3 | 13 |
 
 ## Next up
 
@@ -205,12 +205,12 @@ Target `v0.1.1` · shipped · 0 open · 5 shipped · `##########` 100%
 
 ### M7 — Project and release
 
-Target `ongoing` · ongoing · 3 open · 12 shipped · `########..` 80%
+Target `ongoing` · ongoing · 3 open · 13 shipped · `########..` 81%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
 | **SC-64** — `scripts/backlog.sh` has no tests | med | S | tests,project | open |
-| **SC-65** — The published cask actually installs | med | S | release,docs | open |
+| **SC-94** — Developer ID signing and notarisation | med | M | release | open |
 | **SC-49** — Per-check reference pages | low | M | docs | open |
 | **SC-36** — Real-stream smoke suite | high | S | tests,release | shipped `0.2.0` |
 | **SC-57** — `internal/fetch` tests | high | M | tests | shipped `0.1.1` |
@@ -221,6 +221,7 @@ Target `ongoing` · ongoing · 3 open · 12 shipped · `########..` 80%
 | **SC-34** — Backlog and roadmap tooling | med | M | project | shipped `0.1.1` |
 | **SC-47** — SBOM and signed artefacts | med | M | release | shipped `0.1.1` |
 | **SC-48** — Coverage ratchet | med | S | tests | shipped `0.2.0` |
+| **SC-65** — The published cask actually installs | med | S | release,docs | shipped `0.3.0` |
 | **SC-80** — GitHub issues generated from the backlog | med | M | project,tests | shipped `0.2.0` |
 | **SC-33** — Docs site | low | M | docs | shipped `0.1.1` |
 | **SC-50** — Brand assets | low | S | docs | shipped `0.1.1` |
@@ -235,7 +236,7 @@ Target `ongoing` · ongoing · 3 open · 12 shipped · `########..` 80%
 | `delivery` | 5 | 4 |
 | `integration` | 4 | 4 |
 | `output` | 4 | 3 |
-| `docs` | 5 | 2 |
+| `docs` | 5 | 1 |
 | `project` | 5 | 1 |
-| `release` | 8 | 1 |
+| `release` | 9 | 1 |
 | `tests` | 10 | 1 |

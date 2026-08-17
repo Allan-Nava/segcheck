@@ -180,8 +180,13 @@ never by deleting it and reusing the number.
   with inline CSS/JS and no external request at render time; brand assets are
   hand-written SVG in `docs/assets/`, PNGs are renders of them. A check, flag or
   default that changes moves the page in the same commit as the README row
-- `.goreleaser.yaml` — release build; the Homebrew tap step is present but
-  disabled until the secret exists (SC-32)
+- `.goreleaser.yaml` — release build. The Homebrew cask has published to
+  `Allan-Nava/homebrew-tap` since v0.1.1 (SC-32) and needs the
+  `HOMEBREW_TAP_TOKEN` secret; a release after that fine-grained PAT expires
+  publishes its archives and image and then fails at that step. The darwin
+  binaries are ad-hoc signed, not notarised, so the cask strips
+  `com.apple.quarantine` in a `postflight` (SC-65) — without it Gatekeeper kills
+  the installed binary on sight, silently, with exit 137. SC-94 is the real fix
 - Related: [checkfleet](https://github.com/Allan-Nava/checkfleet) — the
   manifest-level and fleet-level checker segcheck deliberately does not
   duplicate (SC-30 exposes these analyses there as a `stream-deep` module)

@@ -56,10 +56,10 @@ None of those questions can be answered without downloading the bytes.
 ## Install
 
 ```bash
-# Homebrew (macOS — casks are not supported by Homebrew on Linux)
+# Homebrew (macOS only — Homebrew on Linux does not support casks)
 brew install --cask allan-nava/tap/segcheck
 
-# Go
+# Go — every platform, including Linux Homebrew users
 go install github.com/Allan-Nava/segcheck/cmd/segcheck@latest
 
 # Docker (linux/amd64 and linux/arm64)
@@ -67,6 +67,17 @@ docker run --rm ghcr.io/allan-nava/segcheck:latest check https://cdn.example/mas
 
 # Or grab a binary from the releases page
 ```
+
+**macOS, if you download an archive rather than using Homebrew:** the binaries are
+not yet Developer ID signed or notarised, so Gatekeeper kills them on first run —
+and from a terminal it does that silently, with exit 137 and no message, which
+looks like a broken build rather than a signing gap. Clear the quarantine flag:
+
+```bash
+xattr -d com.apple.quarantine ./segcheck
+```
+
+The cask does this for you (SC-65). Real notarisation is SC-94.
 
 The image is the static binary and a CA bundle: no shell, no package manager,
 non-root, and the same build as the release archive for that version.

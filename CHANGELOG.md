@@ -93,6 +93,18 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **The Homebrew cask installed a binary macOS would not run** (SC-65). Homebrew
+  Cask stamps `com.apple.quarantine` on what it stages, and the darwin builds carry
+  the ad-hoc signature the Go linker emits rather than a Developer ID one, so
+  Gatekeeper rejected them. `brew install --cask` reported success and then
+  `segcheck --version` died on SIGKILL — exit 137, no dialog, no message, nothing.
+  Every macOS install since the tap went live in 0.1.1 was affected, and the silence
+  is the worst part: it reads as a broken build, not a signing gap. The cask now
+  strips the attribute in a `postflight`. Two details it depends on:
+  `/usr/bin/xattr` by absolute path, because a Python `xattr` earlier on `PATH`
+  rejects `-r`, and `-dr` rather than `-d`, because only `-dr` exits 0 when the
+  attribute is already absent. Signing and notarising properly — which also fixes
+  the archives on the releases page, still unsigned — is SC-94.
 - Three things real reference streams caught that the unit tests could not, all of
   the same shape — a number that is not the number it looks like:
   - **AC-3 and E-AC-3 misstate their own channel count.** The `AudioSampleEntry`

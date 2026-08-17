@@ -795,17 +795,25 @@ checks roadmap and blocks nothing.
   against the transparency log with the certificate identity resolving to
   `release.yml@refs/tags/v0.1.1`. Keyless throughout — nobody holds a private
   key. <!-- sc: prio=med size=M labels=release ver=0.1.1 -->
-- [ ] **SC-65 — The published cask actually installs**: two questions SC-32
-  could not answer before a cask existed. (1) The binary is unsigned and
-  unnotarized — if Gatekeeper quarantines it, `brew install --cask` succeeds and
-  the first run dies with "the developer cannot be verified", which reads as a
-  broken build rather than a signing gap. Fix is a `hooks.post.install` running
-  `xattr -dr com.apple.quarantine`, or real notarization. (2) Homebrew casks are
-  macOS-only, so the migration off the deprecated `brews` silently removed the
-  Linux Homebrew path; decide whether that audience is worth carrying a formula
-  alongside the cask, or whether the README pointing them at `go install` is
-  enough. Close it by installing the first published cask on a clean macOS.
-  <!-- sc: prio=med size=S labels=release,docs -->
+- [x] **SC-65 — The published cask actually installs**: it did not. Installing the
+  published 0.2.0 cask on macOS 14 arm64 answered both questions. (1) Homebrew Cask
+  stamps `com.apple.quarantine` on the staged binary and Gatekeeper rejects the
+  ad-hoc signature the Go linker emits — `spctl -a` returns *rejected* — but the
+  failure is worse than the dialog this item predicted: from a terminal there is no
+  dialog at all, just SIGKILL, exit 137, and not one byte of output. `brew install
+  --cask` reports success either way, so the tool reads as a broken build and the
+  person who hits it reports the wrong bug. A `hooks.post.install` stripping the
+  attribute fixes it, verified by installing a cask carrying the hook against the
+  real published archives: quarantine absent after install, `--version` exits 0,
+  and a check against Apple's fMP4 reference returns 15 OK. Two details the fix
+  turns on, both found by getting them wrong first — `/usr/bin/xattr` by absolute
+  path, because a Homebrew or conda Python `xattr` earlier on PATH does not accept
+  `-r`; and `-dr` rather than `-d`, because only `-dr` exits 0 when the attribute is
+  already gone, and a postflight that fails on a clean install is worse than the
+  problem. Notarisation is the real fix and is now SC-94. (2) No formula alongside
+  the cask: `go install`, the archives and the image already cover Linux, and a
+  second packaging path exists to be the one that goes stale. Said in the README
+  rather than left implied. <!-- sc: prio=med size=S labels=release,docs ver=0.3.0 -->
 - [x] **SC-80 — GitHub issues generated from the backlog**: the plan was visible
   only to someone reading `BACKLOG.md` or `ROADMAP.md` in the repository, so a
   contributor looking at the issue tab saw an empty project. `backlog.sh issues`
@@ -944,3 +952,15 @@ checks roadmap and blocks nothing.
   for a viewer and what to do about it. The single page carries the summary
   well; it cannot carry that depth for thirteen checks.
   <!-- sc: prio=low size=M labels=docs -->
+- [ ] **SC-94 — Developer ID signing and notarisation**: SC-65 strips
+  `com.apple.quarantine` in the cask's postflight, which makes Homebrew work by
+  telling Gatekeeper to look away rather than by giving it something to verify.
+  The tarball on the releases page is untouched by that: it is still an
+  ad-hoc-signed binary macOS kills on sight, so anyone who downloads an archive
+  instead of using Homebrew meets exactly the exit-137 silence SC-65 closed — and
+  the archive is the only macOS path for someone who does not want a tap. The fix
+  is a Developer ID Application certificate, `codesign --options runtime` over the
+  darwin builds, `notarytool submit` on the archives, and then deleting the
+  postflight. It needs a paid Apple Developer account and two more release
+  secrets, which is why it is not part of SC-65.
+  <!-- sc: prio=med size=M labels=release -->

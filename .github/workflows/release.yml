@@ -61,8 +61,10 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # SC-32: unset until the tap token is added; the brews step is
-          # skip_upload: true so a missing value cannot fail the release.
+          # SC-32: the cask publishes to Allan-Nava/homebrew-tap, which this
+          # workflow's GITHUB_TOKEN cannot write to. Fine-grained PATs expire, and
+          # when this one does a release will publish its archives and image and
+          # then fail at the cask step — the artifacts are fine, the tap is stale.
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 
   # The published image answers to the same contract as the one CI builds from
