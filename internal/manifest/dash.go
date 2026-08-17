@@ -453,8 +453,23 @@ func firstTemplate(ts ...*mpdSegTemplate) *mpdSegTemplate {
 }
 
 func dashKind(as mpdAdaptation, idx int) StreamKind {
+	// Every one of these attributes is optional on the AdaptationSet and may be
+	// stated on its Representations instead — the DASH-IF MultiResMPEG2 test case
+	// puts mimeType, codecs and the frame size all on the Representation and
+	// leaves the set bare. Reading only the set then classified every video rung
+	// as audio, and the ladder check reported "no video rendition" on a stream
+	// that has four of them.
 	mime := strings.ToLower(as.MimeType)
 	ct := strings.ToLower(as.ContentType)
+	codecs := strings.ToLower(as.Codecs)
+	height := as.Height
+	if len(as.Representations) > 0 {
+		rep := as.Representations[0]
+		mime = firstNonEmpty(mime, strings.ToLower(rep.MimeType))
+		codecs = firstNonEmpty(codecs, strings.ToLower(rep.Codecs))
+		height = firstNonZero(height, rep.Height)
+	}
+
 	switch {
 	case strings.HasPrefix(mime, "video") || ct == "video":
 		return Video
@@ -464,14 +479,13 @@ func dashKind(as mpdAdaptation, idx int) StreamKind {
 		return Text
 	}
 	// No mimeType and no contentType: infer from the codecs string.
-	codecs := strings.ToLower(as.Codecs)
 	switch {
 	case strings.HasPrefix(codecs, "avc"), strings.HasPrefix(codecs, "hev"), strings.HasPrefix(codecs, "hvc"), strings.HasPrefix(codecs, "vp0"), strings.HasPrefix(codecs, "av01"):
 		return Video
 	case strings.HasPrefix(codecs, "mp4a"), strings.HasPrefix(codecs, "ac-3"), strings.HasPrefix(codecs, "ec-3"), strings.HasPrefix(codecs, "opus"):
 		return Audio
 	}
-	if as.Height > 0 {
+	if height > 0 {
 		return Video
 	}
 	return Audio

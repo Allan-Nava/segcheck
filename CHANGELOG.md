@@ -18,6 +18,11 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   `@audioSamplingRate` or `AudioChannelConfiguration`, and when the format changes
   part-way through a rendition, which no manifest states at all because a manifest
   states one value for the whole thing.
+- **The `audio` check compares the codec too** (SC-90). An `mp4a` track declared
+  `ec-3` is silence on a device with no E-AC-3 decoder that would have played the
+  AAC happily, because `CODECS` is what a player checks before it commits. A
+  `CODECS` value naming two audio codecs — which no single rendition can honour —
+  or none at all states nothing to compare, and is not treated as a claim.
 - **Audio format read from where each container actually states it** (SC-18): the
   `AudioSampleEntry` in fMP4, the ADTS header in MPEG-TS and in packed audio, and
   the `dac3`/`dec3` box for AC-3 and E-AC-3. Muxed audio inside a video variant is
@@ -40,6 +45,16 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
     `mp4a.40.5` track whose sample entry says 24 kHz outputs the 48 kHz DASH
     declares. Exactly a doubling is now expected for the SBR profiles, and only
     for them.
+- **A DASH `AdaptationSet` may leave `mimeType` to its Representations** (SC-89),
+  and the DASH-IF `MultiResMPEG2` test case does. Every one of its four video rungs
+  read as audio, so `ladder` reported a BAD "no video rendition in the manifest" on
+  a perfectly good stream and `resolution`, `framerate` and `keyframe` went silent
+  on the whole of it. `dashKind` now falls back to the first Representation's
+  `mimeType`, `codecs` and frame size, and the stream joins the smoke suite as a
+  fifth baseline so the silence cannot come back unnoticed.
+- A data race in `TestSampleAll_ByteRangeSegmentsSendTheRangeHeader`, which
+  appended to a shared slice from concurrent HTTP handlers and failed under
+  `-race` about one run in ten.
 
 ## [0.2.0] - 2026-08-17
 

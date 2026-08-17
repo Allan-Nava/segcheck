@@ -824,7 +824,10 @@ func checkAudio(rends []*renditionData) []finding.Finding {
 
 		// Collect every distinct format across the sampled segments. More than
 		// one means the rendition reconfigures part-way through.
-		type format struct{ rate, channels int }
+		type format struct {
+			rate, channels int
+			codec          string
+		}
 		var formats []format
 		for _, sd := range parsedSegs(rd) {
 			t, ok := sd.info.Track(media.Audio)
@@ -834,7 +837,7 @@ func checkAudio(rends []*renditionData) []finding.Finding {
 			if t.SampleRate <= 0 && t.Channels <= 0 {
 				continue
 			}
-			f := format{t.SampleRate, t.Channels}
+			f := format{t.SampleRate, t.Channels, t.Codec}
 			seen := false
 			for _, g := range formats {
 				if g == f {
@@ -876,6 +879,9 @@ func checkAudio(rends []*renditionData) []finding.Finding {
 		var problems []string
 		var value float64
 		var unit string
+		if want, as, ok := declaredAudioCodec(rd.r.Codecs); ok && got.codec != "" && want != got.codec {
+			problems = append(problems, fmt.Sprintf("media is %s but CODECS declares %s", got.codec, as))
+		}
 		if rd.r.SampleRate > 0 && got.rate > 0 && !ratesAgree(got.rate, rd.r.SampleRate, rd.r.Codecs) {
 			problems = append(problems, fmt.Sprintf("media runs at %s but the manifest declares %s",
 				humanSampleRate(got.rate), humanSampleRate(rd.r.SampleRate)))
@@ -899,7 +905,7 @@ func checkAudio(rends []*renditionData) []finding.Finding {
 		}
 
 		switch {
-		case rd.r.SampleRate > 0 || rd.r.Channels > 0:
+		case rd.r.SampleRate > 0 || rd.r.Channels > 0 || rd.r.Codecs != "":
 			out = append(out, finding.Finding{
 				Check: "audio", Target: label, Status: finding.OK,
 				Message: fmt.Sprintf("%s, as declared", humanAudioFormat(got.rate, got.channels)),
@@ -912,6 +918,54 @@ func checkAudio(rends []*renditionData) []finding.Finding {
 		}
 	}
 	return out
+}
+
+// audioCodecNames maps the RFC 6381 CODECS prefixes to the names the media
+// readers report. A CODECS value carries a profile the bitstream does not state
+// ("mp4a.40.2"), so only the sample-entry-shaped prefix is comparable.
+var audioCodecNames = map[string]string{
+	"mp4a": "aac",
+	"ac-3": "ac3",
+	"ec-3": "eac3",
+	"ac-4": "ac4",
+	"opus": "opus",
+	"flac": "flac",
+	"alac": "alac",
+	"dtsc": "dts", "dtse": "dts", "dtsh": "dts", "dtsl": "dts",
+	"mp4a.6b": "mp3", "mp4a.69": "mp3",
+}
+
+// declaredAudioCodec picks the audio codec out of a CODECS value. A video
+// variant's CODECS lists its video codec alongside its audio one, and a value
+// naming no audio codec at all — or more than one, which no single rendition can
+// honour — states nothing this check can compare.
+func declaredAudioCodec(codecs string) (name, as string, ok bool) {
+	var found, raw string
+	for _, c := range strings.Split(codecs, ",") {
+		c = strings.TrimSpace(c)
+		if c == "" {
+			continue
+		}
+		// The longer keys are MP3 object types, which share the mp4a prefix, so
+		// they are tried before it.
+		got := ""
+		for _, key := range []string{"mp4a.6b", "mp4a.69"} {
+			if strings.HasPrefix(strings.ToLower(c), key) {
+				got = audioCodecNames[key]
+			}
+		}
+		if got == "" && len(c) >= 4 {
+			got = audioCodecNames[strings.ToLower(c[:4])]
+		}
+		if got == "" {
+			continue // a video codec, or one this table does not know
+		}
+		if found != "" && found != got {
+			return "", "", false // two audio codecs declared: neither is the claim
+		}
+		found, raw = got, c
+	}
+	return found, raw, found != ""
 }
 
 // ratesAgree compares a coded sampling rate against a declared one.

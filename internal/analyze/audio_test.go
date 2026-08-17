@@ -455,3 +455,92 @@ func TestCheckAudio_HEAACDeclaresTheOutputRate(t *testing.T) {
 		t.Errorf("HE-AAC at a third of the declared rate: want one BAD finding, got %+v", out)
 	}
 }
+
+// A rendition that declares one audio codec and ships another is a rendition a
+// player will not decode at all: CODECS is what it checks before it commits, so
+// an ec-3 declaration over an mp4a track is silence on a device that has no
+// E-AC-3 decoder and would have played the AAC happily.
+func TestRun_AudioCodecContradictsManifest(t *testing.T) {
+	init := mediatest.MP4InitAudio(1, 90000, "mp4a", 2, 48000)
+	frag := mediatest.MP4Segment(1, 1, 0, 3600, 50, 2000)
+	info, err := media.ParseMP4(frag, init)
+	if err != nil {
+		t.Fatalf("ParseMP4: %v", err)
+	}
+	rd := &renditionData{
+		r: manifest.Rendition{Name: "a", Kind: manifest.Audio,
+			Codecs: "ec-3", SampleRate: 48000, Channels: 2},
+		segs: []segmentData{{info: info, parsed: true}},
+	}
+	out := checkAudio([]*renditionData{rd})
+	if len(out) != 1 || out[0].Status != finding.BAD {
+		t.Fatalf("want one BAD finding, got %+v", out)
+	}
+	if !strings.Contains(out[0].Message, "aac") || !strings.Contains(out[0].Message, "ec-3") {
+		t.Errorf("finding does not name both codecs: %q", out[0].Message)
+	}
+}
+
+// The declarations that legitimately name the same codec must not be flagged: a
+// CODECS value carries a profile the track does not state, a video variant lists
+// its video codec alongside the audio one, and E-AC-3 media is declared ec-3.
+func TestCheckAudio_CodecsThatAgree(t *testing.T) {
+	frag := mediatest.MP4Segment(1, 1, 0, 3600, 50, 2000)
+	for _, tc := range []struct {
+		codecs string
+		init   []byte
+	}{
+		{"mp4a.40.2", mediatest.MP4InitAudio(1, 90000, "mp4a", 2, 48000)},
+		{"avc1.4d401f,mp4a.40.2", mediatest.MP4InitAudio(1, 90000, "mp4a", 2, 48000)},
+		{"ec-3", mediatest.MP4InitEAC3(1, 90000, 6, 48000, 0)},
+		{"ac-3", mediatest.MP4InitAC3(1, 90000, 6, 48000)},
+		// Nothing declared cannot be contradicted.
+		{"", mediatest.MP4InitAudio(1, 90000, "mp4a", 2, 48000)},
+	} {
+		info, err := media.ParseMP4(frag, tc.init)
+		if err != nil {
+			t.Fatalf("%s: ParseMP4: %v", tc.codecs, err)
+		}
+		rd := &renditionData{
+			r:    manifest.Rendition{Name: "a", Kind: manifest.Audio, Codecs: tc.codecs},
+			segs: []segmentData{{info: info, parsed: true}},
+		}
+		for _, f := range checkAudio([]*renditionData{rd}) {
+			if f.Status != finding.OK {
+				t.Errorf("CODECS=%q produced %s: %s", tc.codecs, f.Status, f.Message)
+			}
+		}
+	}
+}
+
+// What a CODECS value does and does not amount to a comparable audio claim.
+func TestDeclaredAudioCodec(t *testing.T) {
+	for _, tc := range []struct {
+		codecs string
+		want   string
+		as     string
+		ok     bool
+	}{
+		{"mp4a.40.2", "aac", "mp4a.40.2", true},
+		{"avc1.4d401f,mp4a.40.2", "aac", "mp4a.40.2", true},
+		{"ec-3", "eac3", "ec-3", true},
+		{"fLaC", "flac", "fLaC", true},
+		{"mp4a.6B", "mp3", "mp4a.6B", true},
+		{"mp4a.69", "mp3", "mp4a.69", true},
+		{"dtsc", "dts", "dtsc", true},
+		// A rendition cannot be two audio codecs at once, so a value naming two
+		// states nothing to compare. Neither does a video-only value, a codec this
+		// table does not know, an empty one, or a token too short to read.
+		{"mp4a.40.2,ec-3", "", "", false},
+		{"avc1.4d401f", "", "", false},
+		{"zzzz", "", "", false},
+		{"", "", "", false},
+		{"a,,b", "", "", false},
+	} {
+		name, as, ok := declaredAudioCodec(tc.codecs)
+		if name != tc.want || as != tc.as || ok != tc.ok {
+			t.Errorf("declaredAudioCodec(%q) = %q/%q/%v, want %q/%q/%v",
+				tc.codecs, name, as, ok, tc.want, tc.as, tc.ok)
+		}
+	}
+}

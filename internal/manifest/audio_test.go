@@ -128,3 +128,45 @@ func TestParseHLSChannels_Unreadable(t *testing.T) {
 		t.Errorf("parseHLSChannels(%q) = %d, want 0", "16/JOC", got)
 	}
 }
+
+// An AdaptationSet may state neither mimeType nor contentType nor codecs and
+// leave all of it to its Representations — the DASH-IF MultiResMPEG2 test case
+// does exactly that. Falling through to "audio" then classifies every video rung
+// as audio, which makes the ladder check report "no video rendition in the
+// manifest" on a perfectly good stream.
+func TestParseDASH_KindFromTheRepresentation(t *testing.T) {
+	m := `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" mediaPresentationDuration="PT10S">
+ <Period>
+  <AdaptationSet segmentAlignment="true" maxWidth="1920" maxHeight="1080" par="16:9">
+   <SegmentTemplate media="v-$Number$.m4s" initialization="v-init.mp4" duration="2" timescale="1"/>
+   <Representation id="v1" mimeType="video/mp4" codecs="avc1.640028" width="768" height="432" bandwidth="1951761"/>
+   <Representation id="v2" mimeType="video/mp4" codecs="avc1.640028" width="1920" height="1080" bandwidth="7953041"/>
+  </AdaptationSet>
+  <AdaptationSet segmentAlignment="true">
+   <SegmentTemplate media="a-$Number$.m4s" initialization="a-init.mp4" duration="2" timescale="1"/>
+   <Representation id="a1" mimeType="audio/mp4" codecs="mp4a.40.5" audioSamplingRate="48000" bandwidth="64000"/>
+  </AdaptationSet>
+ </Period>
+</MPD>
+`
+	pl, err := ParseDASH([]byte(m), "https://e.test/m.mpd", fixedNow())
+	if err != nil {
+		t.Fatalf("ParseDASH: %v", err)
+	}
+	want := map[int]StreamKind{1951761: Video, 7953041: Video, 64000: Audio}
+	for _, r := range pl.Renditions {
+		w, ok := want[r.Bandwidth]
+		if !ok {
+			t.Errorf("unexpected rendition %s at %d bps", r.Name, r.Bandwidth)
+			continue
+		}
+		if r.Kind != w {
+			t.Errorf("%dbps: kind = %q, want %q", r.Bandwidth, r.Kind, w)
+		}
+		delete(want, r.Bandwidth)
+	}
+	if len(want) != 0 {
+		t.Errorf("renditions not seen: %v", want)
+	}
+}

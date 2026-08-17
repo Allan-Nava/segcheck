@@ -273,17 +273,20 @@ stream that break in production and that no manifest-only checker can see.
   and against the rendition itself across segments. Silence detection is explicitly
   out of scope (that needs decoding).
   <!-- sc: prio=high size=M labels=check ver=0.3.0 -->
-- [ ] **SC-89 — DASH kind from the Representation**: an `AdaptationSet` may state
+- [x] **SC-89 — DASH kind from the Representation**: an `AdaptationSet` may state
   no `mimeType` or `contentType` and leave it to its Representations, which
   `dash.akamaized.net/dash264/TestCasesHD/2b/qualcomm/1/MultiResMPEG2.mpd` does.
-  Every rung of it is then classified as audio, so the `ladder` check reports a BAD
-  "no video rendition in the manifest" on a perfectly good stream. Fall back to the
-  first Representation's `mimeType`/`codecs`.
-  <!-- sc: prio=high size=S labels=parser -->
-- [ ] **SC-90 — Audio codec against `CODECS`**: the `audio` check compares the rate
-  and the layout but not the codec, so an `mp4a` rendition declared `ec-3` goes
-  unreported. The information is already on the track; the comparison is not.
-  <!-- sc: prio=med size=S labels=check -->
+  Every rung of it was then classified as audio, so the `ladder` check reported a
+  BAD "no video rendition in the manifest" on a perfectly good stream and
+  `resolution`, `framerate` and `keyframe` went silent on all of it. `dashKind` now
+  falls back to the first Representation's `mimeType`, `codecs` and frame size, and
+  the stream is a smoke-suite baseline.
+  <!-- sc: prio=high size=S labels=parser ver=0.3.0 -->
+- [x] **SC-90 — Audio codec against `CODECS`**: the `audio` check compares the rate
+  and the layout, and now the codec too — an `mp4a` track declared `ec-3` is
+  silence on a device with no E-AC-3 decoder that would have played the AAC. A
+  `CODECS` value naming two audio codecs, or none, states nothing to compare.
+  <!-- sc: prio=med size=S labels=check ver=0.3.0 -->
 
 - [ ] **SC-20 — SCTE-35 / `EXT-X-DATERANGE`**: ad-break signalling present in the
   manifest and consistent with the segment boundaries. The check operators

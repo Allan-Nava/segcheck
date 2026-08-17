@@ -112,7 +112,7 @@ segcheck check https://cdn.example/master.m3u8 --exit-on bad
 | `resolution` | The coded resolution in the bitstream against the declared `RESOLUTION` | BAD |
 | `keyframe` | Every segment carries a random access point — an IDR, an HEVC IRAP, an fMP4 sync sample — so it can be switched into at all | BAD |
 | `framerate` | The measured frame rate against the declared `FRAME-RATE` / `@frameRate`, and rungs whose rate is unrelated to the rest of the ladder | WARN |
-| `audio` | The sampling rate and channel layout the media actually carries against `CHANNELS` / `@audioSamplingRate` / `AudioChannelConfiguration`, and either changing part-way through a rendition | BAD |
+| `audio` | The sampling rate, channel layout and codec the media actually carries against `CHANNELS` / `@audioSamplingRate` / `AudioChannelConfiguration` / `CODECS`, and any of them changing part-way through a rendition | BAD |
 | `tracks` | Expected video/audio present, codecs match `CODECS`, track layout stable across segments | BAD |
 | `alignment` | Segment boundaries across renditions, so ABR switching does not glitch | BAD |
 | `encryption` | Declared protection against what the segments carry | BAD |

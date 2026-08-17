@@ -84,6 +84,19 @@ var smokeStreams = []smokeStream{
 		allowed: map[string]string{},
 		expect:  []string{"container", "resolution", "keyframe", "continuity"},
 	},
+	{
+		name: "dash-representation-attrs",
+		url:  "https://dash.akamaized.net/dash264/TestCasesHD/2b/qualcomm/1/MultiResMPEG2.mpd",
+		// The AdaptationSet states no mimeType, no contentType and no codecs and
+		// leaves all of it to its Representations. Until SC-89 every one of its
+		// four video rungs read as audio, so `ladder` reported "no video rendition
+		// in the manifest" and `resolution`, `framerate` and `keyframe` went silent
+		// on the whole stream. Those four checks in `expect` are the point of it.
+		allowed: map[string]string{
+			"bitrate": "a segment peak exceeds the declared BANDWIDTH by about 20%",
+		},
+		expect: []string{"container", "resolution", "keyframe", "framerate", "continuity", "audio", "ladder"},
+	},
 }
 
 type smokeResult struct {
