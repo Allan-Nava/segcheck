@@ -59,7 +59,7 @@ var smokeStreams = []smokeStream{
 			"bitrate": "the example over-declares BANDWIDTH by about 2x on several rungs",
 			"ladder":  "the example ships rungs where more bandwidth buys fewer pixels",
 		},
-		expect: []string{"container", "resolution", "keyframe", "framerate", "continuity"},
+		expect: []string{"container", "resolution", "keyframe", "framerate", "continuity", "audio"},
 	},
 	{
 		name: "apple-mpeg-ts",
@@ -67,13 +67,13 @@ var smokeStreams = []smokeStream{
 		// Byte-range segments off one main.ts, which is what made the first
 		// keyframe rule report this stream three times over.
 		allowed: map[string]string{},
-		expect:  []string{"container", "resolution", "keyframe", "framerate", "continuity"},
+		expect:  []string{"container", "resolution", "keyframe", "framerate", "continuity", "audio"},
 	},
 	{
 		name:    "dash-segment-template",
 		url:     "https://dash.akamaized.net/akamai/bbb_30fps/bbb_30fps.mpd",
 		allowed: map[string]string{},
-		expect:  []string{"container", "resolution", "keyframe", "framerate", "continuity"},
+		expect:  []string{"container", "resolution", "keyframe", "framerate", "continuity", "audio"},
 	},
 	{
 		name: "dash-single-file",

@@ -86,6 +86,7 @@ func ParseHLS(body []byte, baseURL string) (Playlist, error) {
 				Kind:     kind,
 				Language: attrs["LANGUAGE"],
 				GroupID:  attrs["GROUP-ID"],
+				Channels: parseHLSChannels(attrs["CHANNELS"]),
 			})
 
 		case strings.HasPrefix(line, "#EXT-X-TARGETDURATION:"):
@@ -315,4 +316,25 @@ func parsePDT(s string) (time.Time, error) {
 		}
 	}
 	return time.Time{}, fmt.Errorf("unparseable EXT-X-PROGRAM-DATE-TIME %q", s)
+}
+
+// parseHLSChannels reads the count out of the CHANNELS attribute, and only when
+// that count describes the coded audio.
+//
+// The value is a slash-separated list. A bare first element is the channel count
+// and is directly comparable to what the segments carry. Once a spatial-coding
+// identifier follows it, the count is the maximum number of channels the
+// *presentation* renders, not the number the bed codes: Dolby Atmos ships as
+// "16/JOC" over a 5.1 E-AC-3 bed, and comparing 16 against 6 would report Apple's
+// own Atmos reference stream as broken. Such a value is left unstated, because a
+// claim this tool cannot compare is not a claim it should pretend to check.
+func parseHLSChannels(v string) int {
+	if v == "" || strings.Contains(v, "/") {
+		return 0
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil || n <= 0 {
+		return 0
+	}
+	return n
 }

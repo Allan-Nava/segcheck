@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -307,7 +308,12 @@ func TestSampleAll_ZeroConcurrencyStillSamples(t *testing.T) {
 // are analysed.
 func TestSampleAll_ByteRangeSegmentsSendTheRangeHeader(t *testing.T) {
 	whole := tsSegmentBytes()
-	var ranges []string
+	// The segment fan-out fetches concurrently, so the handler records under a
+	// mutex: without one the -race detector fails this test, intermittently.
+	var (
+		mu     sync.Mutex
+		ranges []string
+	)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/index.m3u8", func(w http.ResponseWriter, r *http.Request) {
@@ -319,7 +325,9 @@ func TestSampleAll_ByteRangeSegmentsSendTheRangeHeader(t *testing.T) {
 	})
 	mux.HandleFunc("/all.ts", func(w http.ResponseWriter, r *http.Request) {
 		if rh := r.Header.Get("Range"); rh != "" {
+			mu.Lock()
 			ranges = append(ranges, rh)
+			mu.Unlock()
 			w.Header().Set("Content-Type", "video/mp2t")
 			w.WriteHeader(http.StatusPartialContent)
 			_, _ = w.Write(whole)
@@ -332,6 +340,8 @@ func TestSampleAll_ByteRangeSegmentsSendTheRangeHeader(t *testing.T) {
 	defer srv.Close()
 
 	res := runOn(t, srv.URL+"/index.m3u8")
+	mu.Lock()
+	defer mu.Unlock()
 	if len(ranges) == 0 {
 		t.Fatalf("no Range header was sent for byte-range segments:\n%s", dump(res))
 	}

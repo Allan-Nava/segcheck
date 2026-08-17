@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/Allan-Nava/segcheck/internal/finding"
@@ -801,6 +802,202 @@ func medianFloat(xs []float64) float64 {
 
 // humanFPS drops the decimals a whole rate does not need, so 25 reads as "25fps"
 // and 29.97 keeps the part that distinguishes it from 30.
+// checkAudio compares an audio rendition's actual format against what the
+// manifest claims and against itself. A player configures its decoder and its
+// output device from the manifest before it has fetched a byte of media, so a
+// contradiction here is not cosmetic: the wrong rate is a pitch shift, the wrong
+// channel count is a missing centre channel or a silent surround.
+//
+// The measurement comes from wherever the format is actually stated — the
+// AudioSampleEntry in fMP4, the ADTS header in MPEG-TS and packed audio — and the
+// claim from EXT-X-MEDIA CHANNELS or DASH @audioSamplingRate and
+// AudioChannelConfiguration. Either side may be silent, and a claim the manifest
+// never made cannot be contradicted.
+func checkAudio(rends []*renditionData) []finding.Finding {
+	var out []finding.Finding
+
+	for _, rd := range rends {
+		if rd.err != nil || rd.initErr != nil {
+			continue
+		}
+		label := rendLabel(rd)
+
+		// Collect every distinct format across the sampled segments. More than
+		// one means the rendition reconfigures part-way through.
+		type format struct{ rate, channels int }
+		var formats []format
+		for _, sd := range parsedSegs(rd) {
+			t, ok := sd.info.Track(media.Audio)
+			if !ok {
+				continue
+			}
+			if t.SampleRate <= 0 && t.Channels <= 0 {
+				continue
+			}
+			f := format{t.SampleRate, t.Channels}
+			seen := false
+			for _, g := range formats {
+				if g == f {
+					seen = true
+					break
+				}
+			}
+			if !seen {
+				formats = append(formats, f)
+			}
+		}
+		if len(formats) == 0 {
+			// A video-only rendition has nothing for this check to say. One that
+			// does carry audio but states no format gets an honest OK: that is a
+			// limit of what the segment carries, not a defect in it.
+			if !hasAudioTrack(rd) {
+				continue
+			}
+			out = append(out, finding.Finding{
+				Check: "audio", Target: label, Status: finding.OK,
+				Message: "segments do not state a sampling rate or channel count: not verified",
+			})
+			continue
+		}
+		if len(formats) > 1 {
+			names := make([]string, 0, len(formats))
+			for _, f := range formats {
+				names = append(names, humanAudioFormat(f.rate, f.channels))
+			}
+			out = append(out, finding.Finding{
+				Check: "audio", Target: label, Status: finding.BAD,
+				Message: fmt.Sprintf("audio format changes mid-rendition: %s", strings.Join(names, " then ")),
+				Hint:    "a decoder is configured once from the first segment it sees; a rendition that changes rate or channel layout part-way through goes silent or plays noise from that point on",
+			})
+			continue
+		}
+
+		got := formats[0]
+		var problems []string
+		var value float64
+		var unit string
+		if rd.r.SampleRate > 0 && got.rate > 0 && !ratesAgree(got.rate, rd.r.SampleRate, rd.r.Codecs) {
+			problems = append(problems, fmt.Sprintf("media runs at %s but the manifest declares %s",
+				humanSampleRate(got.rate), humanSampleRate(rd.r.SampleRate)))
+			value, unit = float64(got.rate), "Hz"
+		}
+		if rd.r.Channels > 0 && got.channels > 0 && rd.r.Channels != got.channels {
+			problems = append(problems, fmt.Sprintf("media is %s but the manifest declares %s",
+				humanChannels(got.channels), humanChannels(rd.r.Channels)))
+			if unit == "" {
+				value, unit = float64(got.channels), "channels"
+			}
+		}
+		if len(problems) > 0 {
+			out = append(out, finding.Finding{
+				Check: "audio", Target: label, Status: finding.BAD,
+				Message: strings.Join(problems, "; "),
+				Value:   finding.Num(value), Unit: unit,
+				Hint: "players choose and configure an audio rendition from these declarations alone: one that does not describe the media gets picked for a device that cannot play it",
+			})
+			continue
+		}
+
+		switch {
+		case rd.r.SampleRate > 0 || rd.r.Channels > 0:
+			out = append(out, finding.Finding{
+				Check: "audio", Target: label, Status: finding.OK,
+				Message: fmt.Sprintf("%s, as declared", humanAudioFormat(got.rate, got.channels)),
+			})
+		default:
+			out = append(out, finding.Finding{
+				Check: "audio", Target: label, Status: finding.OK,
+				Message: fmt.Sprintf("%s measured, nothing declared to compare against", humanAudioFormat(got.rate, got.channels)),
+			})
+		}
+	}
+	return out
+}
+
+// ratesAgree compares a coded sampling rate against a declared one.
+//
+// They may legitimately differ by exactly a factor of two. HE-AAC codes the
+// signal at half rate and rebuilds the top octave with Spectral Band Replication,
+// so a track whose AudioSampleEntry says 24 kHz outputs 48 kHz — and DASH's
+// @audioSamplingRate states the output rate. Sony's DASH-IF reference stream is
+// exactly this shape, and treating it as a mismatch would flag a large share of
+// the world's AAC audio as broken.
+func ratesAgree(coded, declared int, codecs string) bool {
+	if coded == declared {
+		return true
+	}
+	return codecSignalsSBR(codecs) && declared == coded*2
+}
+
+// codecSignalsSBR reports whether a CODECS value names an AAC profile that uses
+// Spectral Band Replication: object type 5 is HE-AAC, 29 is HE-AAC v2. RFC 6381
+// allows the object type to be zero-padded, so "mp4a.40.05" means the same thing
+// as "mp4a.40.5".
+func codecSignalsSBR(codecs string) bool {
+	for _, c := range strings.Split(codecs, ",") {
+		c = strings.ToLower(strings.TrimSpace(c))
+		rest, ok := strings.CutPrefix(c, "mp4a.40.")
+		if !ok {
+			continue
+		}
+		n, err := strconv.Atoi(rest)
+		if err != nil {
+			continue
+		}
+		if n == 5 || n == 29 {
+			return true
+		}
+	}
+	return false
+}
+
+// hasAudioTrack reports whether any sampled segment carried an audio track at
+// all. Without one there is no audio to be sane or insane about.
+func hasAudioTrack(rd *renditionData) bool {
+	for _, sd := range parsedSegs(rd) {
+		if _, ok := sd.info.Track(media.Audio); ok {
+			return true
+		}
+	}
+	return false
+}
+
+// humanAudioFormat names a rate and a layout together, skipping whichever half
+// the media did not state.
+func humanAudioFormat(rate, channels int) string {
+	switch {
+	case rate > 0 && channels > 0:
+		return humanSampleRate(rate) + " " + humanChannels(channels)
+	case rate > 0:
+		return humanSampleRate(rate)
+	case channels > 0:
+		return humanChannels(channels)
+	}
+	return "unknown format"
+}
+
+// humanSampleRate writes a rate the way an operator says it: 48 kHz, 44.1 kHz.
+func humanSampleRate(hz int) string {
+	return fmt.Sprintf("%g kHz", float64(hz)/1000)
+}
+
+// humanChannels names the common layouts. A count with no common name is
+// reported as a count rather than guessed at.
+func humanChannels(n int) string {
+	switch n {
+	case 1:
+		return "mono"
+	case 2:
+		return "stereo"
+	case 6:
+		return "5.1"
+	case 8:
+		return "7.1"
+	default:
+		return fmt.Sprintf("%d channels", n)
+	}
+}
+
 func humanFPS(fps float64) string {
 	if math.Abs(fps-math.Round(fps)) < 0.005 {
 		return fmt.Sprintf("%.0ffps", fps)

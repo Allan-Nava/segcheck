@@ -25,6 +25,17 @@ func PackedAudio(startPTS int64, frames int) []byte {
 	return out
 }
 
+// PackedAudioAt is PackedAudio at a chosen sampling rate and channel count, for
+// a caller that needs the format to be something other than the 48kHz stereo
+// default — or to change part-way through a rendition.
+func PackedAudioAt(startPTS int64, frames, sampleRate, channels int) []byte {
+	out := ID3Timestamp(startPTS)
+	for i := 0; i < frames; i++ {
+		out = append(out, ADTSFrame(sampleRate, channels, adtsPayloadSize)...)
+	}
+	return out
+}
+
 // PackedAudioNoID3 is PackedAudio without the timestamp tag: parseable, but with
 // no timeline of its own.
 func PackedAudioNoID3(frames int) []byte {
@@ -56,14 +67,48 @@ func ID3Timestamp(pts int64) []byte {
 
 // adtsFrame builds one ADTS AAC frame header plus payloadSize bytes of payload.
 func adtsFrame(payloadSize int) []byte {
+	return adtsFrameAt(adtsRateIndex, adtsChannelCfg, payloadSize)
+}
+
+// adtsSampleRateIndices maps a sampling rate to the index ADTS states it by. The
+// table is duplicated here rather than shared with the parser on purpose: a
+// builder that derived its answer from the reader under test would agree with it
+// however wrong the reader was.
+var adtsSampleRateIndices = map[int]int{
+	96000: 0, 88200: 1, 64000: 2, 48000: 3, 44100: 4, 32000: 5,
+	24000: 6, 22050: 7, 16000: 8, 12000: 9, 11025: 10, 8000: 11, 7350: 12,
+}
+
+// ADTSHeaderBytes is the seven-byte header alone, for a caller that needs to
+// place it somewhere by hand rather than as a whole frame.
+func ADTSHeaderBytes(sampleRate, channels int) []byte {
+	return ADTSFrame(sampleRate, channels, 0)[:7]
+}
+
+// ADTSFrame builds one frame stating a sampling rate and channel count, for a
+// caller that needs a format other than the package default.
+func ADTSFrame(sampleRate, channels, payloadSize int) []byte {
+	idx, ok := adtsSampleRateIndices[sampleRate]
+	if !ok {
+		idx = adtsRateIndex
+	}
+	// channel_configuration is an index, not a count: 7 means eight channels.
+	cfg := channels
+	if channels == 8 {
+		cfg = 7
+	}
+	return adtsFrameAt(idx, cfg, payloadSize)
+}
+
+func adtsFrameAt(rateIndex, channelCfg, payloadSize int) []byte {
 	const headerLen = 7
 	frameLen := headerLen + payloadSize
 
 	h := make([]byte, headerLen)
 	h[0] = 0xFF
 	h[1] = 0xF1 // MPEG-4, layer 00, protection_absent = 1 (no CRC)
-	h[2] = byte(1<<6) | byte(adtsRateIndex<<2) | byte(adtsChannelCfg>>2)
-	h[3] = byte((adtsChannelCfg&0x03)<<6) | byte(frameLen>>11)
+	h[2] = byte(1<<6) | byte(rateIndex<<2) | byte(channelCfg>>2)
+	h[3] = byte((channelCfg&0x03)<<6) | byte(frameLen>>11)
 	h[4] = byte((frameLen >> 3) & 0xFF)
 	// buffer fullness 0x7FF (variable rate) and one raw data block.
 	h[5] = byte((frameLen&0x07)<<5) | 0x1F

@@ -45,6 +45,12 @@ type Rendition struct {
 	Height       int     `json:"height,omitempty"`
 	Codecs       string  `json:"codecs,omitempty"`
 	FrameRate    float64 `json:"frame_rate,omitempty"`
+	// SampleRate and Channels are what the manifest claims about an audio
+	// rendition: DASH @audioSamplingRate and AudioChannelConfiguration@value,
+	// HLS EXT-X-MEDIA CHANNELS (which states no rate at all). Zero means the
+	// manifest did not say, and an unstated claim is not a wrong one.
+	SampleRate int `json:"sample_rate,omitempty"`
+	Channels   int `json:"channels,omitempty"`
 	// AudioGroup is the EXT-X-STREAM-INF AUDIO attribute, linking a video
 	// variant to its audio group.
 	AudioGroup string `json:"audio_group,omitempty"`

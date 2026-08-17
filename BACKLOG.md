@@ -266,9 +266,25 @@ the stream is healthy.
 Audio, captions, subtitles, ad signalling and protected content — the parts of a
 stream that break in production and that no manifest-only checker can see.
 
-- [ ] **SC-18 — Audio sanity**: sample rate and channel count consistency across
-  a rendition and against `CODECS`; silence detection is explicitly out of scope
-  (that needs decoding). <!-- sc: prio=high size=M labels=check -->
+- [x] **SC-18 — Audio sanity**: sample rate and channel count read from where each
+  container states them — the `AudioSampleEntry` in fMP4, the `dac3`/`dec3` box for
+  AC-3 and E-AC-3, the ADTS header in MPEG-TS and packed audio — then compared
+  against HLS `CHANNELS`, DASH `@audioSamplingRate` and `AudioChannelConfiguration`,
+  and against the rendition itself across segments. Silence detection is explicitly
+  out of scope (that needs decoding).
+  <!-- sc: prio=high size=M labels=check ver=0.3.0 -->
+- [ ] **SC-89 — DASH kind from the Representation**: an `AdaptationSet` may state
+  no `mimeType` or `contentType` and leave it to its Representations, which
+  `dash.akamaized.net/dash264/TestCasesHD/2b/qualcomm/1/MultiResMPEG2.mpd` does.
+  Every rung of it is then classified as audio, so the `ladder` check reports a BAD
+  "no video rendition in the manifest" on a perfectly good stream. Fall back to the
+  first Representation's `mimeType`/`codecs`.
+  <!-- sc: prio=high size=S labels=parser -->
+- [ ] **SC-90 — Audio codec against `CODECS`**: the `audio` check compares the rate
+  and the layout but not the codec, so an `mp4a` rendition declared `ec-3` goes
+  unreported. The information is already on the track; the comparison is not.
+  <!-- sc: prio=med size=S labels=check -->
+
 - [ ] **SC-20 — SCTE-35 / `EXT-X-DATERANGE`**: ad-break signalling present in the
   manifest and consistent with the segment boundaries. The check operators
   actually want before a live event.

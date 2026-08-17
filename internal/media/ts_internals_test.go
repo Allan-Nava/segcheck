@@ -295,14 +295,24 @@ func TestTsStream_CheckCC(t *testing.T) {
 
 // ---------- elementary-stream capture ----------
 
-// Only video payload is kept, and only up to the cap: the capture exists to find
-// a parameter set, and an unbounded one would hold a whole segment in memory for
-// every rendition being checked.
+// Payload is kept only for the tracks something is read out of, and only up to
+// each one's cap: the capture exists to find a parameter set or an ADTS header,
+// and an unbounded one would hold a whole segment in memory for every rendition
+// being checked.
 func TestTsStream_Capture(t *testing.T) {
-	audio := &tsStream{streamType: 0x0F, lastCC: -1}
-	audio.capture(make([]byte, 100))
-	if len(audio.es) != 0 {
-		t.Errorf("captured %d bytes of an audio stream", len(audio.es))
+	// AAC is capped at one header's worth — enough for the rate and the channel
+	// count, nowhere near a segment of audio.
+	aac := &tsStream{streamType: streamTypeAAC, lastCC: -1}
+	aac.capture(make([]byte, 1000))
+	if len(aac.es) != adtsHeaderCapture {
+		t.Errorf("captured %d bytes of AAC, want %d", len(aac.es), adtsHeaderCapture)
+	}
+
+	// Nothing is read out of an AC-3 bitstream, so nothing is kept.
+	ac3 := &tsStream{streamType: 0x81, lastCC: -1}
+	ac3.capture(make([]byte, 100))
+	if len(ac3.es) != 0 {
+		t.Errorf("captured %d bytes of an AC-3 stream", len(ac3.es))
 	}
 
 	video := &tsStream{streamType: 0x1B, lastCC: -1}

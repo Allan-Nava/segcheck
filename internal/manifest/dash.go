@@ -37,13 +37,18 @@ type mpdPeriod struct {
 }
 
 type mpdAdaptation struct {
-	MimeType          string              `xml:"mimeType,attr"`
-	ContentType       string              `xml:"contentType,attr"`
-	Lang              string              `xml:"lang,attr"`
-	Codecs            string              `xml:"codecs,attr"`
-	Width             int                 `xml:"width,attr"`
-	Height            int                 `xml:"height,attr"`
-	FrameRate         string              `xml:"frameRate,attr"`
+	MimeType                  string `xml:"mimeType,attr"`
+	ContentType               string `xml:"contentType,attr"`
+	Lang                      string `xml:"lang,attr"`
+	Codecs                    string `xml:"codecs,attr"`
+	Width                     int    `xml:"width,attr"`
+	Height                    int    `xml:"height,attr"`
+	FrameRate                 string `xml:"frameRate,attr"`
+	AudioSamplingRate         int    `xml:"audioSamplingRate,attr"`
+	AudioChannelConfiguration []struct {
+		SchemeIDURI string `xml:"schemeIdUri,attr"`
+		Value       string `xml:"value,attr"`
+	} `xml:"AudioChannelConfiguration"`
 	BaseURL           []string            `xml:"BaseURL"`
 	SegmentTemplate   *mpdSegTemplate     `xml:"SegmentTemplate"`
 	Representations   []mpdRepresentation `xml:"Representation"`
@@ -53,13 +58,18 @@ type mpdAdaptation struct {
 }
 
 type mpdRepresentation struct {
-	ID              string          `xml:"id,attr"`
-	Bandwidth       int             `xml:"bandwidth,attr"`
-	Width           int             `xml:"width,attr"`
-	Height          int             `xml:"height,attr"`
-	Codecs          string          `xml:"codecs,attr"`
-	MimeType        string          `xml:"mimeType,attr"`
-	FrameRate       string          `xml:"frameRate,attr"`
+	ID                        string `xml:"id,attr"`
+	Bandwidth                 int    `xml:"bandwidth,attr"`
+	Width                     int    `xml:"width,attr"`
+	Height                    int    `xml:"height,attr"`
+	Codecs                    string `xml:"codecs,attr"`
+	MimeType                  string `xml:"mimeType,attr"`
+	FrameRate                 string `xml:"frameRate,attr"`
+	AudioSamplingRate         int    `xml:"audioSamplingRate,attr"`
+	AudioChannelConfiguration []struct {
+		SchemeIDURI string `xml:"schemeIdUri,attr"`
+		Value       string `xml:"value,attr"`
+	} `xml:"AudioChannelConfiguration"`
 	BaseURL         []string        `xml:"BaseURL"`
 	SegmentTemplate *mpdSegTemplate `xml:"SegmentTemplate"`
 	SegmentBase     *struct {
@@ -147,6 +157,13 @@ func ParseDASH(body []byte, baseURL string, now time.Time) (Playlist, error) {
 					Height:    firstNonZero(rep.Height, as.Height),
 					Codecs:    firstNonEmpty(rep.Codecs, as.Codecs),
 					FrameRate: parseFrameRate(firstNonEmpty(rep.FrameRate, as.FrameRate)),
+					// The Representation states its own audio properties when it
+					// differs from the set; otherwise the set's values apply to it.
+					SampleRate: firstNonZero(rep.AudioSamplingRate, as.AudioSamplingRate),
+					Channels: firstNonZero(
+						dashChannels(rep.AudioChannelConfiguration),
+						dashChannels(as.AudioChannelConfiguration),
+					),
 				}
 
 				switch {
@@ -587,6 +604,30 @@ func parseFrameRate(s string) float64 {
 	}
 	f, _ := strconv.ParseFloat(s, 64)
 	return f
+}
+
+// mpegChannelConfigScheme is the one AudioChannelConfiguration scheme whose
+// @value is a plain channel count.
+const mpegChannelConfigScheme = "urn:mpeg:dash:23003:3:audio_channel_configuration:2011"
+
+// dashChannels reads the channel count from an AudioChannelConfiguration. Only
+// the MPEG scheme states a count; Dolby's states a channel *mask* in hex
+// ("F801" is 5.1), and reading that as a number would claim 63489 channels. An
+// unrecognised scheme leaves the count unknown, because the audio check compares
+// the media against this number and a wrong claim reads as a defect in the media.
+func dashChannels(cfgs []struct {
+	SchemeIDURI string `xml:"schemeIdUri,attr"`
+	Value       string `xml:"value,attr"`
+}) int {
+	for _, c := range cfgs {
+		if c.SchemeIDURI != mpegChannelConfigScheme {
+			continue
+		}
+		if n, err := strconv.Atoi(strings.TrimSpace(c.Value)); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 0
 }
 
 func firstNonZero(vs ...int) int {

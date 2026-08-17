@@ -79,6 +79,65 @@ func TSWithSPSOpening(startPTS, frameDur int64, frames int, sps []byte, firstSli
 	return out
 }
 
+// TSWithAAC builds an MPEG-TS segment carrying one AAC audio stream — stream type
+// 0x0F — as ADTS frames inside the PES payload.
+//
+// MPEG-TS states no sampling rate or channel count anywhere in the container:
+// both live in the ADTS header of every frame, which is why an MPEG-TS audio
+// rendition reported neither until the elementary-stream capture stopped being
+// video-only.
+// TSMuxed builds a segment carrying video and AAC audio on separate PIDs of one
+// program — the shape most HLS transport-stream ladders actually use, and the one
+// where the audio format is only readable from the ADTS headers inside the audio
+// PID's PES payload.
+func TSMuxed(startPTS, frameDur int64, frames int, sps []byte, sampleRate, channels int) []byte {
+	const (
+		pmtPID   = 0x1000
+		videoPID = 0x0100
+		audioPID = 0x0101
+	)
+	var out []byte
+	out = append(out, tsPacket(0x0000, true, 0, pat(pmtPID))...)
+	out = append(out, tsPacket(pmtPID, true, 0, pmt2(videoPID, 0x1B, audioPID, 0x0F))...)
+
+	es := []byte{0x00, 0x00, 0x00, 0x01, 0x67}
+	es = append(es, sps...)
+	es = append(es, 0x00, 0x00, 0x00, 0x01, H264IDRSlice)
+
+	vcc, acc := 0, 0
+	out = append(out, tsPacket(videoPID, true, vcc, pes(0xE0, startPTS, es))...)
+	vcc++
+	out = append(out, tsPacket(audioPID, true, acc, pes(0xC0, startPTS, ADTSFrame(sampleRate, channels, 64)))...)
+	acc++
+	for i := 1; i < frames; i++ {
+		pts := startPTS + int64(i)*frameDur
+		out = append(out, tsPacket(videoPID, true, vcc&0x0F, pes(0xE0, pts, []byte{0x00, 0x00, 0x00, 0x01, 0x41, 0x9A}))...)
+		vcc++
+		out = append(out, tsPacket(audioPID, true, acc&0x0F, pes(0xC0, pts, ADTSFrame(sampleRate, channels, 64)))...)
+		acc++
+	}
+	return out
+}
+
+func TSWithAAC(startPTS, frameDur int64, frames int, sampleRate, channels int) []byte {
+	const (
+		pmtPID   = 0x1000
+		audioPID = 0x0101
+		aacType  = 0x0F
+	)
+	var out []byte
+	out = append(out, tsPacket(0x0000, true, 0, pat(pmtPID))...)
+	out = append(out, tsPacket(pmtPID, true, 0, pmt(audioPID, aacType))...)
+
+	cc := 0
+	for i := 0; i < frames; i++ {
+		pts := startPTS + int64(i)*frameDur
+		out = append(out, tsPacket(audioPID, true, cc, pes(0xC0, pts, ADTSFrame(sampleRate, channels, 64)))...)
+		cc = (cc + 1) & 0x0F
+	}
+	return out
+}
+
 // TSDropPacket is TS with one continuity counter deliberately skipped, which is
 // what packet loss between the packager and the client looks like.
 func TSDropPacket(startPTS, frameDur int64, frames int) []byte {
@@ -147,6 +206,27 @@ func pat(pmtPID uint16) []byte {
 		0xDE, 0xAD, 0xBE, 0xEF, // CRC32 (not verified)
 	}
 	return append([]byte{0x00}, sec...) // pointer_field
+}
+
+// pmt2 is pmt with two elementary streams, for a muxed segment.
+func pmt2(pid1 uint16, type1 byte, pid2 uint16, type2 byte) []byte {
+	sec := []byte{
+		0x02,       // table_id
+		0xB0, 0x17, // section_length 23: 9 fixed + 2x5 ES + 4 CRC
+		0x00, 0x01, // program_number
+		0xC1,       // version, current_next
+		0x00, 0x00, // section_number, last_section_number
+		0xE0 | byte(pid1>>8), byte(pid1 & 0xFF), // PCR_PID
+		0xF0, 0x00, // program_info_length 0
+		type1,
+		0xE0 | byte(pid1>>8), byte(pid1 & 0xFF),
+		0xF0, 0x00, // ES_info_length 0
+		type2,
+		0xE0 | byte(pid2>>8), byte(pid2 & 0xFF),
+		0xF0, 0x00, // ES_info_length 0
+		0xDE, 0xAD, 0xBE, 0xEF, // CRC32
+	}
+	return append([]byte{0x00}, sec...)
 }
 
 func pmt(esPID uint16, streamType byte) []byte {
@@ -250,6 +330,11 @@ func mp4InitWith(trackID, timescale uint32, kind, sampleEntryType string, width,
 }
 
 // mp4InitWithExtra is mp4InitWith plus any additional boxes to place inside moov.
+func mp4InitAudioWith(trackID, timescale uint32, sampleEntryType string, channels, sampleRate int) []byte {
+	// An audio track states no frame size, so the tkhd carries zeros.
+	return mp4InitFrom(trackID, timescale, "soun", audioSampleEntryAt(sampleEntryType, channels, sampleRate), nil, 0, 0)
+}
+
 func mp4InitWithExtra(trackID, timescale uint32, kind, sampleEntryType string, width, height int, extra []byte) []byte {
 	handler := "vide"
 	sampleEntry := visualSampleEntry(sampleEntryType, width, height)
@@ -257,6 +342,10 @@ func mp4InitWithExtra(trackID, timescale uint32, kind, sampleEntryType string, w
 		handler = "soun"
 		sampleEntry = audioSampleEntry("mp4a")
 	}
+	return mp4InitFrom(trackID, timescale, handler, sampleEntry, extra, width, height)
+}
+
+func mp4InitFrom(trackID, timescale uint32, handler string, sampleEntry, extra []byte, width, height int) []byte {
 	stsd := box("stsd", concat(
 		u32(0), // version + flags
 		u32(1), // entry_count
@@ -371,16 +460,130 @@ func visualSampleEntry(typ string, width, height int) []byte {
 }
 
 func audioSampleEntry(typ string) []byte {
-	return box(typ, concat(
-		make([]byte, 6),
-		[]byte{0x00, 0x01},
-		make([]byte, 8),
-		u16(2),  // channelcount
-		u16(16), // samplesize
-		make([]byte, 2),
-		make([]byte, 2),
-		u32(48000<<16),
+	return audioSampleEntryAt(typ, 2, 48000)
+}
+
+// audioSampleEntryAt writes an AudioSampleEntry stating a channel count and a
+// sampling rate. The rate is 16.16 fixed point, which is the field a reader is
+// most likely to take whole and report as 3.1 billion Hz.
+func audioSampleEntryAt(typ string, channels, sampleRate int) []byte {
+	return box(typ, audioSampleEntryFixed(channels, sampleRate))
+}
+
+// audioSampleEntryFixed is the 28 bytes every AudioSampleEntry starts with,
+// before whatever codec box follows.
+func audioSampleEntryFixed(channels, sampleRate int) []byte {
+	return concat(
+		make([]byte, 6),    // reserved
+		[]byte{0x00, 0x01}, // data_reference_index
+		make([]byte, 8),    // reserved
+		u16(uint16(channels)),
+		u16(16),         // samplesize
+		make([]byte, 2), // pre_defined
+		make([]byte, 2), // reserved
+		u32(uint32(sampleRate)<<16),
+	)
+}
+
+// MP4InitAudio is an initialisation segment for one audio track stating a channel
+// count and a sampling rate, so a test can assert that both are read from the
+// container rather than guessed.
+func MP4InitAudio(trackID, timescale uint32, sampleEntryType string, channels, sampleRate int) []byte {
+	return mp4InitAudioWith(trackID, timescale, sampleEntryType, channels, sampleRate)
+}
+
+// ac3Acmod maps a channel count to the (acmod, lfeon) pair AC-3 states it with.
+// Only the layouts a test needs are here; anything else panics rather than
+// planting a defect the test did not mean to plant.
+func ac3Acmod(channels int) (acmod, lfeon int) {
+	switch channels {
+	case 1:
+		return 1, 0 // 1/0
+	case 2:
+		return 2, 0 // 2/0
+	case 6:
+		return 7, 1 // 3/2 plus LFE
+	case 8:
+		return 7, 1 // 3/2 plus LFE, the rest in dependent substreams
+	}
+	panic("mediatest: unsupported AC-3 channel count")
+}
+
+// MP4InitAC3 builds an fMP4 audio init whose AudioSampleEntry claims stereo — the
+// way real AC-3 encoders write it — while the dac3 box states the true layout.
+// That disagreement is the whole reason the dac3 box has to be read: trusting the
+// sample entry reports every 5.1 AC-3 track as stereo.
+func MP4InitAC3(trackID, timescale uint32, channels, sampleRate int) []byte {
+	acmod, lfeon := ac3Acmod(channels)
+	entry := box("ac-3", concat(
+		audioSampleEntryFixed(2, sampleRate), // the misleading channelcount
+		box("dac3", ac3SpecificBox(fscodFor(sampleRate), acmod, lfeon)),
 	))
+	return mp4InitFrom(trackID, timescale, "soun", entry, nil, 0, 0)
+}
+
+// MP4InitEAC3 is MP4InitAC3 for Enhanced AC-3, whose dec3 box describes one or
+// more substreams rather than a single bit stream.
+func MP4InitEAC3(trackID, timescale uint32, channels, sampleRate, dependentSubstreams int) []byte {
+	acmod, lfeon := ac3Acmod(channels)
+	entry := box("ec-3", concat(
+		audioSampleEntryFixed(2, sampleRate),
+		box("dec3", eac3SpecificBox(fscodFor(sampleRate), acmod, lfeon, dependentSubstreams)),
+	))
+	return mp4InitFrom(trackID, timescale, "soun", entry, nil, 0, 0)
+}
+
+// fscodFor is the sampling_rate_code AC-3 states a rate with.
+func fscodFor(sampleRate int) int {
+	switch sampleRate {
+	case 48000:
+		return 0
+	case 44100:
+		return 1
+	case 32000:
+		return 2
+	}
+	return 3 // reserved in AC-3; in E-AC-3 it means a half rate in fscod2
+}
+
+// ac3SpecificBox is the three bytes of an AC3SpecificBox: fscod(2) bsid(5)
+// bsmod(3) acmod(3) lfeon(1) bit_rate_code(5) reserved(5).
+func ac3SpecificBox(fscod, acmod, lfeon int) []byte {
+	var w bitWriter
+	w.u(2, uint32(fscod))
+	w.u(5, 8) // bsid: 8 is standard AC-3
+	w.u(3, 0) // bsmod: complete main
+	w.u(3, uint32(acmod))
+	w.u(1, uint32(lfeon))
+	w.u(5, 10) // bit_rate_code: 384 kbps
+	w.u(5, 0)  // reserved
+	return w.bytes()
+}
+
+// eac3SpecificBox is an EC3SpecificBox with one independent substream:
+// data_rate(13) num_ind_sub(3), then fscod(2) bsid(5) reserved(1) asvc(1)
+// bsmod(3) acmod(3) lfeon(1) reserved(3) num_dep_sub(4) and, only when there are
+// dependent substreams, chan_loc(9).
+func eac3SpecificBox(fscod, acmod, lfeon, dependentSubstreams int) []byte {
+	var w bitWriter
+	w.u(13, 192) // data_rate in kbit/s
+	w.u(3, 0)    // num_ind_sub: 0 means one independent substream
+	w.u(2, uint32(fscod))
+	w.u(5, 16) // bsid: 16 is E-AC-3
+	w.u(1, 0)  // reserved
+	w.u(1, 0)  // asvc
+	w.u(3, 0)  // bsmod
+	w.u(3, uint32(acmod))
+	w.u(1, uint32(lfeon))
+	w.u(3, 0) // reserved
+	w.u(4, uint32(dependentSubstreams))
+	if dependentSubstreams > 0 {
+		// chan_loc: the left and right wide pair, which is what takes 5.1 to 7.1.
+		w.u(9, 1<<6)
+	} else {
+		w.u(1, 0) // reserved
+	}
+	return w.bytes()
 }
 
 // ---------- byte helpers ----------

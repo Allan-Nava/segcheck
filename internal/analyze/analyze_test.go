@@ -42,6 +42,9 @@ type segSpec struct {
 	// hevc codes the segment as HEVC rather than H.264, which is a different
 	// stream type in the PMT and a different parameter set to read.
 	hevc bool
+	// audioRate/audioChannels mux an AAC track alongside the video, which is how
+	// most transport-stream ladders are actually delivered.
+	audioRate, audioChannels int
 	// status, when non-zero, is served instead of the media.
 	status int
 	// body, when non-nil, is served instead of the media.
@@ -132,6 +135,11 @@ func hlsOriginHandler(variants []variantSpec) *http.ServeMux {
 				}
 				w.Header().Set("Content-Type", "video/mp2t")
 				if s.codedWidth > 0 {
+					if s.audioRate > 0 {
+						_, _ = w.Write(mediatest.TSMuxed(s.startPTS, frameDur, segFrames,
+							mediatest.SPSFor(s.codedWidth, s.codedHeight), s.audioRate, s.audioChannels))
+						return
+					}
 					if s.hevc {
 						_, _ = w.Write(mediatest.TSWithHEVCSPS(s.startPTS, frameDur, segFrames, mediatest.HEVCSPSFor(s.codedWidth, s.codedHeight)))
 						return

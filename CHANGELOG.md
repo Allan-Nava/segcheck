@@ -7,6 +7,40 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **`audio` check — what the audio actually is, against what the manifest says
+  it is** (SC-18). A player configures its decoder and its output device from the
+  manifest before it has fetched a byte of media, so a rendition that plays at a
+  rate or a channel layout other than the one declared is a pitch shift or a
+  silent surround channel — and nothing manifest-only can see it. The check
+  reports a BAD when the media contradicts HLS `CHANNELS`, DASH
+  `@audioSamplingRate` or `AudioChannelConfiguration`, and when the format changes
+  part-way through a rendition, which no manifest states at all because a manifest
+  states one value for the whole thing.
+- **Audio format read from where each container actually states it** (SC-18): the
+  `AudioSampleEntry` in fMP4, the ADTS header in MPEG-TS and in packed audio, and
+  the `dac3`/`dec3` box for AC-3 and E-AC-3. Muxed audio inside a video variant is
+  read too, which is how most transport-stream ladders are delivered.
+
+### Fixed
+
+- Three things real reference streams caught that the unit tests could not, all of
+  the same shape — a number that is not the number it looks like:
+  - **AC-3 and E-AC-3 misstate their own channel count.** The `AudioSampleEntry`
+    `channelcount` field reads 2 on Apple's 5.1 reference track; the layout is in
+    the `dac3`/`dec3` box. Trusting the field reported every surround AC-3
+    rendition as stereo. With dependent substreams present the count now stays
+    unknown rather than reporting a 7.1 programme as 5.1.
+  - **`CHANNELS="16/JOC"` is not sixteen channels.** Once a spatial-coding
+    identifier follows the count, the count describes a rendered presentation, not
+    the coded bed — Dolby Atmos ships 16/JOC over 5.1 — so it is no longer treated
+    as a comparable claim.
+  - **HE-AAC codes at half the rate it plays.** SBR rebuilds the top octave, so a
+    `mp4a.40.5` track whose sample entry says 24 kHz outputs the 48 kHz DASH
+    declares. Exactly a doubling is now expected for the SBR profiles, and only
+    for them.
+
 ## [0.2.0] - 2026-08-17
 
 The release M3 was for: the rungs segcheck read least well. Two new checks —

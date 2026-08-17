@@ -29,6 +29,8 @@ type initTrack struct {
 	// duration and every boundary after it looks like a gap.
 	trexDuration uint32
 	trexSize     uint32
+	sampleRate   int
+	channels     int
 }
 
 // fragTrack is what the media fragments tell us about one track.
@@ -150,13 +152,15 @@ func ParseMP4(data, init []byte) (SegmentInfo, error) {
 
 func (it *initTrack) track() Track {
 	return Track{
-		ID:        it.id,
-		Kind:      it.kind,
-		Codec:     it.codec,
-		Width:     it.width,
-		Height:    it.height,
-		Timescale: it.timescale,
-		Encrypted: it.encrypted,
+		ID:         it.id,
+		Kind:       it.kind,
+		Codec:      it.codec,
+		Width:      it.width,
+		Height:     it.height,
+		Timescale:  it.timescale,
+		Encrypted:  it.encrypted,
+		SampleRate: it.sampleRate,
+		Channels:   it.channels,
 	}
 }
 
@@ -198,6 +202,14 @@ func parseMoov(moov []byte, out map[uint32]*initTrack) {
 				if stsd, ok := findBox(stbl, "stsd"); ok {
 					codec, w, h, enc := parseStsd(stsd)
 					t.codec = codec
+					if t.kind == Audio {
+						// The AudioSampleEntry states the channel count and the
+						// sampling rate, in the same place a VisualSampleEntry
+						// states the frame size.
+						if entries := boxesIn(stsd[8:]); len(entries) > 0 {
+							t.channels, t.sampleRate = audioSampleEntryFields(entries[0].typ, entries[0].payload)
+						}
+					}
 					if w > 0 && h > 0 {
 						// The sample entry is the coded size; tkhd is a display
 						// size that a packager may have left at a stale value.
@@ -285,6 +297,101 @@ const (
 
 // parseStsd reads the first sample entry: its type is the codec, and for video
 // its width/height are the coded resolution.
+// audioSampleEntryFields reads the channel count and sampling rate an
+// AudioSampleEntry states. The rate is 16.16 fixed point — taking the word whole
+// reports a bit over 3 billion Hz, which is a number that survives every guard.
+func audioSampleEntryFields(typ string, payload []byte) (channels, sampleRate int) {
+	if len(payload) < audioSampleEntrySize {
+		return 0, 0
+	}
+	channels = int(be16(payload[16:]))
+	sampleRate = int(be32(payload[24:]) >> 16)
+
+	// AC-3 and E-AC-3 write 2 into the channelcount field whatever the programme
+	// really is — Apple's own reference stream does it for a 5.1 track — so for
+	// those codecs the field is not evidence of anything. The layout is in the
+	// dac3/dec3 box, and without one the count stays unknown rather than wrong.
+	if typ == "ac-3" || typ == "ec-3" {
+		channels = 0
+		for _, b := range boxesIn(payload[audioSampleEntrySize:]) {
+			var (
+				ch, rate int
+				ok       bool
+			)
+			switch b.typ {
+			case "dac3":
+				ch, rate, ok = parseDAC3(b.payload)
+			case "dec3":
+				ch, rate, ok = parseDEC3(b.payload)
+			default:
+				continue
+			}
+			if ok {
+				channels = ch
+				if rate > 0 {
+					sampleRate = rate
+				}
+			}
+			break
+		}
+	}
+
+	if channels < 0 || channels > maxAudioChannels {
+		channels = 0
+	}
+	if sampleRate < 0 || sampleRate > maxAudioSampleRate {
+		sampleRate = 0
+	}
+	return channels, sampleRate
+}
+
+// ac3ChannelCounts maps acmod to the number of full-bandwidth channels it
+// carries, before the LFE. acmod 0 is dual mono, which is two channels.
+var ac3ChannelCounts = [8]int{2, 1, 2, 3, 3, 4, 4, 5}
+
+// ac3SampleRates is the fscod table. Index 3 is reserved in AC-3 and means
+// "look at fscod2" in E-AC-3, so it reports no rate at all.
+var ac3SampleRates = [4]int{48000, 44100, 32000, 0}
+
+// parseDAC3 reads an AC3SpecificBox: fscod(2) bsid(5) bsmod(3) acmod(3) lfeon(1)
+// and then a bit rate this tool has no use for.
+func parseDAC3(b []byte) (channels, sampleRate int, ok bool) {
+	if len(b) < 3 {
+		return 0, 0, false
+	}
+	v := uint32(b[0])<<16 | uint32(b[1])<<8 | uint32(b[2])
+	fscod := int(v >> 22 & 0x03)
+	acmod := int(v >> 11 & 0x07)
+	lfeon := int(v >> 10 & 0x01)
+	return ac3ChannelCounts[acmod] + lfeon, ac3SampleRates[fscod], true
+}
+
+// parseDEC3 reads an EC3SpecificBox: data_rate(13) num_ind_sub(3), then for the
+// first independent substream fscod(2) bsid(5) reserved(1) asvc(1) bsmod(3)
+// acmod(3) lfeon(1) reserved(3) num_dep_sub(4).
+//
+// Dependent substreams carry the channels that take 5.1 to 7.1, and which ones
+// they carry is a chan_loc bitmap whose entries stand for one channel or for a
+// pair. Rather than half-count them, a programme with dependent substreams
+// reports its rate and leaves the channel count unknown.
+func parseDEC3(b []byte) (channels, sampleRate int, ok bool) {
+	if len(b) < 5 {
+		return 0, 0, false
+	}
+	// The substream fields start at bit 16 of the box, so this 24-bit word holds
+	// them all: fscod at its top, num_dep_sub one bit above its bottom.
+	sub := uint32(b[2])<<16 | uint32(b[3])<<8 | uint32(b[4])
+	fscod := int(sub >> 22 & 0x03)
+	acmod := int(sub >> 9 & 0x07)
+	lfeon := int(sub >> 8 & 0x01)
+	numDepSub := int(sub >> 1 & 0x0F)
+	sampleRate = ac3SampleRates[fscod]
+	if numDepSub > 0 {
+		return 0, sampleRate, true
+	}
+	return ac3ChannelCounts[acmod] + lfeon, sampleRate, true
+}
+
 func parseStsd(b []byte) (codec string, width, height int, encrypted bool) {
 	if len(b) < 8 {
 		return "", 0, 0, false

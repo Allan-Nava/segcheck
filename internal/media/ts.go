@@ -15,6 +15,14 @@ const TSTimescale = 90000
 // segment that has not shown one in 1 MiB does not have one to find.
 const maxESCapture = 1 << 20
 
+// streamTypeAAC is the PMT stream_type for AAC delivered as ADTS.
+const streamTypeAAC = 0x0F
+
+// adtsHeaderCapture bounds how much AAC payload we keep. Only the first frame
+// header is read, and holding a whole segment of audio per rendition to read
+// seven bytes of it would cost megabytes for nothing.
+const adtsHeaderCapture = 64
+
 // tsStream is the accumulating state for one elementary stream (one PID).
 type tsStream struct {
 	pid        uint16
@@ -156,11 +164,26 @@ func (s *tsStream) checkCC(cc int, discontinuity bool) {
 	}
 }
 
+// esCapacity is how much of the elementary stream is worth keeping. A video
+// track is scanned end to end for parameter sets and random access points; an
+// AAC track only needs its first ADTS header, and capturing a whole segment of
+// audio to read seven bytes would cost megabytes per rendition.
+func (s *tsStream) esCapacity() int {
+	switch {
+	case isVideoStreamType(s.streamType):
+		return maxESCapture
+	case s.streamType == streamTypeAAC:
+		return adtsHeaderCapture
+	default:
+		return 0
+	}
+}
+
 func (s *tsStream) capture(b []byte) {
-	if !isVideoStreamType(s.streamType) || len(s.es) >= maxESCapture {
+	room := s.esCapacity() - len(s.es)
+	if room <= 0 {
 		return
 	}
-	room := maxESCapture - len(s.es)
 	if len(b) > room {
 		b = b[:room]
 	}
@@ -200,6 +223,11 @@ func (s *tsStream) track() Track {
 			}
 		}
 		t.FrameDur = medianDelta(s.pts)
+	}
+	if t.Kind == Audio && s.streamType == streamTypeAAC {
+		if rate, channels, ok := adtsHeaderFields(s.es); ok {
+			t.SampleRate, t.Channels = rate, channels
+		}
 	}
 	if t.Kind == Video && len(s.es) > 0 {
 		// Dispatch on the stream type rather than trying both readers: an HEVC

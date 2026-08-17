@@ -47,6 +47,14 @@ func plausibleResolution(w, h int) bool {
 	return w > 0 && h > 0 && w <= maxCodedDimension && h <= maxCodedDimension
 }
 
+// The bounds on what counts as a stated audio format. 22.2 surround is 24
+// channels and the highest rate anyone ships is 384kHz; past either, the reader is
+// looking at the wrong bytes rather than at an unusual stream.
+const (
+	maxAudioChannels   = 64
+	maxAudioSampleRate = 384000
+)
+
 // maxPlausibleFPS bounds what counts as a measured frame rate. High-speed capture
 // reaches a few hundred; anything past this is arithmetic on timestamps that did
 // not advance, not a rate the pictures are shown at.
@@ -79,6 +87,15 @@ type Track struct {
 	// FrameDur is the median gap between consecutive presentation timestamps —
 	// the tail of the last frame, which the PTS span alone does not cover.
 	FrameDur int64 `json:"frame_dur,omitempty"`
+	// SampleRate and Channels are what an audio track actually runs at, read from
+	// the AudioSampleEntry in fMP4 and from the ADTS header in MPEG-TS and packed
+	// audio. Zero when the container did not state it.
+	//
+	// A rendition whose either value changes mid-stream forces a decoder reset,
+	// which most players show as a gap in the audio — and the manifest cannot
+	// reveal it, because it states one value for the whole rendition.
+	SampleRate int `json:"sample_rate,omitempty"`
+	Channels   int `json:"channels,omitempty"`
 	// Encrypted marks a track whose samples are protected (encv/enca sample
 	// entry, or a TS payload flagged scrambled).
 	Encrypted bool `json:"encrypted,omitempty"`

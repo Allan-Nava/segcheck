@@ -26,6 +26,31 @@ var ErrUnsupportedContainer = errors.New("recognised container, not analysed")
 // segment's MPEG-2 timestamp, on the same 90kHz clock as MPEG-TS.
 const appleTimestampOwner = "com.apple.streaming.transportStreamTimestamp"
 
+// adtsChannelCounts maps channel_configuration to a channel count. Only index 7
+// differs from itself: it means 7.1, which is eight channels.
+var adtsChannelCounts = [8]int{0, 1, 2, 3, 4, 5, 6, 8}
+
+// adtsHeaderFields reads the sampling rate and channel count from the first ADTS
+// header in b. MPEG-TS states neither in the container, so for an AAC track the
+// bitstream is the only place the numbers exist.
+func adtsHeaderFields(b []byte) (rate, channels int, ok bool) {
+	for off := 0; off+4 <= len(b); off++ {
+		if b[off] != 0xFF || b[off+1]&0xF6 != 0xF0 {
+			continue
+		}
+		rate = adtsSampleRates[(b[off+2]>>2)&0x0F]
+		cfg := (b[off+2]&0x01)<<2 | (b[off+3] >> 6)
+		channels = adtsChannelCounts[cfg&0x07]
+		if rate == 0 || channels == 0 {
+			// A reserved index, or a configuration that defers the layout to the
+			// AudioSpecificConfig: unknown beats a made-up number.
+			return 0, 0, false
+		}
+		return rate, channels, true
+	}
+	return 0, 0, false
+}
+
 // adtsSampleRates is the sampling_frequency_index table.
 var adtsSampleRates = [16]int{96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350, 0, 0, 0}
 
@@ -71,6 +96,10 @@ func ParsePackedAudio(data []byte) (SegmentInfo, error) {
 		info.Tracks = append(info.Tracks, track)
 		if channels > 0 {
 			info.Channels = channels
+			info.Tracks[0].Channels = channels
+		}
+		if rate > 0 {
+			info.Tracks[0].SampleRate = rate
 		}
 		return info, nil
 
@@ -101,7 +130,7 @@ func scanADTS(b []byte) (frames, samples, rate, channels int, err error) {
 		}
 		protectionAbsent := b[off+1]&0x01 == 1
 		rateIdx := (b[off+2] >> 2) & 0x0F
-		chanCfg := (b[off+2]&0x01)<<2 | (b[off+3] >> 6)
+		chanCfg := ((b[off+2]&0x01)<<2 | (b[off+3] >> 6)) & 0x07
 		frameLen := int(b[off+3]&0x03)<<11 | int(b[off+4])<<3 | int(b[off+5])>>5
 		rawBlocks := int(b[off+6]&0x03) + 1
 
@@ -117,7 +146,7 @@ func scanADTS(b []byte) (frames, samples, rate, channels int, err error) {
 		}
 		if frames == 0 {
 			rate = adtsSampleRates[rateIdx]
-			channels = int(chanCfg)
+			channels = adtsChannelCounts[chanCfg]
 			if rate == 0 {
 				return 0, 0, 0, 0, fmt.Errorf("ADTS frame declares reserved sampling_frequency_index %d", rateIdx)
 			}
