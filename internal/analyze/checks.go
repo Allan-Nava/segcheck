@@ -871,6 +871,7 @@ func checkSubtitles(rends []*renditionData, opts Options) []finding.Finding {
 			unmapped   int
 			wrapped    int
 			unanchored int
+			unreadable int
 			drifted    []string
 			declared   = len(rd.segs)
 		)
@@ -880,14 +881,19 @@ func checkSubtitles(rends []*renditionData, opts Options) []finding.Finding {
 				continue
 			}
 			readable++
-			cues += t.Samples
+			cues += t.Cues
 
 			switch {
 			case sd.info.Container == media.ContainerMP4:
-				// The wrapper states the timing and the cues are inside the samples,
-				// which SC-93 would read. The fragment's own timeline is already
-				// checked by `timeline` and `continuity`.
+				// The wrapper states the timing, and the cues inside the samples are
+				// counted but not timed: a cue's own begin and end are inside a TTML
+				// document or a vttc box, and the fragment's timeline is what
+				// `timeline` and `continuity` already check. Cue *placement* for a
+				// wrapped rendition is SC-97.
 				wrapped++
+				if !t.CuesRead {
+					unreadable++
+				}
 			case !t.HasPTS:
 				// A WebVTT segment whose cues could not be placed on the media
 				// timeline, which means it carried no X-TIMESTAMP-MAP. A segment with
@@ -945,6 +951,13 @@ func checkSubtitles(rends []*renditionData, opts Options) []finding.Finding {
 					cues, readable),
 				Hint: "raise --renditions above 0 so the media timeline the cues are anchored to is known",
 			})
+		case wrapped == readable && unreadable == readable:
+			// Nobody looked inside, which is not the same as nothing being there — so
+			// this comes before the no-cues WARN below rather than after it.
+			out = append(out, finding.Finding{
+				Check: "subtitles", Target: label, Status: finding.OK,
+				Message: fmt.Sprintf("%d fMP4-wrapped segments whose samples segcheck could not read for cues", readable),
+			})
 		case cues == 0:
 			out = append(out, finding.Finding{
 				Check: "subtitles", Target: label, Status: finding.WARN,
@@ -955,8 +968,9 @@ func checkSubtitles(rends []*renditionData, opts Options) []finding.Finding {
 		case wrapped == readable:
 			out = append(out, finding.Finding{
 				Check: "subtitles", Target: label, Status: finding.OK,
-				Message: fmt.Sprintf("%d fMP4-wrapped segments carrying %d samples; the cues themselves are inside them and not read",
-					readable, cues),
+				Message: fmt.Sprintf("%d cues across %d fMP4-wrapped segments; their placement is stated by the fragments, which `timeline` checks",
+					cues, readable),
+				Value: finding.Num(float64(cues)), Unit: "cues",
 			})
 		default:
 			msg := fmt.Sprintf("%d cues across %d segments, on the media timeline", cues, readable)

@@ -120,27 +120,53 @@ func TestRun_NoSubtitleRenditionIsSilent(t *testing.T) {
 	}
 }
 
-// An fMP4-wrapped subtitle track states its timing in the wrapper rather than in
-// its cues. The track is reported and the cue-level comparison is honestly
-// declined, rather than a silence that reads like a clean bill of health.
+// An fMP4-wrapped subtitle track states its timing in the wrapper and its cues in the
+// samples. Both are reported, and the placement of an individual cue is left to
+// `timeline` — which is what actually checks the fragment's own clock.
 func TestCheckSubtitles_FMP4WrappedTrack(t *testing.T) {
-	rd := &renditionData{
-		r: manifest.Rendition{Name: "en", Kind: manifest.Text},
-		segs: []segmentData{{
-			seg:    manifest.Segment{Duration: 4},
-			parsed: true,
-			info: media.SegmentInfo{Container: media.ContainerMP4, Tracks: []media.Track{{
-				Kind: media.Text, Codec: "ttml", Timescale: 90000,
-				HasPTS: true, MinPTS: 0, MaxPTS: 360000, Samples: 2,
-			}}},
-		}},
+	wrapped := func(tr media.Track) *renditionData {
+		return &renditionData{
+			r: manifest.Rendition{Name: "en", Kind: manifest.Text},
+			segs: []segmentData{{
+				seg:    manifest.Segment{Duration: 4},
+				parsed: true,
+				info:   media.SegmentInfo{Container: media.ContainerMP4, Tracks: []media.Track{tr}},
+			}},
+		}
 	}
-	out := checkSubtitles([]*renditionData{rd}, Defaults())
+	base := media.Track{
+		Kind: media.Text, Codec: "ttml", Timescale: 90000,
+		HasPTS: true, MinPTS: 0, MaxPTS: 360000, Samples: 2,
+	}
+
+	// Cues read out of the samples.
+	withCues := base
+	withCues.Cues, withCues.CuesRead = 3, true
+	out := checkSubtitles([]*renditionData{wrapped(withCues)}, Defaults())
 	if len(out) != 1 || out[0].Status != finding.OK {
 		t.Fatalf("want one OK finding, got %+v", out)
 	}
-	if !strings.Contains(out[0].Message, "fMP4") {
-		t.Errorf("the finding does not say how the cues were not read: %q", out[0].Message)
+	if !strings.Contains(out[0].Message, "3 cues") {
+		t.Errorf("the finding does not report the cues: %q", out[0].Message)
+	}
+
+	// Samples nobody could read. That is not the same as no cues, and must not
+	// produce the WARN an empty rendition gets — "nobody looked" and "nothing there"
+	// lead to opposite verdicts.
+	out = checkSubtitles([]*renditionData{wrapped(base)}, Defaults())
+	if len(out) != 1 || out[0].Status != finding.OK {
+		t.Fatalf("want one OK finding for unreadable samples, got %+v", out)
+	}
+	if !strings.Contains(out[0].Message, "could not read") {
+		t.Errorf("the finding does not say nobody looked: %q", out[0].Message)
+	}
+
+	// And a wrapped rendition whose samples *were* read and hold nothing is the WARN.
+	empty := base
+	empty.CuesRead = true
+	out = checkSubtitles([]*renditionData{wrapped(empty)}, Defaults())
+	if len(out) != 1 || out[0].Status != finding.WARN {
+		t.Fatalf("want one WARN for a rendition that says nothing, got %+v", out)
 	}
 }
 

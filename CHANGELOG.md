@@ -114,6 +114,26 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   noise — but *not* against a real encrypted stream, because no public AES-128 test
   stream was reachable. SC-96 tracks that, and it matters: every other reader in this
   project had a design error that only a real stream found.
+- **A fragment's samples are located, so what is inside them can be read** (SC-91,
+  SC-93). A track's samples are in no header: the `tfhd` names a base — in practice the
+  enclosing `moof` — and each `trun` states an offset from it followed by the sizes of
+  the samples that begin there. The data offset is signed, because a fragment may place
+  its samples before the box that describes them.
+
+  Two readers were waiting on that. A CMAF `c608` caption track's `cdat` and `cdt2`
+  boxes say which CEA-608 field the data is on, so Apple's own fMP4 reference stream now
+  reports "CEA-608 field 1 (CC1/CC3)" where it said the channel was not attributable
+  (SC-91). And a `stpp` sample is a TTML document while a `wvtt` sample is a sequence of
+  cue boxes — with `vtte` saying nothing is displayed rather than being a cue — so a
+  CMAF subtitle rendition's cues are counted rather than guessed at from the sample
+  count (SC-93). A rendition whose segments are the right size and carry nothing is the
+  usual shape of a broken subtitle pipeline, and the sample count alone could not tell
+  it from a working one.
+
+  Samples nobody could read are still distinguished from samples holding nothing: they
+  lead to opposite verdicts, and the check reports the first as a limit of this tool
+  rather than as a rendition that says nothing. SC-97 tracks timing a wrapped cue as
+  well as counting it.
 - **Packed MP3 renditions are measured, not skipped** (SC-21). Recognising the format
   and stopping was honest, but it left the duration check with nothing to compare
   against, so a rendition declaring six seconds a segment and shipping four went

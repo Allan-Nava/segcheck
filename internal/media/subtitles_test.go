@@ -452,3 +452,115 @@ func TestLooksTTML_OnlyScansTheHead(t *testing.T) {
 		t.Error("a root element past the scanned head was found anyway")
 	}
 }
+
+// SC-93: the cues inside an fMP4-wrapped subtitle track.
+//
+// A stpp or wvtt track states its timing in the wrapper, and the cues themselves are in
+// the samples. Reporting the sample count was the honest limit before the samples could
+// be located; with them located, a CMAF subtitle rendition is as checkable as a text one
+// — which matters because "the segments are the right size and carry nothing" is exactly
+// how a subtitle pipeline breaks.
+func TestParseMP4_SubtitleCuesInSamples(t *testing.T) {
+	t.Run("stpp samples are TTML documents", func(t *testing.T) {
+		init := mediatest.MP4InitSubtitle(1, 90000, "stpp")
+		docA := mediatest.TTML(mediatest.TTMLOptions{Cues: []mediatest.Cue{
+			{Start: 1, End: 3, Text: "one"}, {Start: 3, End: 5, Text: "two"},
+		}})
+		docB := mediatest.TTML(mediatest.TTMLOptions{Cues: []mediatest.Cue{{Start: 6, End: 8, Text: "three"}}})
+		frag := mediatest.MP4SegmentSamples(1, mediatest.TrackSamples{
+			TrackID: 1, SampleDuration: 90000, Samples: [][]byte{docA, docB},
+		})
+		info, err := ParseMP4(frag, init)
+		if err != nil {
+			t.Fatalf("ParseMP4: %v", err)
+		}
+		tr, ok := info.Track(Text)
+		if !ok {
+			t.Fatal("no text track")
+		}
+		if tr.Cues != 3 {
+			t.Errorf("cues = %d, want 3 across the two samples", tr.Cues)
+		}
+	})
+
+	t.Run("wvtt samples are cue boxes", func(t *testing.T) {
+		init := mediatest.MP4InitSubtitle(1, 90000, "wvtt")
+		frag := mediatest.MP4SegmentSamples(1, mediatest.TrackSamples{
+			TrackID: 1, SampleDuration: 90000, Samples: [][]byte{
+				mediatest.VTTCSample("one"),
+				// An empty-cue box says nothing is displayed here, and is not a cue.
+				mediatest.VTTESample(),
+				mediatest.VTTCSample("two"),
+			},
+		})
+		info, err := ParseMP4(frag, init)
+		if err != nil {
+			t.Fatalf("ParseMP4: %v", err)
+		}
+		tr, _ := info.Track(Text)
+		if tr.Cues != 2 {
+			t.Errorf("cues = %d, want 2: the empty-cue box is not one", tr.Cues)
+		}
+	})
+}
+
+// A subtitle track whose segments are the right size and carry nothing is exactly how a
+// subtitle pipeline breaks, and the sample count alone could not tell it from a working
+// one.
+func TestParseMP4_SubtitleTrackWithNoCues(t *testing.T) {
+	init := mediatest.MP4InitSubtitle(1, 90000, "stpp")
+	empty := mediatest.TTML(mediatest.TTMLOptions{})
+	frag := mediatest.MP4SegmentSamples(1, mediatest.TrackSamples{
+		TrackID: 1, SampleDuration: 90000, Samples: [][]byte{empty, empty},
+	})
+	info, err := ParseMP4(frag, init)
+	if err != nil {
+		t.Fatalf("ParseMP4: %v", err)
+	}
+	tr, ok := info.Track(Text)
+	if !ok {
+		t.Fatal("no text track")
+	}
+	if tr.Samples != 2 {
+		t.Errorf("samples = %d, want 2: the samples are there", tr.Samples)
+	}
+	if tr.Cues != 0 {
+		t.Errorf("cues = %d, want 0: none of them says anything", tr.Cues)
+	}
+	if !tr.CuesRead {
+		t.Error("CuesRead is false, so zero cues cannot be told from cues nobody looked for")
+	}
+}
+
+// A sample this reader cannot make sense of leaves the cue count unread rather than
+// reporting zero: the two lead to opposite verdicts.
+func TestParseMP4_SubtitleSamplesUnreadable(t *testing.T) {
+	init := mediatest.MP4InitSubtitle(1, 90000, "stpp")
+	frag := mediatest.MP4SegmentSamples(1, mediatest.TrackSamples{
+		TrackID: 1, SampleDuration: 90000, Samples: [][]byte{[]byte("not a TTML document")},
+	})
+	info, err := ParseMP4(frag, init)
+	if err != nil {
+		t.Fatalf("ParseMP4: %v", err)
+	}
+	tr, _ := info.Track(Text)
+	if tr.CuesRead {
+		t.Errorf("a cue count was reported from samples that are not subtitles: %+v", tr)
+	}
+}
+
+// A wvtt sample that is not boxes at all states no cue, and must not be counted as one.
+func TestSubtitleSampleCues_Unreadable(t *testing.T) {
+	data := []byte("not boxes at all")
+	if _, ok := subtitleSampleCues("webvtt", data, []sampleRange{{0, len(data)}}); ok {
+		t.Error("bytes that are not boxes were read as wvtt cues")
+	}
+	// No samples to look at is not a cue count of zero.
+	if _, ok := subtitleSampleCues("ttml", data, nil); ok {
+		t.Error("an empty sample list produced a cue count")
+	}
+	// A codec this reader does not model reads no cues from it.
+	if _, ok := subtitleSampleCues("ttxt", data, []sampleRange{{0, len(data)}}); ok {
+		t.Error("an unmodelled subtitle codec produced a cue count")
+	}
+}

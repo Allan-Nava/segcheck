@@ -46,11 +46,10 @@ type CaptionPresence struct {
 	// sample entry — that carries samples in this segment. This is how Apple's own
 	// fMP4 reference stream delivers CEA-608, rather than in the video SEI.
 	//
-	// The track states the standard, not which field or service: attributing a
-	// c608 track's data needs its samples located in the mdat and their cdat/cdt2
-	// boxes read, which is SC-91. Until then a channel declared against such a
-	// track can be neither confirmed nor disproved, and an empty caption track is
-	// the whole defect anyway.
+	// The track states which standard it carries; which field or service is in
+	// Field1/Field2/Services, read from the samples themselves when they could be
+	// located and state one. When they could not, a channel declared against the
+	// track can be neither confirmed nor disproved — see Attributable.
 	Track608 bool `json:"track608,omitempty"`
 	Track708 bool `json:"track708,omitempty"`
 	// Scanned records that the bitstream was walked at all.
@@ -279,4 +278,28 @@ func (s *captionScanner) addService(n int) {
 		}
 	}
 	s.out.Services = append(s.out.Services, n)
+}
+
+// captionTrackFields reads which CEA-608 field a c608 track's samples carry.
+//
+// The samples are cdat boxes for field 1 and cdt2 for field 2. This is what the track
+// itself cannot say: before the samples could be located, a channel declared against a
+// CMAF caption track was neither confirmable nor deniable, and Apple's reference stream
+// is delivered exactly this way.
+func captionTrackFields(data []byte, ranges []sampleRange) (field1, field2 bool) {
+	for _, r := range ranges {
+		for _, b := range boxesIn(data[r.start:r.end]) {
+			switch b.typ {
+			case "cdat":
+				if len(b.payload) >= 2 {
+					field1 = true
+				}
+			case "cdt2":
+				if len(b.payload) >= 2 {
+					field2 = true
+				}
+			}
+		}
+	}
+	return field1, field2
 }

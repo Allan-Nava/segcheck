@@ -380,3 +380,89 @@ func TestParseMP4_CaptionsInHEVCSEI(t *testing.T) {
 		t.Errorf("services = %v, want [2]: %+v", tr.Captions.Services, tr.Captions)
 	}
 }
+
+// SC-91: which field a CMAF caption track carries.
+//
+// A c608 track states the standard and no more from its headers — that was the honest
+// limit before the samples could be located. With them located, the cdat and cdt2
+// boxes inside say which CEA-608 field the data is on, and a channel declared against
+// the track becomes as checkable as one in a video SEI.
+func TestParseMP4_CMAFCaptionTrackFieldAttribution(t *testing.T) {
+	init := mediatest.MP4InitWithCaptionTrack(1, 2, 90000, 1280, 720, "c608")
+
+	for _, tc := range []struct {
+		name    string
+		samples [][]byte
+		field1  bool
+		field2  bool
+	}{
+		{
+			name:    "field 1",
+			samples: [][]byte{mediatest.CDATSample(1, [2]byte{0xC1, 0xC2})},
+			field1:  true,
+		},
+		{
+			name:    "field 2",
+			samples: [][]byte{mediatest.CDATSample(2, [2]byte{0xC1, 0xC2})},
+			field2:  true,
+		},
+		{
+			name: "both fields, in separate samples",
+			samples: [][]byte{
+				mediatest.CDATSample(1, [2]byte{0xC1, 0xC2}),
+				mediatest.CDATSample(2, [2]byte{0xC3, 0xC4}),
+			},
+			field1: true, field2: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			frag := mediatest.MP4SegmentSamples(1,
+				mediatest.TrackSamples{TrackID: 1, SampleDuration: 3600, Samples: [][]byte{make([]byte, 40)}},
+				mediatest.TrackSamples{TrackID: 2, SampleDuration: 3600, Samples: tc.samples},
+			)
+			info, err := ParseMP4(frag, init)
+			if err != nil {
+				t.Fatalf("ParseMP4: %v", err)
+			}
+			tr, ok := info.Track(Video)
+			if !ok {
+				t.Fatal("no video track")
+			}
+			c := tr.Captions
+			if c.Field1 != tc.field1 || c.Field2 != tc.field2 {
+				t.Errorf("fields = %v/%v, want %v/%v", c.Field1, c.Field2, tc.field1, tc.field2)
+			}
+			// Once the field is known, the track flag has nothing left to add: the
+			// report says the field rather than "not attributable".
+			if !c.Attributable() {
+				t.Errorf("the field was located but not reported as attributable: %+v", c)
+			}
+		})
+	}
+}
+
+// A caption track whose samples say nothing about a field — an empty box, or one this
+// reader does not model — falls back to what it did before: the standard is known, the
+// field is not, and a channel declared against it can be neither confirmed nor
+// disproved.
+func TestParseMP4_CMAFCaptionTrackWithUnreadableSamples(t *testing.T) {
+	init := mediatest.MP4InitWithCaptionTrack(1, 2, 90000, 1280, 720, "c608")
+	frag := mediatest.MP4SegmentSamples(1,
+		mediatest.TrackSamples{TrackID: 1, SampleDuration: 3600, Samples: [][]byte{make([]byte, 40)}},
+		mediatest.TrackSamples{TrackID: 2, SampleDuration: 3600, Samples: [][]byte{
+			{0x00, 0x00, 0x00, 0x08, 'j', 'u', 'n', 'k'},
+		}},
+	)
+	info, err := ParseMP4(frag, init)
+	if err != nil {
+		t.Fatalf("ParseMP4: %v", err)
+	}
+	tr, _ := info.Track(Video)
+	c := tr.Captions
+	if !c.Track608 {
+		t.Errorf("the caption track was not reported at all: %+v", c)
+	}
+	if c.Attributable() {
+		t.Errorf("a field was attributed from samples that state none: %+v", c)
+	}
+}

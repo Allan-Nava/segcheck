@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**96 items · 49 shipped · 47 open · 13 milestones.**
+**97 items · 51 shipped · 46 open · 13 milestones.**
 
 ## At a glance
 
@@ -15,7 +15,7 @@
 | **M1** — Core: read the segments | `v0.1.0` | shipped | `##########` 100% | 0 | 6 |
 | **M2** — The checks | `v0.1.0` | shipped | `##########` 100% | 0 | 8 |
 | **M3** — Codec and timing depth | `v0.2.0` | shipped | `##########` 100% | 0 | 9 |
-| **M4** — Everything that is not the video track | `v0.3.0` | **now** | `######....` 62% | 5 | 8 |
+| **M4** — Everything that is not the video track | `v0.3.0` | **now** | `#######...` 71% | 4 | 10 |
 | **M5** — Live and delivery | `v0.4.0` | next | `..........` 0% | 6 | 0 |
 | **M9** — Wallclock and DVR correctness | `v0.4.0` | next | `..........` 0% | 5 | 0 |
 | **M6** — Integration | `v0.5.0` | later | `..........` 0% | 6 | 0 |
@@ -87,15 +87,14 @@ Target `v0.2.0` · shipped · 0 open · 9 shipped · `##########` 100%
 
 ### M4 — Everything that is not the video track
 
-Target `v0.3.0` · **now** · 5 open · 8 shipped · `######....` 62%
+Target `v0.3.0` · **now** · 4 open · 10 shipped · `#######...` 71%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
-| **SC-91** — Attribute a CMAF caption track's field | med | M | parser | open |
 | **SC-92** — Splice descriptors and `EXT-X-DATERANGE` payloads | med | M | parser | open |
-| **SC-93** — Cues inside an fMP4 subtitle track | med | M | parser | open |
 | **SC-95** — SAMPLE-AES and CENC | med | L | parser | open |
 | **SC-96** — Verify against a real encrypted stream | med | S | tests | open |
+| **SC-97** — Place a wrapped subtitle cue on the timeline | med | M | check | open |
 | **SC-18** — Audio sanity | high | M | check | shipped `0.3.0` |
 | **SC-20** — SCTE-35 / `EXT-X-DATERANGE` | high | L | check,parser | shipped `0.3.0` |
 | **SC-37** — CEA-608/708 captions | high | L | check,parser | shipped `0.3.0` |
@@ -103,6 +102,8 @@ Target `v0.3.0` · **now** · 5 open · 8 shipped · `######....` 62%
 | **SC-22** — Encrypted-segment support with a key | med | M | cli,parser | shipped `0.3.0` |
 | **SC-38** — Subtitle renditions | med | L | check,parser | shipped `0.3.0` |
 | **SC-90** — Audio codec against `CODECS` | med | S | check | shipped `0.3.0` |
+| **SC-91** — Attribute a CMAF caption track's field | med | M | parser | shipped `0.3.0` |
+| **SC-93** — Cues inside an fMP4 subtitle track | med | M | parser | shipped `0.3.0` |
 | **SC-21** — MP3 packed audio | low | S | parser | shipped `0.3.0` |
 
 ### M5 — Live and delivery
@@ -232,8 +233,8 @@ Target `ongoing` · ongoing · 3 open · 13 shipped · `########..` 81%
 
 | Label | Items | Open |
 |---|---|---|
-| `check` | 45 | 29 |
-| `parser` | 44 | 24 |
+| `check` | 46 | 30 |
+| `parser` | 44 | 22 |
 | `cli` | 8 | 6 |
 | `delivery` | 5 | 4 |
 | `integration` | 4 | 4 |

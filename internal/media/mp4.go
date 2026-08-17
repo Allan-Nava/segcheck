@@ -114,6 +114,11 @@ func ParseMP4(data, init []byte) (SegmentInfo, error) {
 	// folded onto the video track, which is what every caller asks about.
 	var captionTracks []Track
 
+	// Where each track's samples are. A caption track's field and a subtitle track's
+	// cues are in the samples, not in any header, and nothing could read them until
+	// this located them.
+	samples := trackSamples(data, defaults)
+
 	for _, id := range sortedFragIDs(frags) {
 		f := frags[id]
 		var t Track
@@ -157,6 +162,14 @@ func ParseMP4(data, init []byte) (SegmentInfo, error) {
 				t.MaxPTS -= t.FrameDur
 			}
 		}
+		if t.Kind == Text {
+			// The cues are in the samples, not in the wrapper. Counting the samples
+			// could not tell a rendition that says nothing from one that says plenty.
+			if cues, ok := subtitleSampleCues(t.Codec, data, samples[id]); ok {
+				t.Cues, t.CuesRead = cues, true
+			}
+		}
+
 		// A CMAF caption track is the captions: a c608 or c708 sample entry under
 		// the clcp handler, carrying samples of its own. Apple's fMP4 reference
 		// stream delivers CEA-608 this way rather than in the video SEI, so a
@@ -164,6 +177,13 @@ func ParseMP4(data, init []byte) (SegmentInfo, error) {
 		// widely deployed caption delivery there is.
 		switch t.Codec {
 		case "c608", "c708":
+			// The samples say which field the data is on, which the track itself
+			// cannot. Locating them is what turns "a CEA-608 caption track" into
+			// "CEA-608 field 1".
+			if t.Codec == "c608" {
+				f1, f2 := captionTrackFields(data, samples[id])
+				t.Captions.Field1, t.Captions.Field2 = f1, f2
+			}
 			captionTracks = append(captionTracks, t)
 		}
 		if t.Kind == Video && len(mdat) > 0 && len(frags) == 1 {
@@ -225,6 +245,10 @@ func foldCaptionTracks(info *SegmentInfo, caption []Track) {
 			case "c708":
 				c.Track708 = true
 			}
+			// A field read out of the track's own samples is the better answer, and
+			// takes precedence over the video SEI having found nothing.
+			c.Field1 = c.Field1 || ct.Captions.Field1
+			c.Field2 = c.Field2 || ct.Captions.Field2
 		}
 	}
 }
@@ -802,6 +826,12 @@ func parseTrun(trun []byte, f *fragTrack, defaultDuration, defaultSize uint32) {
 type mp4box struct {
 	typ     string
 	payload []byte
+	// start is where this box's header begins in the data it was found in, and
+	// header how long that header is. Together they are what locates a fragment's
+	// samples: a trun states its data offset relative to the enclosing moof, and
+	// without knowing where that moof starts the offset points nowhere.
+	start  int
+	header int
 }
 
 // boxesIn iterates the boxes at one level. A box whose declared size does not
@@ -812,6 +842,7 @@ func boxesIn(data []byte) []mp4box {
 		size := int(be32(data[off:]))
 		typ := string(data[off+4 : off+8])
 		header := 8
+		start := off
 		switch size {
 		case 1:
 			if off+16 > len(data) {
@@ -825,7 +856,7 @@ func boxesIn(data []byte) []mp4box {
 		if size < header || off+size > len(data) {
 			return out
 		}
-		out = append(out, mp4box{typ: typ, payload: data[off+header : off+size]})
+		out = append(out, mp4box{typ: typ, payload: data[off+header : off+size], start: start, header: header})
 		off += size
 	}
 	return out

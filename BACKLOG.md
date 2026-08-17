@@ -309,12 +309,11 @@ stream that break in production and that no manifest-only checker can see.
   reference stream delivers it. "The captions are declared but the encoder stopped
   emitting them" is invisible to every manifest checker.
   <!-- sc: prio=high size=L labels=check,parser ver=0.3.0 -->
-- [ ] **SC-91 — Attribute a CMAF caption track's field**: a `c608` track states the
-  standard, not which CEA-608 field or CEA-708 service it carries, so a channel
-  declared against one can be neither confirmed nor disproved. Locating the track's
-  samples — `trun` data offsets against the `mdat` — and reading their `cdat`/`cdt2`
-  boxes would make the comparison as exact as the SEI path already is.
-  <!-- sc: prio=med size=M labels=parser -->
+- [x] **SC-91 — Attribute a CMAF caption track's field**: the track's samples are
+  located from the `trun` data offsets against the `mdat`, and their `cdat`/`cdt2` boxes
+  say which CEA-608 field the data is on. Apple's own fMP4 reference stream now reports
+  "CEA-608 field 1 (CC1/CC3)" where it used to say the channel was not attributable.
+  <!-- sc: prio=med size=M labels=parser ver=0.3.0 -->
 - [x] **SC-38 — Subtitle renditions**: WebVTT and TTML/IMSC segments are fetched and
   parsed, and their cue times compared against the window the manifest put them in —
   overlap rather than containment, because a cue crossing a boundary appears in both
@@ -322,11 +321,17 @@ stream that break in production and that no manifest-only checker can see.
   accumulated `EXTINF`, which is the difference between reading Apple's advanced
   example correctly and reporting all of it ten seconds adrift.
   <!-- sc: prio=med size=L labels=check,parser ver=0.3.0 -->
-- [ ] **SC-93 — Cues inside an fMP4 subtitle track**: a `stpp` or `wvtt` track states
-  its timing in the wrapper, and the cues themselves are in the samples. Locating
-  them — `trun` offsets against the `mdat`, as SC-91 needs for captions — would make
-  a CMAF subtitle rendition as checkable as a text one.
-  <!-- sc: prio=med size=M labels=parser -->
+- [x] **SC-93 — Cues inside an fMP4 subtitle track**: a `stpp` sample is a TTML document
+  and a `wvtt` sample a sequence of cue boxes, both now read through the same sample
+  location SC-91 needed. A rendition whose segments are the right size and carry nothing
+  is the usual shape of a broken subtitle pipeline, and the sample count alone could not
+  tell it from a working one.
+  <!-- sc: prio=med size=M labels=parser ver=0.3.0 -->
+- [ ] **SC-97 — Place a wrapped subtitle cue on the timeline**: SC-93 counts the cues in
+  a `stpp`/`wvtt` sample but does not time them. A TTML document's own `begin` and `end`
+  are relative to the fragment that carries it, so comparing them against the fragment's
+  `tfdt` would give a CMAF rendition the same drift check a WebVTT one already gets.
+  <!-- sc: prio=med size=M labels=check -->
 - [x] **SC-21 — MP3 packed audio**: the frame-size tables for every version and layer,
   so a packed MP3 rendition's duration can be measured instead of the container being
   recognised and skipped. A header stating a reserved or free-format field is refused

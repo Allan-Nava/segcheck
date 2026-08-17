@@ -101,6 +101,16 @@ type Track struct {
 	// reveal it, because it states one value for the whole rendition.
 	SampleRate int `json:"sample_rate,omitempty"`
 	Channels   int `json:"channels,omitempty"`
+	// Cues is how many subtitle cues a text track's samples carry, and CuesRead
+	// whether they were readable at all. Zero cues and no cue count lead to
+	// opposite verdicts: the first is a rendition that says nothing, the second one
+	// nobody could look inside.
+	//
+	// For a WebVTT or TTML segment the cues are the samples, so Samples and Cues
+	// agree. For an fMP4-wrapped track they do not: a sample may hold several cues,
+	// or the empty-cue box that holds none.
+	Cues     int  `json:"cues,omitempty"`
+	CuesRead bool `json:"cues_read,omitempty"`
 	// Captions is the closed-caption data found in a video track's bitstream.
 	// Its Scanned field is what separates "no captions here" from "nobody
 	// looked", which lead to opposite verdicts.

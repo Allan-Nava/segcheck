@@ -75,6 +75,9 @@ func ParseWebVTT(data []byte) (SegmentInfo, error) {
 		haveCue = true
 	}
 	track.Samples = cues
+	// For a text segment the cues *are* the samples, but the check reads Cues so it
+	// has one field to read whether the rendition arrived as text or wrapped in fMP4.
+	track.Cues, track.CuesRead = cues, true
 	if haveCue && haveMap {
 		// mapOffset is the media time the local zero corresponds to.
 		track.MinPTS = int64((first + mapOffset) * TSTimescale)
@@ -244,6 +247,7 @@ func ParseTTML(data []byte) (SegmentInfo, error) {
 			break
 		}
 		track.Samples++
+		track.Cues++
 		begin, okB := parseTTMLTime(p.Begin)
 		if !okB {
 			continue
@@ -266,6 +270,7 @@ func ParseTTML(data []byte) (SegmentInfo, error) {
 		}
 		haveCue = true
 	}
+	track.CuesRead = true
 	if haveCue {
 		// TTML counts on the media timeline already: there is no map to apply.
 		track.MinPTS = int64(first * TSTimescale)
@@ -326,4 +331,51 @@ func looksTTML(data []byte) bool {
 	}
 	return strings.Contains(s, "<tt ") || strings.Contains(s, "<tt>") ||
 		strings.Contains(s, ":tt ") || strings.Contains(s, "http://www.w3.org/ns/ttml")
+}
+
+// subtitleSampleCues counts the cues in an fMP4 subtitle track's samples.
+//
+// A stpp sample is a TTML document; a wvtt sample is a sequence of boxes, where vttc
+// holds a cue and vtte says nothing is displayed. Reporting the sample count alone
+// could not tell a rendition that says nothing from one that says plenty — which is
+// exactly how a subtitle pipeline breaks — so this reads inside them.
+//
+// It reports false when nothing was readable: zero cues and no cue count are opposite
+// answers, and conflating them would report a broken rendition as merely quiet.
+func subtitleSampleCues(codec string, data []byte, ranges []sampleRange) (int, bool) {
+	if len(ranges) == 0 {
+		return 0, false
+	}
+	cues, read := 0, false
+	for _, r := range ranges {
+		sample := data[r.start:r.end]
+		switch codec {
+		case "ttml":
+			info, err := ParseTTML(sample)
+			if err != nil {
+				continue
+			}
+			read = true
+			if t, ok := info.Track(Text); ok {
+				cues += t.Samples
+			}
+		case "webvtt":
+			// The boxes a wvtt sample is made of. An empty sample is a vtte box,
+			// which is a statement that nothing is displayed rather than a cue.
+			boxes := boxesIn(sample)
+			if len(boxes) == 0 {
+				continue
+			}
+			for _, b := range boxes {
+				switch b.typ {
+				case "vttc":
+					cues++
+					read = true
+				case "vtte":
+					read = true
+				}
+			}
+		}
+	}
+	return cues, read
 }
