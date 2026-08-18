@@ -113,6 +113,7 @@ func TestRun_UsageErrorsExitTwo(t *testing.T) {
 		{"malformed --header", []string{"check", "http://x/m.m3u8", "--header", "no-colon"}, "header"},
 		{"unknown flag", []string{"check", "http://x/m.m3u8", "--nope"}, "nope"},
 		{"negative --watch", []string{"check", "http://x/m.m3u8", "--watch", "-5s"}, "--watch"},
+		{"negative --parts", []string{"check", "http://x/m.m3u8", "--parts", "-1"}, "--parts"},
 		{"zero --stall-tolerance", []string{"check", "http://x/m.m3u8", "--watch", "30s", "--stall-tolerance", "0"}, "--stall-tolerance"},
 	}
 	for _, tc := range cases {

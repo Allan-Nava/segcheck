@@ -381,11 +381,17 @@ stream the way a viewer receives it".
   renumbers a `SegmentTimeline` every time the window slides, and only the URI
   changes when — and only when — something new is published.
   <!-- sc: prio=high size=L labels=cli,check ver=0.4.0 -->
-- [ ] **SC-39 — LL-HLS parts**: `EXT-X-PART`, `EXT-X-PRELOAD-HINT` and
-  `EXT-X-SERVER-CONTROL` — fetch the parts, check part durations against
-  `PART-TARGET`, and check that the parts of a segment reconstruct that
-  segment's timeline. Low-latency ladders are where continuity defects are born.
-  <!-- sc: prio=high size=XL labels=check,parser -->
+- [x] **SC-39 — LL-HLS parts**: `EXT-X-PART`, `EXT-X-PART-INF`, `EXT-X-SERVER-CONTROL`
+  and `EXT-X-PRELOAD-HINT` are parsed, and `--parts N` fetches a segment's parts and
+  compares them with the segment they make up: contiguity, coverage at both edges,
+  `INDEPENDENT=YES` against the real sync sample, and measured length against
+  `PART-TARGET`. The point is that the parts are not slices of the segment — a
+  packager muxes both — so the two descriptions of the same media can disagree, and
+  then the low-latency and the normal path deliver different content. The preload
+  hint is parsed and never fetched: it blocks until the media exists by design.
+  Unit-tested only; no public LL-HLS reference stream was reachable to run it
+  against, which is SC-99.
+  <!-- sc: prio=high size=XL labels=check,parser ver=0.4.0 -->
 - [ ] **SC-40 — Multi-period DASH**: continuity across a period boundary, where
   the presentation-time offset resets and an encoder change lands. Today each
   period is checked as if the others did not exist.
@@ -1017,3 +1023,14 @@ checks roadmap and blocks nothing.
   the next release anyway. Belongs in the tap; filed here because segcheck's release is
   what surfaced it.
   <!-- sc: prio=low size=S labels=release -->
+- [ ] **SC-99 — No low-latency reference stream in the smoke suite**: every check this
+  project has shipped a false positive in was caught by SC-36 against real media rather
+  than by a unit test, and `parts` (SC-39) is the first check to ship without that pass:
+  no public LL-HLS endpoint was reachable when it was written. It needs a live stream
+  publishing `EXT-X-PART`, which rules out the static reference URLs the rest of the
+  suite uses — the parts are aged out of the window seconds after their segment
+  completes, so the fixture has to be live at the moment CI runs, or the suite has to
+  serve one itself from `mediatest` over a loopback origin and accept that a
+  self-served stream cannot catch a shared misreading. The second is worth less and
+  still worth more than nothing.
+  <!-- sc: prio=med size=M labels=tests -->

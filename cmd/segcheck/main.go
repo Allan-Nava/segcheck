@@ -35,6 +35,9 @@ Sampling:
   --audio N           audio renditions to inspect (default 1)
   --subtitles N       subtitle renditions to inspect (default 1)
   --from MODE         where to sample: auto|edge|start (default auto: edge for live, start for VOD)
+  --parts N           sampled segments whose EXT-X-PART parts are also fetched
+                      and compared with the segment they make up (default 1,
+                      0 = off; ignored by a stream that publishes no parts)
 
 Live edge:
   --watch DUR         after checking the segments, keep re-reading the manifest
@@ -47,6 +50,12 @@ and lines up, and only a second look a TARGETDURATION later tells it from a
 healthy stream. --watch re-reads at the interval the manifest itself implies —
 TARGETDURATION in HLS, minimumUpdatePeriod in DASH — and costs one request per
 selected rendition per poll, so --renditions bounds what it costs.
+
+Low-latency HLS describes the same media twice — as segments and, more finely,
+as the parts published before each segment exists — and a packager muxes the two
+separately, so they can disagree. --parts fetches a segment's parts and checks
+that they reconstruct it, that a part declared INDEPENDENT really opens on a
+keyframe, and that no part outruns PART-TARGET.
 
 Thresholds:
   --duration-tolerance PCT   allowed declared-vs-real duration drift (default 5)
@@ -85,6 +94,7 @@ Examples:
   segcheck check https://cdn.example/master.m3u8 --output markdown > report.md
   segcheck check https://cdn.example/master.m3u8 --exit-on bad
   segcheck check https://cdn.example/live.m3u8 --watch 2m --exit-on bad
+  segcheck check https://cdn.example/ll.m3u8 --parts 2
 `
 
 type headerFlag map[string]string
@@ -138,6 +148,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	fs.IntVar(&opts.MaxAudio, "audio", opts.MaxAudio, "")
 	fs.IntVar(&opts.MaxText, "subtitles", opts.MaxText, "")
 	fs.StringVar(&opts.From, "from", opts.From, "")
+	fs.IntVar(&opts.PartSegments, "parts", opts.PartSegments, "")
 	fs.Float64Var(&opts.DurationTolerancePct, "duration-tolerance", opts.DurationTolerancePct, "")
 	fs.Float64Var(&opts.GapToleranceMS, "gap-tolerance", opts.GapToleranceMS, "")
 	fs.Float64Var(&opts.BitrateTolerancePct, "bitrate-tolerance", opts.BitrateTolerancePct, "")
@@ -262,6 +273,9 @@ func validate(opts analyze.Options, format, exitOn string) error {
 	}
 	if opts.Watch < 0 {
 		return fmt.Errorf("--watch cannot be negative")
+	}
+	if opts.PartSegments < 0 {
+		return fmt.Errorf("--parts cannot be negative")
 	}
 	// A tolerance of zero would make every advance a stall, including the
 	// healthy one, which is a checker that cries wolf on every live stream.

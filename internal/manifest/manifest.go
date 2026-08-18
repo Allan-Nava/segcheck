@@ -148,6 +148,49 @@ type Segment struct {
 	// resolves to sixteen raw bytes. Anything else is a DRM system whose key this
 	// tool cannot fetch.
 	KeyFormat string `json:"key_format,omitempty"`
+	// Parts are the EXT-X-PART entries this segment was published as, in order.
+	// Empty for everything but a low-latency playlist, and empty there too once
+	// the packager has aged them out.
+	Parts []Part `json:"parts,omitempty"`
+}
+
+// Part is one EXT-X-PART: a fraction of a segment, published before the segment
+// itself exists. Low-latency HLS is built out of them, and they are a second,
+// finer description of media the playlist already describes as segments — which
+// is exactly why they are worth reading. Two descriptions of the same media can
+// disagree.
+type Part struct {
+	URI      string  `json:"uri"`
+	Duration float64 `json:"duration"`
+	// ByteRange restricts the part to a range of its resource, which is how most
+	// packagers publish parts: every part of a segment is a range of the same
+	// growing file.
+	ByteRange *ByteRange `json:"byte_range,omitempty"`
+	// Independent is INDEPENDENT=YES: the part is claimed to begin with an
+	// independent frame, so a player may start playing at it. It is the one claim
+	// a part makes about the bitstream, and the media can arbitrate it.
+	Independent bool `json:"independent,omitempty"`
+	// Gap is GAP=YES: the packager is declaring this part deliberately absent.
+	// Fetching it is pointless and reporting it missing is reporting the manifest
+	// back at itself.
+	Gap bool `json:"gap,omitempty"`
+	// Sequence is the media sequence number of the segment this part belongs to,
+	// and Index its position within that segment, both so a finding can name it:
+	// a part has no number of its own.
+	Sequence int `json:"sequence"`
+	Index    int `json:"index"`
+}
+
+// PreloadHint is EXT-X-PRELOAD-HINT: a resource the server promises is coming
+// and will hold a request open for. segcheck does not fetch it — a preload hint
+// is designed to block until the media exists, and a checker that blocked on one
+// would hang rather than report — but a playlist that hints at something it has
+// already published is making a player fetch the same bytes twice.
+type PreloadHint struct {
+	Type            string `json:"type"` // PART or MAP
+	URI             string `json:"uri"`
+	ByteRangeStart  int64  `json:"byte_range_start,omitempty"`
+	ByteRangeLength int64  `json:"byte_range_length,omitempty"`
 }
 
 // ByteRange is an HLS EXT-X-BYTERANGE.
@@ -172,6 +215,21 @@ type Playlist struct {
 	// dynamic MPD.
 	Live           bool    `json:"live"`
 	TargetDuration float64 `json:"target_duration,omitempty"`
+	// PartTarget is EXT-X-PART-INF PART-TARGET: the longest any EXT-X-PART in
+	// this playlist may be. Zero when the playlist publishes no parts.
+	PartTarget float64 `json:"part_target,omitempty"`
+	// PartHoldBack and CanBlockReload are EXT-X-SERVER-CONTROL: how far back
+	// from the live edge a low-latency player should stay, and whether the
+	// server will hold a request open for media that does not exist yet.
+	PartHoldBack   float64 `json:"part_hold_back,omitempty"`
+	CanBlockReload bool    `json:"can_block_reload,omitempty"`
+	// PendingParts are the parts of the segment currently being published: the
+	// ones with no segment URI line after them yet. They are kept apart from
+	// Segments because attaching them to the last complete segment would count
+	// that segment's media twice.
+	PendingParts []Part `json:"pending_parts,omitempty"`
+	// PreloadHint is EXT-X-PRELOAD-HINT, when the playlist carries one.
+	PreloadHint *PreloadHint `json:"preload_hint,omitempty"`
 	// UpdatePeriod is how often the manifest itself says it will change: DASH
 	// @minimumUpdatePeriod. HLS states no such interval — a player re-reads a
 	// live media playlist at TARGETDURATION — so it stays zero there.

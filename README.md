@@ -96,6 +96,10 @@ segcheck check https://cdn.example/live.m3u8 --from edge --segments 12
 # DASH is the same command
 segcheck check https://cdn.example/manifest.mpd
 
+# A low-latency ladder: fetch two segments' worth of EXT-X-PART parts and
+# check they reconstruct the segments a normal player would fetch
+segcheck check https://cdn.example/ll.m3u8 --parts 2
+
 # Watch the live edge for two minutes: a packager that stopped publishing
 # serves a flawless playlist, and only a second look tells the two apart
 segcheck check https://cdn.example/live.m3u8 --watch 2m
@@ -151,7 +155,10 @@ environment.
 | `alignment` | Segment boundaries across renditions, so ABR switching does not glitch | BAD |
 | `encryption` | Declared protection against what the segments carry, whether a supplied key actually decrypts them, and — for SAMPLE-AES and CENC, which protect the samples and not the container — which half of the tool could run at all | BAD |
 | `ladder` | Duplicate rungs, inverted rungs, dangling `AUDIO` groups, missing `CODECS` | BAD |
+| `parts` | Low-latency `EXT-X-PART` parts fetched and compared with the segment they make up: contiguity, coverage, `INDEPENDENT=YES` against the real sync sample, and measured length against `PART-TARGET` | BAD |
 | `watch` | With `--watch`, whether the live edge actually advances: new-segment latency, a stall, and a packager that stopped publishing | BAD |
+
+Low-latency HLS is read as well as delivered: `EXT-X-PART-INF`, `EXT-X-SERVER-CONTROL`, `EXT-X-PART` and `EXT-X-PRELOAD-HINT`. The parts of a segment are fetched and compared with the segment itself, because a packager muxes the two separately and they can disagree — and when they do, a viewer on the low-latency path gets different media from one fetching whole segments. The preload hint is parsed and never fetched: it is designed to block until the media exists, and a checker that blocked on one would hang instead of reporting.
 
 Containers understood: **MPEG-TS** (PAT/PMT, PES timestamps, continuity counters, H.264 and HEVC/H.265 parameter sets for the real resolution), **fragmented MP4 / CMAF** (`moov` for timescale, codec and coded size; `mvex`/`trex` defaults; `tfdt`/`trun` for the timeline; `sidx` for single-file DASH, addressed by byte range), **packed audio** (ADTS AAC and MPEG-1/2 audio, with the ID3 `transportStreamTimestamp` that gives audio-only renditions a timeline), and **WebVTT and TTML/IMSC** subtitle segments. Audio format is read where each container actually states it: the `AudioSampleEntry` in fMP4, the `dac3`/`dec3` box for AC-3 and E-AC-3 (whose `channelcount` field is not to be trusted), and the ADTS header everywhere else.
 
@@ -165,6 +172,8 @@ Containers understood: **MPEG-TS** (PAT/PMT, PES timestamps, continuity counters
 ## Sampling, and what it costs
 
 segcheck downloads real media, so it is worth knowing what it will pull. Per run: `renditions × segments` segments, plus one initialisation segment per rendition. Defaults (6 segments, all renditions) against a five-rung 1080p ladder is roughly 100–200 MB. Trim it with `--renditions` and `--segments`; a capped `--renditions` always keeps the top and bottom rungs, because that is where ladder defects concentrate.
+
+`--parts N` adds the parts of the N newest sampled segments per rendition — a segment's worth of bytes each, split across many small requests. `--parts 0` switches the low-latency checks off; a stream that publishes no `EXT-X-PART` never pays for them either way.
 
 `--watch` adds manifests, not media: one request per selected rendition every re-read interval — `TARGETDURATION` in HLS, `minimumUpdatePeriod` in DASH — for as long as you asked for. The segments are downloaded once, at the start.
 

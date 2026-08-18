@@ -64,6 +64,11 @@ type Options struct {
 	// 29.97 where the media runs at 30000/1001, and those are the same rate
 	// spelled two ways.
 	FrameRateTolerancePct float64
+	// PartSegments is how many of the sampled segments have their EXT-X-PART
+	// parts fetched and compared with the segment they make up. The cap is on
+	// segments rather than parts because half a segment's parts cannot answer
+	// whether they reconstruct it. Zero switches the low-latency checks off.
+	PartSegments int
 	// Watch is how long to keep re-reading the manifest after the segments have
 	// been checked, observing what the live edge does. Zero is a single shot,
 	// which is every run that did not ask for otherwise.
@@ -94,6 +99,7 @@ func Defaults() Options {
 		GapToleranceMS:        100,
 		BitrateTolerancePct:   10,
 		FrameRateTolerancePct: 2,
+		PartSegments:          1,
 		StallTolerance:        3,
 		Now:                   time.Now,
 		Sleep:                 waitFor,
@@ -135,6 +141,14 @@ type renditionData struct {
 	// live and targetDuration come from the rendition's own media playlist.
 	live           bool
 	targetDuration float64
+	// parts are the sampled EXT-X-PART parts, and partTarget the PART-TARGET
+	// they are judged against. hasParts records that the playlist publishes
+	// parts at all, which is what decides whether the check has anything to say:
+	// a stream with none must not gain a row in the report for a feature it does
+	// not use.
+	parts      []partData
+	partTarget float64
+	hasParts   bool
 	// adBreaks are the ad-break signals declared for this rendition: from its own
 	// media playlist in HLS, from the Period's EventStreams in DASH.
 	adBreaks []manifest.AdBreak
@@ -216,6 +230,7 @@ func Run(ctx context.Context, c *fetch.Client, rawurl string, opts Options) find
 	res.Findings = append(res.Findings, checkTimeline(rends, opts)...)
 	res.Findings = append(res.Findings, checkEncryption(rends)...)
 	res.Findings = append(res.Findings, checkAlignment(rends, opts)...)
+	res.Findings = append(res.Findings, checkParts(rends, opts)...)
 	res.Findings = append(res.Findings, checkLadder(*pl)...)
 
 	// The watch loop runs last and takes as long as it was asked to: everything
@@ -295,6 +310,8 @@ func selectRenditions(ctx context.Context, c *fetch.Client, pl manifest.Playlist
 			segs:           toSegmentData(sampleSegments(pl.Segments, pl.Live, opts)),
 			live:           pl.Live,
 			targetDuration: pl.TargetDuration,
+			partTarget:     pl.PartTarget,
+			hasParts:       playlistHasParts(pl),
 		}}, findings
 	}
 
@@ -320,6 +337,8 @@ func selectRenditions(ctx context.Context, c *fetch.Client, pl manifest.Playlist
 		case len(r.Segments) > 0: // DASH: the MPD already listed the segments
 			rd.live = pl.Live
 			rd.adBreaks = pl.AdBreaks
+			// DASH has no EXT-X-PART; low latency there is chunked transfer of a
+			// segment that is already listed, with nothing extra to compare.
 			rd.segs = toSegmentData(sampleSegments(r.Segments, pl.Live, opts))
 		case r.SingleFile:
 			// A single-file DASH representation. Its URI is the media file, not a
@@ -335,6 +354,8 @@ func selectRenditions(ctx context.Context, c *fetch.Client, pl manifest.Playlist
 				rd.live = sub.Live
 				rd.targetDuration = sub.TargetDuration
 				rd.adBreaks = sub.AdBreaks
+				rd.partTarget = sub.PartTarget
+				rd.hasParts = playlistHasParts(sub)
 				rd.segs = toSegmentData(sampleSegments(sub.Segments, sub.Live, opts))
 			}
 		default:
@@ -363,6 +384,21 @@ func chooseRenditions(pl manifest.Playlist, opts Options) chosenRenditions {
 		audio: pick(byKind(pl.Renditions, manifest.Audio), opts.MaxAudio),
 		text:  pick(byKind(pl.Renditions, manifest.Text), opts.MaxText),
 	}
+}
+
+// playlistHasParts reports whether the playlist publishes EXT-X-PART at all.
+// PART-TARGET alone is not enough: a playlist can declare the interval and have
+// aged every part out of the window.
+func playlistHasParts(pl manifest.Playlist) bool {
+	if len(pl.PendingParts) > 0 {
+		return true
+	}
+	for _, s := range pl.Segments {
+		if len(s.Parts) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func loadMediaPlaylist(ctx context.Context, c *fetch.Client, rawurl string) (manifest.Playlist, error) {
@@ -491,6 +527,12 @@ func sampleAll(ctx context.Context, c *fetch.Client, rends []*renditionData, opt
 	// cached as "no key" would silently leave later segments undecrypted.
 	keys := resolveKeys(ctx, c, rends, opts)
 
+	// Which parts to fetch is decided before the fan-out, from the same sampled
+	// segments, so the parts ride the same concurrency bound as everything else.
+	for _, rd := range rends {
+		rd.parts = selectParts(rd, opts)
+	}
+
 	sem := make(chan struct{}, conc)
 	var wg sync.WaitGroup
 	for _, rd := range rends {
@@ -533,6 +575,11 @@ func sampleAll(ctx context.Context, c *fetch.Client, rends []*renditionData, opt
 		}
 	}
 	wg.Wait()
+
+	// The parts go after the segments rather than alongside them: a part is only
+	// meaningful next to the segment it makes up, and that segment has to have
+	// been read before there is anything to compare it with.
+	samplePartsAll(ctx, c, rends, inits, conc)
 }
 
 type initResult struct {

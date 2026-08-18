@@ -19,6 +19,27 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   a stall rather than jitter. Watching a VOD playlist is not a defect and is reported as
   an OK finding saying there is no live edge, not as a problem in the stream. Only
   manifests are re-fetched: the segments are downloaded once, at the start.
+- **`--parts N` checks the low-latency path** (SC-39). Low-latency HLS describes the same
+  media twice: as segments, and at a finer grain as the `EXT-X-PART`s published before each
+  segment exists. A packager muxes the two separately, so they can disagree — and when they
+  do, a viewer on the low-latency path gets different media from one fetching whole
+  segments. Nothing that reads only the manifest can see it, and nothing that fetches only
+  the segments can either. The new `parts` check fetches a segment's parts and reports:
+  parts that are not contiguous with each other, parts that do not cover the segment they
+  make up, a part declared `INDEPENDENT=YES` whose media does not open on a sync sample
+  (a player invited to join there has nothing to decode), a part longer than the measured
+  `PART-TARGET`, and a part that will not fetch or parse. A `GAP=YES` part is the packager
+  declaring the hole and is never reported. Default `--parts 1`; `--parts 0` switches it off,
+  and a stream with no parts never gains a row.
+- `EXT-X-PART-INF`, `EXT-X-SERVER-CONTROL`, `EXT-X-PART` and `EXT-X-PRELOAD-HINT` are parsed
+  (`Playlist.PartTarget`, `PartHoldBack`, `CanBlockReload`, `PendingParts`, `PreloadHint`,
+  `Segment.Parts`). A part's `BYTERANGE` follows the same "continue from the previous range"
+  rule as `EXT-X-BYTERANGE`, on its own chain — every part of a segment is usually a range
+  of the same growing file. The parts still pending at the end of a playlist belong to the
+  segment being published right now, and are kept apart from the completed ones so that
+  segment's media is not counted twice. The preload hint is parsed and deliberately never
+  fetched: it is designed to block until the media exists, and a checker that blocked on one
+  would hang rather than report.
 - `manifest.Playlist.UpdatePeriod` carries DASH `@minimumUpdatePeriod`, which is the MPD
   stating how often it will change and therefore how often `--watch` has to look.
 

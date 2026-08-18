@@ -42,6 +42,17 @@ func ParseHLS(body []byte, baseURL string) (Playlist, error) {
 		// comes first in the playlist, the URI on the next line.
 		lastRangeEnd int64
 		lastRangeURI string
+		// pendingParts are the EXT-X-PART lines seen since the last segment URI.
+		// They belong to the segment whose URI comes *after* them — a part is
+		// published before the segment it makes up exists, which is the whole
+		// point of low latency — and the ones still pending at the end of the
+		// playlist belong to the segment being published right now.
+		pendingParts []Part
+		// lastPartRangeEnd and lastPartRangeURI carry the "continue from the
+		// previous range" rule across parts, which have their own chain: every
+		// part of a segment is usually a range of the same growing file.
+		lastPartRangeEnd int64
+		lastPartRangeURI string
 		// ccGroups holds the CLOSED-CAPTIONS declarations by GROUP-ID, and
 		// ccGroupOf which group each variant named. Both are resolved after the
 		// scan: nothing in the spec requires the EXT-X-MEDIA entries to come
@@ -162,6 +173,46 @@ func ParseHLS(body []byte, baseURL string) (Playlist, error) {
 			}
 			pl.AdBreaks = append(pl.AdBreaks, b)
 
+		case strings.HasPrefix(line, "#EXT-X-PART-INF:"):
+			pl.PartTarget = attrFloat(parseAttrs(strings.TrimPrefix(line, "#EXT-X-PART-INF:")), "PART-TARGET")
+
+		case strings.HasPrefix(line, "#EXT-X-SERVER-CONTROL:"):
+			attrs := parseAttrs(strings.TrimPrefix(line, "#EXT-X-SERVER-CONTROL:"))
+			pl.PartHoldBack = attrFloat(attrs, "PART-HOLD-BACK")
+			pl.CanBlockReload = strings.EqualFold(attrs["CAN-BLOCK-RELOAD"], "YES")
+
+		case strings.HasPrefix(line, "#EXT-X-PART:"):
+			attrs := parseAttrs(strings.TrimPrefix(line, "#EXT-X-PART:"))
+			uri := attrs["URI"]
+			if uri == "" {
+				break // a part with no URI is nothing a player can fetch
+			}
+			part := Part{
+				URI:         Resolve(base, uri),
+				Duration:    attrFloat(attrs, "DURATION"),
+				Independent: strings.EqualFold(attrs["INDEPENDENT"], "YES"),
+				Gap:         strings.EqualFold(attrs["GAP"], "YES"),
+				Sequence:    mediaSeq + len(pl.Segments),
+				Index:       len(pendingParts),
+			}
+			if p := parseByteRange(attrs["BYTERANGE"]); p != nil {
+				br := p.resolve(part.URI, lastPartRangeURI, lastPartRangeEnd)
+				part.ByteRange = &br
+				lastPartRangeURI, lastPartRangeEnd = part.URI, br.Offset+br.Length
+			}
+			pendingParts = append(pendingParts, part)
+
+		case strings.HasPrefix(line, "#EXT-X-PRELOAD-HINT:"):
+			attrs := parseAttrs(strings.TrimPrefix(line, "#EXT-X-PRELOAD-HINT:"))
+			if uri := attrs["URI"]; uri != "" {
+				pl.PreloadHint = &PreloadHint{
+					Type:            strings.ToUpper(attrs["TYPE"]),
+					URI:             Resolve(base, uri),
+					ByteRangeStart:  int64(attrFloat(attrs, "BYTERANGE-START")),
+					ByteRangeLength: int64(attrFloat(attrs, "BYTERANGE-LENGTH")),
+				}
+			}
+
 		case strings.HasPrefix(line, "#EXT-X-TARGETDURATION:"):
 			pl.TargetDuration, _ = strconv.ParseFloat(strings.TrimPrefix(line, "#EXT-X-TARGETDURATION:"), 64)
 
@@ -264,6 +315,8 @@ func ParseHLS(body []byte, baseURL string) (Playlist, error) {
 					seg.ByteRange = &br
 					lastRangeURI, lastRangeEnd = uri, br.Offset+br.Length
 				}
+				seg.Parts = pendingParts
+				pendingParts = nil
 				pl.Segments = append(pl.Segments, seg)
 				pendingDur, pendingDisc, pendingRange = 0, false, nil
 				havePendingPDT = false
@@ -285,6 +338,10 @@ func ParseHLS(body []byte, baseURL string) (Playlist, error) {
 	for i, g := range ccGroupOf {
 		pl.Renditions[i].Captions = ccGroups[g]
 	}
+	// Whatever parts are still pending belong to the segment being published
+	// right now, which has no URI line yet. Attaching them to the last complete
+	// segment would count its media twice.
+	pl.PendingParts = pendingParts
 	// A media playlist without EXT-X-ENDLIST is a sliding window: live.
 	pl.Live = !pl.Master && !endList
 	_ = seqSet
