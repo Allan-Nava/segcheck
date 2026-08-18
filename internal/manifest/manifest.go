@@ -183,6 +183,12 @@ type Segment struct {
 	// Discontinuity marks an intentional timeline break (EXT-X-DISCONTINUITY).
 	// A PTS jump here is expected; one without it is a defect.
 	Discontinuity bool `json:"discontinuity,omitempty"`
+	// DiscontinuitySequence is which timeline this segment sits on: the
+	// playlist's EXT-X-DISCONTINUITY-SEQUENCE plus every EXT-X-DISCONTINUITY at
+	// or before it. It is what a player uses to decide whether two segments
+	// belong on the same clock, so two rungs of a ladder that put the same media
+	// at different numbers put it on two different timelines.
+	DiscontinuitySequence int `json:"discontinuity_sequence,omitempty"`
 	// InitURI is the initialisation segment in force for this segment
 	// (EXT-X-MAP), needed to parse fMP4 at all.
 	InitURI string `json:"init_uri,omitempty"`
@@ -346,10 +352,15 @@ type Playlist struct {
 	// UpdatePeriod is how often the manifest itself says it will change: DASH
 	// @minimumUpdatePeriod. HLS states no such interval — a player re-reads a
 	// live media playlist at TARGETDURATION — so it stays zero there.
-	UpdatePeriod  float64     `json:"update_period,omitempty"`
-	MediaSequence int         `json:"media_sequence,omitempty"`
-	Renditions    []Rendition `json:"renditions,omitempty"`
-	Segments      []Segment   `json:"segments,omitempty"`
+	UpdatePeriod  float64 `json:"update_period,omitempty"`
+	MediaSequence int     `json:"media_sequence,omitempty"`
+	// DiscontinuitySequence is EXT-X-DISCONTINUITY-SEQUENCE: how many
+	// discontinuities have already rolled out of the front of a live window.
+	// Absent the tag it is zero, which is what a VOD playlist and a live one that
+	// has never rolled one out both mean.
+	DiscontinuitySequence int         `json:"discontinuity_sequence,omitempty"`
+	Renditions            []Rendition `json:"renditions,omitempty"`
+	Segments              []Segment   `json:"segments,omitempty"`
 	// AdBreaks are the SCTE-35 ad-break signals the manifest declares: HLS
 	// EXT-X-DATERANGE and EXT-X-CUE-OUT/CUE-IN in a media playlist, DASH
 	// EventStream events at Period level.

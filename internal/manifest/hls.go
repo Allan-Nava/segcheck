@@ -23,6 +23,7 @@ func ParseHLS(body []byte, baseURL string) (Playlist, error) {
 		pendingStream  map[string]string // EXT-X-STREAM-INF awaiting its URI
 		pendingDur     float64
 		pendingDisc    bool
+		discSeq        int
 		pendingRange   *pendingByteRange
 		pendingPDT     time.Time
 		havePendingPDT bool
@@ -244,6 +245,10 @@ func ParseHLS(body []byte, baseURL string) (Playlist, error) {
 		case strings.HasPrefix(line, "#EXT-X-TARGETDURATION:"):
 			pl.TargetDuration, _ = strconv.ParseFloat(strings.TrimPrefix(line, "#EXT-X-TARGETDURATION:"), 64)
 
+		case strings.HasPrefix(line, "#EXT-X-DISCONTINUITY-SEQUENCE:"):
+			discSeq, _ = strconv.Atoi(strings.TrimPrefix(line, "#EXT-X-DISCONTINUITY-SEQUENCE:"))
+			pl.DiscontinuitySequence = discSeq
+
 		case strings.HasPrefix(line, "#EXT-X-MEDIA-SEQUENCE:"):
 			mediaSeq, _ = strconv.Atoi(strings.TrimPrefix(line, "#EXT-X-MEDIA-SEQUENCE:"))
 			pl.MediaSequence = mediaSeq
@@ -255,6 +260,10 @@ func ParseHLS(body []byte, baseURL string) (Playlist, error) {
 
 		case line == "#EXT-X-DISCONTINUITY":
 			pendingDisc = true
+			// The tag is a boundary, so it counts from the segment that follows
+			// it — which is why the increment happens here and not where the
+			// segment is built.
+			discSeq++
 
 		case strings.HasPrefix(line, "#EXT-X-MAP:"):
 			attrs := parseAttrs(strings.TrimPrefix(line, "#EXT-X-MAP:"))
@@ -326,18 +335,19 @@ func ParseHLS(body []byte, baseURL string) (Playlist, error) {
 			case expectSegment:
 				uri := Resolve(base, line)
 				seg := Segment{
-					URI:           uri,
-					Duration:      pendingDur,
-					Discontinuity: pendingDisc,
-					InitURI:       currentMap,
-					InitRange:     currentMapRange,
-					Sequence:      mediaSeq + len(pl.Segments),
-					PDT:           pendingPDT,
-					HasPDT:        havePendingPDT,
-					KeyMethod:     keyMethod,
-					KeyURI:        keyURI,
-					KeyFormat:     keyFormat,
-					KeyIV:         keyIV,
+					URI:                   uri,
+					Duration:              pendingDur,
+					Discontinuity:         pendingDisc,
+					DiscontinuitySequence: discSeq,
+					InitURI:               currentMap,
+					InitRange:             currentMapRange,
+					Sequence:              mediaSeq + len(pl.Segments),
+					PDT:                   pendingPDT,
+					HasPDT:                havePendingPDT,
+					KeyMethod:             keyMethod,
+					KeyURI:                keyURI,
+					KeyFormat:             keyFormat,
+					KeyIV:                 keyIV,
 				}
 				if pendingRange != nil {
 					br := pendingRange.resolve(uri, lastRangeURI, lastRangeEnd)

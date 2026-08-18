@@ -9,6 +9,27 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **`EXT-X-DISCONTINUITY` is checked against the reset it promises** (SC-54). The tag is
+  an instruction, not a description: it tells the player to throw its decoder away and
+  start again. `continuity` read it as a licence — a timeline jump here is expected rather
+  than a defect — and took the declaration on trust in the other direction, which is the
+  half nobody looks at, because neither the manifest nor the media is individually wrong.
+  The new `discontinuity` check reports a tag over a timeline that runs straight through
+  it: a flush and a re-initialisation performed for no reason, and on a packager emitting
+  one per segment, a hitch per segment on perfectly continuous media. RFC 8216 §4.3.2.3 is
+  what keeps it honest — the tag signals a change of encoding as well as of timestamps, so
+  a continuous timeline over media that really did change codec, track layout or coded
+  size is the tag doing its job and stays quiet.
+  The second half is which timeline a segment sits on. `EXT-X-DISCONTINUITY-SEQUENCE` is
+  now parsed and every segment carries its own number — the playlist's value plus every
+  tag at or before it — so two rungs that put the same media at different numbers are
+  reported: a player switching between them places the new segment on a timeline the old
+  one was never on. The media is what settles it, since the comparison happens only where
+  the measured timestamps agree that this is the same moment. This is the first check
+  since `parts` to ship without a real-stream pass: no reachable public reference stream
+  carries an `EXT-X-DISCONTINUITY` at all — Apple's bipbop set, mux.dev, Unified
+  Streaming's live and SCTE-35 endpoints and Akamai's vectors were all checked — which is
+  filed as SC-103.
 - **A multi-period MPD is read as one presentation** (SC-40). A `Period` is how an ad
   break, a programme junction and a re-encode are all expressed, and it is the one place
   in a presentation where every timeline restarts — which makes a defect at a boundary

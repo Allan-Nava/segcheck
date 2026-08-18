@@ -177,6 +177,11 @@ AGENTS.md wins and this file gets fixed.
 - **Signalling is not media.** A splice-information PID or an ID3 PID appears only in
   the segments that carry a cue, so `trackShape` excludes them — counting them made
   `tracks` warn about a decoder reset on every ad break in a healthy stream.
+- **`EXT-X-DISCONTINUITY` signals a change of encoding, not only of timestamps.** RFC 8216
+  §4.3.2.3 lists file format, track layout and codec alongside the timestamp sequence, so
+  a tag over a perfectly continuous timeline is legitimate whenever the media on either
+  side changed shape. Reading timestamps alone would report a correct splice into
+  differently encoded content as a decoder flush performed for nothing.
 - **A DASH Period boundary does not divide a segment grid.** A period's first segment
   legitimately begins *before* the period does — the player trims the head — and audio
   straddles almost every boundary there is: nomor's DASH-IF vector puts 1.96198s AAC

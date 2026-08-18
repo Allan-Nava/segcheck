@@ -72,6 +72,10 @@ type variantSpec struct {
 	// cueOutBefore, when non-zero, writes an EXT-X-CUE-OUT before that 1-based
 	// segment and an EXT-X-CUE-IN two segments later.
 	cueOutBefore int
+	// discontinuitySequence writes EXT-X-DISCONTINUITY-SEQUENCE at the head of
+	// this variant's media playlist. Two rungs of a ladder that state different
+	// ones put the same media on two different timelines.
+	discontinuitySequence int
 	// splicePID declares a splice information PID in every segment of the variant,
 	// which is what a real encoder does whether or not a given segment carries a
 	// cue. It is set automatically when any segment plants a splice.
@@ -150,6 +154,9 @@ func hlsOriginHandler(variants []variantSpec) *http.ServeMux {
 		mux.HandleFunc("/"+v.name+"/index.m3u8", func(w http.ResponseWriter, _ *http.Request) {
 			var b strings.Builder
 			b.WriteString("#EXTM3U\n#EXT-X-VERSION:4\n#EXT-X-TARGETDURATION:2\n#EXT-X-MEDIA-SEQUENCE:0\n")
+			if v.discontinuitySequence != 0 {
+				fmt.Fprintf(&b, "#EXT-X-DISCONTINUITY-SEQUENCE:%d\n", v.discontinuitySequence)
+			}
 			for i, s := range v.segments {
 				if s.discontinuity {
 					b.WriteString("#EXT-X-DISCONTINUITY\n")

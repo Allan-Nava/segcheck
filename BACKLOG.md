@@ -480,12 +480,19 @@ wrong place, an ad splices two frames late, or a scrub back into the DVR window
   (601s). Measuring how deep the window *really* is when it fails needs bisection
   over segments the manifest does not list, and is SC-101.
   <!-- sc: prio=high size=M labels=check,delivery ver=0.4.0 -->
-- [ ] **SC-54 — Discontinuity integrity**: `EXT-X-DISCONTINUITY-SEQUENCE` and
-  DASH period boundaries against the timeline resets the media actually
-  contains. A declared discontinuity with no reset in the media and a reset with
-  nothing declared are opposite bugs that present as the same stall, and the
-  `continuity` check currently trusts the declaration.
-  <!-- sc: prio=med size=M labels=check -->
+- [x] **SC-54 — Discontinuity integrity**: the `discontinuity` check reads
+  `EXT-X-DISCONTINUITY` as the instruction it is rather than the description
+  `continuity` treats it as. A tag over a timeline that runs straight through it is a
+  decoder flush the viewer pays for and nobody asked for; RFC 8216 §4.3.2.3 keeps it
+  honest, because the tag signals a change of encoding as well as of timestamps, so a
+  continuous timeline over media that really changed codec, track layout or coded size
+  stays quiet. `EXT-X-DISCONTINUITY-SEQUENCE` is parsed and carried onto every segment,
+  so two rungs that put the same measured moment at different numbers — the same media
+  on two different timelines, which stalls a switch — are reported. The DASH half of
+  this item is SC-40: a Period boundary expresses its reset through
+  `@presentationTimeOffset`, and that is where it is checked. Shipped without a
+  real-stream pass; see SC-103.
+  <!-- sc: prio=med size=M labels=check ver=0.4.0 -->
 - [ ] **SC-55 — Live-edge drift**: over a `--watch` window (SC-25) the edge must
   advance at 1× real time. Report an edge that drifts against the wallclock,
   stalls, or moves backwards — the three shapes of a packager losing its clock,
@@ -1125,3 +1132,15 @@ checks roadmap and blocks nothing.
   the MPD expects it to be) or carry "this period's start is not derivable" and refuse to
   print a start that was never computed.
   <!-- sc: prio=med size=M labels=parser -->
+- [ ] **SC-103 — No reference stream carrying a discontinuity**: `discontinuity` (SC-54)
+  is the second check after `parts` (SC-99) to ship without the real-stream pass that has
+  caught every false positive this project has had. Nothing reachable and public declares
+  an `EXT-X-DISCONTINUITY`: Apple's bipbop variants and their subtitle and audio
+  playlists, mux.dev's test streams, Unified Streaming's `live` and `scte35` endpoints and
+  Akamai's HLS vectors were all read and every one of them has zero. An ad-inserted live
+  endpoint would do it, and so — less well — would serving one from `mediatest` over a
+  loopback origin in the smoke suite, which cannot catch a shared misreading but can catch
+  the check falling silent. The specific risk left open is the encoding-change exemption:
+  a real packager's discontinuity at a codec change has to keep the check quiet, and only
+  a real packager can prove it does.
+  <!-- sc: prio=med size=M labels=tests -->

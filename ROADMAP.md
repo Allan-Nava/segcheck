@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**102 items · 75 shipped · 27 open · 13 milestones.**
+**103 items · 76 shipped · 27 open · 13 milestones.**
 
 ## At a glance
 
@@ -17,20 +17,19 @@
 | **M3** — Codec and timing depth | `v0.2.0` | shipped | `##########` 100% | 0 | 9 |
 | **M4** — Everything that is not the video track | `v0.3.0` | shipped | `##########` 100% | 0 | 14 |
 | **M5** — Live and delivery | `v0.4.0` | **now** | `########..` 83% | 1 | 5 |
-| **M9** — Wallclock and DVR correctness | `v0.4.0` | next | `######....` 60% | 2 | 3 |
+| **M9** — Wallclock and DVR correctness | `v0.4.0` | next | `########..` 80% | 1 | 4 |
 | **M6** — Integration | `v0.5.0` | later | `..........` 0% | 6 | 0 |
 | **M10** — Authoring-spec conformance | `v0.5.0` | later | `######....` 60% | 2 | 3 |
 | **M11** — Content protection, in depth | `v0.6.0` | later | `######....` 60% | 2 | 3 |
 | **M12** — Colour, HDR and the codec string | `v0.7.0` | later | `#####.....` 50% | 3 | 3 |
 | **M13** — Audio, past the sanity check | `v0.8.0` | later | `#####.....` 50% | 3 | 3 |
 | **M8** — Container image and supply chain | `v0.1.1` | shipped | `##########` 100% | 0 | 5 |
-| **M7** — Project and release | `ongoing` | ongoing | `######....` 62% | 8 | 13 |
+| **M7** — Project and release | `ongoing` | ongoing | `######....` 59% | 9 | 13 |
 
 ## Next up
 
 The open items with the highest priority in the milestones that are in flight.
 
-- **SC-54** — Discontinuity integrity · `med` · size `M` · check (M9, target `v0.4.0`)
 - **SC-55** — Live-edge drift · `med` · size `M` · check,cli (M9, target `v0.4.0`)
 - **SC-64** — `scripts/backlog.sh` has no tests · `med` · size `S` · tests,project (M7, target `ongoing`)
 - **SC-94** — Developer ID signing and notarisation · `med` · size `M` · release (M7, target `ongoing`)
@@ -38,6 +37,7 @@ The open items with the highest priority in the milestones that are in flight.
 - **SC-100** — Two rungs at one resolution get one name · `med` · size `S` · output (M7, target `ongoing`)
 - **SC-101** — A failed DVR window reports the claim, not the truth · `med` · size `M` · check,delivery (M7, target `ongoing`)
 - **SC-102** — A Period behind an `xlink:href` swallows the periods after it · `med` · size `M` · parser (M7, target `ongoing`)
+- **SC-103** — No reference stream carrying a discontinuity · `med` · size `M` · tests (M7, target `ongoing`)
 
 ## Milestones
 
@@ -121,15 +121,15 @@ Target `v0.4.0` · **now** · 1 open · 5 shipped · `########..` 83%
 
 ### M9 — Wallclock and DVR correctness
 
-Target `v0.4.0` · next · 2 open · 3 shipped · `######....` 60%
+Target `v0.4.0` · next · 1 open · 4 shipped · `########..` 80%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
-| **SC-54** — Discontinuity integrity | med | M | check | open |
 | **SC-55** — Live-edge drift | med | M | check,cli | open |
 | **SC-51** — `EXT-X-PROGRAM-DATE-TIME` against the media | high | M | check | shipped `0.4.0` |
 | **SC-52** — DASH `availabilityStartTime` and `UTCTiming` | high | M | check,parser | shipped `0.4.0` |
 | **SC-53** — The DVR window is real | high | M | check,delivery | shipped `0.4.0` |
+| **SC-54** — Discontinuity integrity | med | M | check | shipped `0.4.0` |
 
 ### M6 — Integration
 
@@ -208,7 +208,7 @@ Target `v0.1.1` · shipped · 0 open · 5 shipped · `##########` 100%
 
 ### M7 — Project and release
 
-Target `ongoing` · ongoing · 8 open · 13 shipped · `######....` 62%
+Target `ongoing` · ongoing · 9 open · 13 shipped · `######....` 59%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
@@ -218,6 +218,7 @@ Target `ongoing` · ongoing · 8 open · 13 shipped · `######....` 62%
 | **SC-100** — Two rungs at one resolution get one name | med | S | output | open |
 | **SC-101** — A failed DVR window reports the claim, not the truth | med | M | check,delivery | open |
 | **SC-102** — A Period behind an `xlink:href` swallows the periods after it | med | M | parser | open |
+| **SC-103** — No reference stream carrying a discontinuity | med | M | tests | open |
 | **SC-49** — Per-check reference pages | low | M | docs | open |
 | **SC-98** — The generated cask fails the tap's style audit | low | S | release | open |
 | **SC-36** — Real-stream smoke suite | high | S | tests,release | shipped `0.2.0` |
@@ -238,13 +239,13 @@ Target `ongoing` · ongoing · 8 open · 13 shipped · `######....` 62%
 
 | Label | Items | Open |
 |---|---|---|
-| `check` | 47 | 14 |
+| `check` | 47 | 13 |
 | `parser` | 45 | 9 |
 | `integration` | 4 | 4 |
 | `output` | 5 | 4 |
 | `cli` | 8 | 3 |
+| `tests` | 13 | 3 |
 | `delivery` | 6 | 2 |
 | `release` | 10 | 2 |
-| `tests` | 12 | 2 |
 | `docs` | 5 | 1 |
 | `project` | 5 | 1 |
