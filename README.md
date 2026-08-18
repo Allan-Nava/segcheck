@@ -108,6 +108,9 @@ segcheck check https://cdn.example/ll.m3u8 --parts 2
 # because a conformance rule you cannot turn off is a wall of findings
 segcheck check https://cdn.example/master.m3u8 --profile apple
 
+# Ask two CDN edges for the same segments and compare the bytes
+segcheck check https://cdn.example/live.m3u8 --pop 203.0.113.7 --pop 198.51.100.4
+
 # Watch the live edge for two minutes: a packager that stopped publishing
 # serves a flawless playlist, and only a second look tells the two apart
 segcheck check https://cdn.example/live.m3u8 --watch 2m
@@ -162,6 +165,7 @@ environment.
 | `tracks` | Expected video/audio present, codecs match `CODECS`, track layout stable across segments | BAD |
 | `alignment` | Segment boundaries across renditions, so ABR switching does not glitch | BAD |
 | `encryption` | Declared protection against what the segments carry, whether a supplied key actually decrypts them, and — for SAMPLE-AES and CENC, which protect the samples and not the container — which half of the tool could run at all | BAD |
+| `pop` | With `--pop`, the same segment URLs fetched through several CDN edges and compared byte for byte — a stale edge plays perfectly and plays the wrong content | BAD |
 | `cache` | Whether the CDN is actually caching: `X-Cache`, `CF-Cache-Status`, `Age` and their vendor spellings per segment, a live edge served entirely from the origin, and segments the origin tells caches not to store | BAD |
 | `ladder` | Duplicate rungs, inverted rungs, dangling `AUDIO` groups, missing `CODECS` | BAD |
 | `codecstring` | The whole `CODECS` string, not just its first component: video profile, level and tier against `avcC`/`hvcC`/`av1C`/`vpcC` or the parameter set, and the audio object type against the `esds` configuration — reported in both directions, because declaring below the media hides a rung and declaring above it hides viewers | BAD |
@@ -197,6 +201,8 @@ Containers understood: **MPEG-TS** (PAT/PMT, PES timestamps, continuity counters
 segcheck downloads real media, so it is worth knowing what it will pull. Per run: `renditions × segments` segments, plus one initialisation segment per rendition. Defaults (6 segments, all renditions) against a five-rung 1080p ladder is roughly 100–200 MB. Trim it with `--renditions` and `--segments`; a capped `--renditions` always keeps the top and bottom rungs, because that is where ladder defects concentrate.
 
 `--parts N` adds the parts of the N newest sampled segments per rendition — a segment's worth of bytes each, split across many small requests. `--parts 0` switches the low-latency checks off; a stream that publishes no `EXT-X-PART` never pays for them either way.
+
+`--pop ADDR` fetches every sampled segment again through that edge, so N edges cost N+1 copies of the sample. It connects to the address while still sending the original `Host` and TLS server name, which is what makes it the same request to a different edge rather than a different request.
 
 `--watch` adds manifests, not media: one request per selected rendition every re-read interval — `TARGETDURATION` in HLS, `minimumUpdatePeriod` in DASH — for as long as you asked for. The segments are downloaded once, at the start.
 

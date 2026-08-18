@@ -324,6 +324,7 @@ footer{border-top:1px solid var(--border);padding:34px 0;color:var(--muted);font
           <tr><td><code>tracks</code></td><td>Expected video/audio present, codecs match <code>CODECS</code>, track layout stable across segments</td><td><span class="pill p-bad">BAD</span></td></tr>
           <tr><td><code>alignment</code></td><td>Segment boundaries across renditions, so ABR switching does not glitch</td><td><span class="pill p-bad">BAD</span></td></tr>
           <tr><td><code>encryption</code></td><td>Declared protection against what the segments carry, whether a supplied key actually decrypts them, and — for SAMPLE-AES and CENC, which protect the samples and not the container — which half of the tool could run at all</td><td><span class="pill p-bad">BAD</span></td></tr>
+          <tr><td><code>pop</code></td><td>With <code>--pop</code>, the same segment URLs fetched through several CDN edges and compared byte for byte — a stale edge plays perfectly and plays the wrong content</td><td><span class="pill p-bad">BAD</span></td></tr>
           <tr><td><code>cache</code></td><td>Whether the CDN is actually caching: <code>X-Cache</code>, <code>CF-Cache-Status</code>, <code>Age</code> and their vendor spellings per segment, a live edge served entirely from the origin, and segments the origin tells caches not to store</td><td><span class="pill p-bad">BAD</span></td></tr>
           <tr><td><code>ladder</code></td><td>Duplicate rungs, inverted rungs, dangling <code>AUDIO</code> groups, missing <code>CODECS</code></td><td><span class="pill p-bad">BAD</span></td></tr>
           <tr><td><code>codecstring</code></td><td>The whole <code>CODECS</code> string, not just its first component: video profile, level and tier against <code>avcC</code>/<code>hvcC</code>/<code>av1C</code>/<code>vpcC</code> or the parameter set, and the audio object type against the <code>esds</code> configuration — reported in both directions, because declaring below the media hides a rung and declaring above it hides viewers</td><td><span class="pill p-bad">BAD</span></td></tr>
@@ -421,6 +422,9 @@ segcheck check https://cdn.example/ll.m3u8 --parts 2
 # because a conformance rule you cannot turn off is a wall of findings
 segcheck check https://cdn.example/master.m3u8 --profile apple
 
+# Ask two CDN edges for the same segments and compare the bytes
+segcheck check https://cdn.example/live.m3u8 --pop 203.0.113.7 --pop 198.51.100.4
+
 # Watch the live edge for two minutes: a packager that stopped publishing
 # serves a flawless playlist, and only a second look tells the two apart
 segcheck check https://cdn.example/live.m3u8 --watch 2m
@@ -458,6 +462,7 @@ segcheck check https://cdn.example/master.m3u8 --exit-on bad</pre></div>
           <tr><td><code>--concurrency N</code></td><td>Simultaneous segment downloads</td><td><code>6</code></td></tr>
           <tr><td><code>--header 'K: V'</code></td><td>Extra request header, repeatable</td><td>—</td></tr>
           <tr><td><code>--max-bytes N</code></td><td>Cap on a single response body</td><td><code>67108864</code></td></tr>
+          <tr><td><code>--pop ADDR</code></td><td>Also fetch every sampled segment through this edge address and compare the bytes, repeatable</td><td>none</td></tr>
           <tr><td><code>--insecure</code></td><td>Skip TLS verification</td><td>off</td></tr>
           <tr><td><code>--output FORMAT</code></td><td><code>text|json|markdown</code></td><td><code>text</code></td></tr>
           <tr><td><code>--no-color</code></td><td>Plain text even on a TTY (<code>NO_COLOR</code> is honoured too)</td><td>off</td></tr>

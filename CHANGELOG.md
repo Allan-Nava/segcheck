@@ -9,6 +9,23 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **`--pop ADDR` compares CDN edges** (SC-24). One edge serving different bytes from
+  another for the same URL is the defect a single-shot check cannot see by construction:
+  it asks one edge, gets a perfect answer, and the viewers routed elsewhere are the ones
+  complaining. A stale POP holding a segment from before a re-encode does not fail — it
+  plays the wrong content, at the right length, with the right timestamps.
+  The flag connects to an address the URL does not resolve to while still sending the
+  original `Host` and TLS server name, which is what makes it the same request to a
+  different edge rather than a different request. The comparison is of the *same URLs*
+  rather than a second full run: re-running the analysis against another edge would sample
+  a live playlist at a different moment, and the difference would be the clock rather than
+  the edges. Reported per edge: segments it did not serve that another did, segments whose
+  bytes differ, and an edge that could not be reached at all — which is a hole in the
+  coverage, not a verdict. Verified against two real Akamai edges of `dash.akamaized.net`.
+- `fetch.Options.Resolve` and `fetch.Client.WithResolve` carry every other setting —
+  headers, timeout, byte cap, user agent — because a comparison between edges is only
+  meaningful if the request is otherwise identical. An override with no port keeps the one
+  the URL's scheme implies.
 - **Cache behaviour** (SC-23). A CDN that is not caching a live edge is an origin serving
   every viewer directly, and nothing in the media shows it: every segment arrives, parses
   and lines up perfectly. It surfaces as origin load during a peak, which is the worst

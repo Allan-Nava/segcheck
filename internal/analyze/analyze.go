@@ -68,6 +68,10 @@ type Options struct {
 	// inspected. They are cheap — one picture per entry — but a ladder can carry
 	// one per resolution.
 	MaxIFrame int
+	// POPs are extra edge addresses to ask for the same segments, so a stale or
+	// incomplete one can be found. Each costs a second copy of the sample, which
+	// is why the list is empty unless a caller asks.
+	POPs []string
 	// ClearLead is the length of unencrypted lead-in the operator asked their
 	// packager for. Zero means they did not say, and the measured lead is then
 	// reported rather than judged: how much of a presentation is deliberately
@@ -261,6 +265,7 @@ func Run(ctx context.Context, c *fetch.Client, rawurl string, opts Options) find
 
 	res.Findings = append(res.Findings, checkFetch(rends)...)
 	res.Findings = append(res.Findings, checkCache(rends)...)
+	res.Findings = append(res.Findings, checkPOP(rends, comparePOPs(ctx, c, rends, opts))...)
 	res.Findings = append(res.Findings, checkInit(rends)...)
 	res.Findings = append(res.Findings, checkContainer(rends)...)
 	res.Findings = append(res.Findings, checkContinuity(rends, opts)...)

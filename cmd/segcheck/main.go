@@ -78,6 +78,14 @@ HTTP:
   --header 'K: V'     extra request header, repeatable
   --max-bytes N       cap on a single response body (default 67108864)
   --insecure          skip TLS verification
+  --pop ADDR          also fetch every sampled segment through this edge address
+                      and compare the bytes, repeatable (default: none)
+
+--pop connects to an address the URL does not resolve to while still sending the
+original Host and TLS server name, which is how one CDN edge is asked for the
+same URL as another. A stale edge plays perfectly and plays the wrong content,
+so only the viewers routed there ever see it. Each edge costs a second copy of
+the sample.
 
 Encrypted streams (AES-128):
   --key-file PATH     read the 16-byte content key from a file (raw or hex)
@@ -108,7 +116,23 @@ Examples:
   segcheck check https://cdn.example/live.m3u8 --watch 2m --exit-on bad
   segcheck check https://cdn.example/ll.m3u8 --parts 2
   segcheck check https://cdn.example/master.m3u8 --profile apple
+  segcheck check https://cdn.example/live.m3u8 --pop 203.0.113.7 --pop 198.51.100.4
 `
+
+// popFlag collects the repeatable --pop addresses in the order they were given,
+// so a finding names the edge the operator named.
+type popFlag []string
+
+func (p *popFlag) String() string { return "" }
+
+func (p *popFlag) Set(v string) error {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return fmt.Errorf("--pop needs an address, such as 203.0.113.7 or edge.example:8443")
+	}
+	*p = append(*p, v)
+	return nil
+}
 
 type headerFlag map[string]string
 
@@ -181,6 +205,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	noColor := fs.Bool("no-color", false, "")
 	exitOn := fs.String("exit-on", "", "")
 	fs.Var(headers, "header", "")
+	fs.Var((*popFlag)(&opts.POPs), "pop", "")
 
 	// flag stops parsing at the first non-flag argument, so `check <url> --flags`
 	// — the order everyone actually types — would silently ignore everything

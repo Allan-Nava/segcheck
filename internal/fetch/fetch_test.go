@@ -207,3 +207,81 @@ func TestDefaultUserAgent_CarriesTheVersion(t *testing.T) {
 		t.Errorf("User-Agent %q does not carry the build version", ua)
 	}
 }
+
+// A POP comparison asks the same URL of several edges, which means connecting to
+// an address the URL does not resolve to while still sending the original Host —
+// otherwise the edge serves a different site, or nothing at all.
+func TestClient_ResolveOverridesTheAddressNotTheHost(t *testing.T) {
+	var gotHost string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotHost = r.Host
+		_, _ = w.Write([]byte("from this edge"))
+	}))
+	defer srv.Close()
+
+	addr := strings.TrimPrefix(srv.URL, "http://")
+	c := New(Options{Timeout: 5 * time.Second, Resolve: addr})
+
+	// A hostname that does not resolve anywhere: only the override can reach it.
+	resp, err := c.Get(context.Background(), "http://pop-under-test.invalid/seg0.ts", "")
+	if err != nil {
+		t.Fatalf("Get through an overridden address: %v", err)
+	}
+	if string(resp.Body) != "from this edge" {
+		t.Errorf("body = %q", resp.Body)
+	}
+	if gotHost != "pop-under-test.invalid" {
+		t.Errorf("the edge saw Host %q, want the original hostname: an override that rewrote it would ask for a different site", gotHost)
+	}
+}
+
+// An override with no port keeps the one the URL implies, so `--pop 203.0.113.7`
+// works against both http and https without the caller doing arithmetic.
+func TestClient_ResolveWithoutAPortKeepsTheSchemeDefault(t *testing.T) {
+	c := New(Options{Timeout: time.Second, Resolve: "203.0.113.7"})
+	// Nothing listens there; what matters is that the dial is attempted against
+	// the override and its port, rather than failing to parse.
+	_, err := c.Get(context.Background(), "http://example.invalid/x", "")
+	if err == nil {
+		t.Fatal("a dial to a black-hole address succeeded")
+	}
+	if strings.Contains(err.Error(), "no such host") {
+		t.Errorf("the override was not used; the URL host was resolved instead: %v", err)
+	}
+}
+
+// A URL a request cannot even be built from fails before any dial, and the
+// failure has to reach the caller rather than a zero-value response.
+func TestClient_UnbuildableRequest(t *testing.T) {
+	c := New(Options{Timeout: time.Second})
+	if _, err := c.Get(context.Background(), "http://[::1]:namedport/x", ""); err == nil {
+		t.Error("a URL with a named port built a request")
+	}
+}
+
+// WithResolve carries everything but the address, because a comparison between
+// edges is only meaningful if the request is otherwise identical.
+func TestClient_WithResolveCarriesTheRest(t *testing.T) {
+	var gotAgent, gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAgent, gotAuth = r.Header.Get("User-Agent"), r.Header.Get("Authorization")
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+
+	base := New(Options{
+		Timeout:   5 * time.Second,
+		UserAgent: "segcheck/test",
+		Headers:   map[string]string{"Authorization": "Bearer abc"},
+	})
+	clone := base.WithResolve(strings.TrimPrefix(srv.URL, "http://"))
+	if _, err := clone.Get(context.Background(), "http://pop.invalid/x", ""); err != nil {
+		t.Fatalf("Get through the clone: %v", err)
+	}
+	if gotAgent != "segcheck/test" {
+		t.Errorf("the clone sent User-Agent %q, want the original", gotAgent)
+	}
+	if gotAuth != "Bearer abc" {
+		t.Errorf("the clone dropped the caller's headers: %q", gotAuth)
+	}
+}

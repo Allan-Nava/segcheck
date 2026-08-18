@@ -116,6 +116,7 @@ func TestRun_UsageErrorsExitTwo(t *testing.T) {
 		{"negative --parts", []string{"check", "http://x/m.m3u8", "--parts", "-1"}, "--parts"},
 		{"unknown --profile", []string{"check", "http://x/m.m3u8", "--profile", "netflix"}, "--profile"},
 		{"negative --clear-lead", []string{"check", "http://x/m.m3u8", "--clear-lead", "-2s"}, "--clear-lead"},
+		{"empty --pop", []string{"check", "http://x/m.m3u8", "--pop", "  "}, "--pop"},
 		{"zero --stall-tolerance", []string{"check", "http://x/m.m3u8", "--watch", "30s", "--stall-tolerance", "0"}, "--stall-tolerance"},
 	}
 	for _, tc := range cases {
@@ -340,5 +341,26 @@ func TestRun_UnreadableKeyIsAUsageError(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "--key-file") {
 		t.Errorf("stderr does not name the flag: %q", stderr.String())
+	}
+}
+
+// --pop is repeatable and keeps the order it was given, so a finding names the
+// edge the operator named.
+func TestPOPFlag(t *testing.T) {
+	var p popFlag
+	if err := p.Set(" 203.0.113.7 "); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+	if err := p.Set("edge.example:8443"); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+	if len(p) != 2 || p[0] != "203.0.113.7" || p[1] != "edge.example:8443" {
+		t.Errorf("popFlag = %v, want both in order and trimmed", p)
+	}
+	if err := p.Set("   "); err == nil {
+		t.Error("an empty --pop was accepted")
+	}
+	if p.String() != "" {
+		t.Errorf("String() = %q, want empty: it exists only to satisfy flag.Value", p.String())
 	}
 }

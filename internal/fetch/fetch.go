@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -32,6 +33,15 @@ type Options struct {
 	MaxBytes int64
 	// UserAgent overrides DefaultUserAgent when non-empty.
 	UserAgent string
+	// Resolve connects to this address instead of resolving the URL's host, while
+	// still sending the original Host header and TLS server name. It is how the
+	// same URL is asked of several edges: an override that rewrote the Host would
+	// ask each one for a different site, and one that rewrote the server name
+	// would fail the handshake.
+	//
+	// A value with no port keeps the one the URL implies, so an operator can pass
+	// a bare address for either scheme.
+	Resolve string
 }
 
 // DefaultMaxBytes caps one response at 64 MiB: larger than any sane segment,
@@ -45,6 +55,20 @@ type Client struct {
 	headers   map[string]string
 	maxBytes  int64
 	userAgent string
+	// opts is kept so a client can be cloned onto another address without the
+	// caller having to carry the options alongside it — which is what a POP
+	// comparison needs, and what it would otherwise have to duplicate.
+	opts Options
+}
+
+// WithResolve returns a client identical to this one but connecting to addr
+// instead of resolving each URL's host. Everything else — the headers, the
+// timeout, the byte cap, the user agent — is carried over, because a comparison
+// between edges is only meaningful if the request is otherwise the same.
+func (c *Client) WithResolve(addr string) *Client {
+	opts := c.opts
+	opts.Resolve = addr
+	return New(opts)
 }
 
 // Response is one completed fetch.
@@ -69,6 +93,12 @@ func New(opts Options) *Client {
 		MaxIdleConnsPerHost: 16,
 		ForceAttemptHTTP2:   true,
 	}
+	if opts.Resolve != "" {
+		dialer := &net.Dialer{Timeout: timeout, KeepAlive: 30 * time.Second}
+		tr.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			return dialer.DialContext(ctx, network, redirectAddr(addr, opts.Resolve))
+		}
+	}
 	if opts.Insecure {
 		tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // opt-in via --insecure
 	}
@@ -85,7 +115,24 @@ func New(opts Options) *Client {
 		headers:   opts.Headers,
 		maxBytes:  maxBytes,
 		userAgent: ua,
+		opts:      opts,
 	}
+}
+
+// redirectAddr replaces the host of addr with the override, keeping addr's port
+// unless the override states one of its own.
+//
+// The port has to survive: an override of "203.0.113.7" against an https URL must
+// still reach 443, and an operator asked for an edge rather than for a port.
+func redirectAddr(addr, override string) string {
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return override
+	}
+	if _, _, err := net.SplitHostPort(override); err == nil {
+		return override // the override states its own port
+	}
+	return net.JoinHostPort(override, port)
 }
 
 // Get fetches a URL. rangeHeader, when non-empty, is sent as the Range header
