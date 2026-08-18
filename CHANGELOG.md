@@ -9,6 +9,22 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **A Period that states no `@start` is placed where it really begins** (SC-102). ISO/IEC
+  23009-1 makes `@start` optional: a Period without one begins where the previous Period
+  ended, and only a Period that stated a `@duration` says where that was. segcheck read
+  the attribute and defaulted its absence to zero, so on nomor's `5b/1` DASH-IF vector —
+  three Periods, not one `@start` between them — all three were placed at 0.000s, which
+  is where the first one is and where media 250 and 360 seconds further on is not.
+  `@duration` is now derived the same way, from the next Period's start, or from
+  `@mediaPresentationDuration` for the last one only; giving an interior Period the whole
+  presentation's length is how a single-period assumption survives into a multi-period
+  MPD. Where nothing determines a start — a Period held in another document behind an
+  `xlink:href` states no duration here, so nothing after it can be derived — the new
+  `Rendition.PeriodStartKnown` carries the absence and `period` reports an ERROR naming
+  the hole in its coverage, rather than printing a position nobody computed. The suite's
+  first multi-period reference stream lands with it: `period` arithmetic had shipped
+  without the real-stream pass, which is where this was found.
+
 - **A failed DVR window reports how much of it the origin really holds** (SC-101). Saying
   the window is short was only half an answer: the number an operator changes a retention
   setting with is how much is really there, and it is the one thing the manifest cannot

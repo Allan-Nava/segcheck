@@ -161,10 +161,18 @@ type Rendition struct {
 	//
 	// PeriodIndex is 0 and the rest are zero for a single-period MPD and for HLS,
 	// which is what every check that predates this already assumes.
-	PeriodID       string  `json:"period_id,omitempty"`
-	PeriodIndex    int     `json:"period_index,omitempty"`
-	PeriodStart    float64 `json:"period_start,omitempty"`
-	PeriodDuration float64 `json:"period_duration,omitempty"`
+	PeriodID    string  `json:"period_id,omitempty"`
+	PeriodIndex int     `json:"period_index,omitempty"`
+	PeriodStart float64 `json:"period_start,omitempty"`
+	// PeriodStartKnown is false when nothing in the MPD says where this Period
+	// begins. A Period may omit @start, in which case it follows the one before
+	// it — but only if that one's duration is known, and a Period held in another
+	// document behind an xlink:href states no duration here at all. Zero is then
+	// not a start, it is the absence of one, and anything that places the Period
+	// on the presentation timeline has to say it could not rather than put it at
+	// the beginning where the first Period already is.
+	PeriodStartKnown bool    `json:"period_start_known,omitempty"`
+	PeriodDuration   float64 `json:"period_duration,omitempty"`
 	// PresentationTimeOffset is what a segment's own timeline has to have
 	// subtracted from it to land on the presentation timeline, in seconds. A
 	// packager that forgets it after a period restart puts every segment of that

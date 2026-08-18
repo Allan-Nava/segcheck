@@ -1141,18 +1141,21 @@ checks roadmap and blocks nothing.
   self-served stream cannot catch a shared misreading. The second is worth less and
   still worth more than nothing.
   <!-- sc: prio=med size=M labels=tests -->
-- [ ] **SC-102 — A Period behind an `xlink:href` swallows the periods after it**: an MPD
-  may put a Period in another document and reference it, which is how an ad decision
-  server splices a break in, and segcheck neither resolves the reference nor accounts for
-  the gap it leaves. A remote Period contributes no renditions — honest enough — but it
-  also states no `@duration`, so every Period after it that derives its start from the
-  previous one derives it from nothing: nomor's `5_1a` DASH-IF vector has three Periods
-  and segcheck places the third at 0.000s, which is where the first one is. Nothing acts
-  on that number today beyond printing it, which is the only reason this is not a wrong
-  finding rather than a wrong label. Either resolve the reference (`@actuate=onLoad` says
-  the MPD expects it to be) or carry "this period's start is not derivable" and refuse to
-  print a start that was never computed.
-  <!-- sc: prio=med size=M labels=parser -->
+- [x] **SC-102 — A Period behind an `xlink:href` swallows the periods after it**: the
+  wider defect underneath it turned out to be simpler and to fire on a stream with no
+  `xlink` in it at all. `@start` is optional — ISO/IEC 23009-1 makes an absent one the
+  previous Period's start plus its duration — and segcheck defaulted the absence to zero,
+  so nomor's `5b/1` DASH-IF vector, three Periods and not one `@start` between them, had
+  all three placed at 0.000s. `@duration` is derived the same way now, from the next
+  Period's start and from `@mediaPresentationDuration` for the last one only, because
+  giving an interior Period the whole presentation's length is how a single-period
+  assumption survives into a multi-period MPD. The reference is still not resolved, and
+  that is now said rather than papered over: a Period behind an `xlink:href` states no
+  duration here, so nothing after it is derivable, and `Rendition.PeriodStartKnown`
+  carries the absence so `period` reports the hole in its coverage instead of printing a
+  position nobody computed. The suite's first multi-period reference stream lands with
+  it — the arithmetic SC-40 added had never had the real-stream pass.
+  <!-- sc: prio=med size=M labels=parser ver=0.4.0 -->
 - [ ] **SC-103 — No reference stream carrying a discontinuity**: `discontinuity` (SC-54)
   is the second check after `parts` (SC-99) to ship without the real-stream pass that has
   caught every false positive this project has had. Nothing reachable and public declares

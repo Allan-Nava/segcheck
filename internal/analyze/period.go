@@ -48,6 +48,11 @@ type periodShape struct {
 	index int
 	id    string
 	start float64
+	// placed is false when nothing in the MPD says where this period begins: a
+	// Period ahead of it is held in another document behind an xlink:href and
+	// states no duration here. Printing a start segcheck computed from nothing
+	// would be inventing the one measurement this check is about.
+	placed bool
 	// offsetErr is how far the period's media sits from where the MPD's own
 	// arithmetic puts it: the segment's timestamp, less the presentation-time
 	// offset, less the offset into the period the manifest gives that segment.
@@ -74,6 +79,22 @@ func checkPeriod(rends []*renditionData) []finding.Finding {
 	}
 
 	var out []finding.Finding
+	for _, p := range periods {
+		if p.placed {
+			continue
+		}
+		// A limit of this tool, not a defect in the stream. The MPD is entitled
+		// to hold a Period in another document; segcheck does not follow the
+		// reference, so it cannot say where anything after it plays, and an
+		// operator needs to know the coverage has that hole rather than to be
+		// handed a position nobody computed.
+		out = append(out, finding.Finding{
+			Check: "period", Target: p.label, Status: finding.ERROR,
+			Message: fmt.Sprintf("%s cannot be placed on the presentation timeline: it states no start, and a Period before it is held in another document (xlink:href) that segcheck does not follow, so nothing here says when that one ends",
+				p.label),
+			Hint: "the media in this period was still checked; only where it sits relative to the others was not",
+		})
+	}
 	out = append(out, periodTimelineFindings(periods)...)
 	out = append(out, periodEncoderFindings(periods)...)
 	if len(out) == 0 {
@@ -98,10 +119,11 @@ func periodShapes(rends []*renditionData) []periodShape {
 		p, ok := byIndex[rd.r.PeriodIndex]
 		if !ok {
 			p = &periodShape{
-				index: rd.r.PeriodIndex,
-				id:    rd.r.PeriodID,
-				start: rd.r.PeriodStart,
-				label: periodLabel(rd.r),
+				index:  rd.r.PeriodIndex,
+				id:     rd.r.PeriodID,
+				start:  rd.r.PeriodStart,
+				placed: rd.r.PeriodStartKnown,
+				label:  periodLabel(rd.r),
 			}
 			byIndex[rd.r.PeriodIndex] = p
 			order = append(order, rd.r.PeriodIndex)
@@ -187,7 +209,7 @@ func periodTimelineFindings(periods []periodShape) []finding.Finding {
 	var base float64
 	haveBase := false
 	for _, p := range periods {
-		if p.measured {
+		if p.measured && p.placed {
 			base, haveBase = p.offsetErr, true
 			break
 		}
@@ -197,7 +219,7 @@ func periodTimelineFindings(periods []periodShape) []finding.Finding {
 	}
 	var out []finding.Finding
 	for _, p := range periods {
-		if !p.measured {
+		if !p.measured || !p.placed {
 			continue
 		}
 		drift := p.offsetErr - base

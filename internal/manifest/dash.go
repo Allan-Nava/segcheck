@@ -184,13 +184,15 @@ func ParseDASH(body []byte, baseURL string, now time.Time) (Playlist, error) {
 	mpdDur, _ := parseISODuration(doc.MediaPresentationDuration)
 	pl.UpdatePeriod, _ = parseISODuration(doc.MinimumUpdatePeriod)
 
+	starts, durations := periodTimeline(doc.Periods, mpdDur)
+
 	for pi, period := range doc.Periods {
 		pbase := applyBaseURLs(base, period.BaseURL)
-		periodStart, _ := parseISODuration(period.Start)
-		periodDur, _ := parseISODuration(period.Duration)
-		if periodDur == 0 {
-			periodDur = mpdDur
+		periodStart, startKnown := starts[pi], starts[pi] >= 0
+		if !startKnown {
+			periodStart = 0
 		}
+		periodDur := durations[pi]
 		pl.AdBreaks = append(pl.AdBreaks, dashAdBreaks(period.EventStreams, periodStart)...)
 
 		for ai, as := range period.AdaptationSets {
@@ -220,18 +222,19 @@ func ParseDASH(body []byte, baseURL string, now time.Time) (Playlist, error) {
 						dashChannels(rep.AudioChannelConfiguration),
 						dashChannels(as.AudioChannelConfiguration),
 					),
-					PeriodID:      period.ID,
-					PeriodIndex:   pi,
-					PeriodStart:   periodStart,
-					Captions:      dashCaptions(as.Accessibility),
-					KeyMethod:     dashKeyMethod(protected),
-					KeyScheme:     scheme,
-					DRMSystems:    systems,
-					DRMInManifest: inManifest,
-					Primaries:     primaries,
-					Transfer:      transfer,
-					Matrix:        matrix,
-					VideoRange:    VideoRangeForTransfer(transfer),
+					PeriodID:         period.ID,
+					PeriodIndex:      pi,
+					PeriodStart:      periodStart,
+					PeriodStartKnown: startKnown,
+					Captions:         dashCaptions(as.Accessibility),
+					KeyMethod:        dashKeyMethod(protected),
+					KeyScheme:        scheme,
+					DRMSystems:       systems,
+					DRMInManifest:    inManifest,
+					Primaries:        primaries,
+					Transfer:         transfer,
+					Matrix:           matrix,
+					VideoRange:       VideoRangeForTransfer(transfer),
 				}
 
 				// The period's own extent and the offset that maps its media onto
@@ -327,6 +330,66 @@ func ParseDASH(body []byte, baseURL string, now time.Time) (Playlist, error) {
 	}
 	disambiguate(pl.Renditions)
 	return pl, nil
+}
+
+// periodTimeline resolves where every Period begins and how long it lasts.
+//
+// Neither is always stated. ISO/IEC 23009-1 makes an absent @start the previous
+// Period's start plus its duration, and an absent @duration the distance to the
+// next Period's start — or, for the last one, to the end of the presentation.
+// Defaulting either to zero is what put nomor's third Period at the very
+// beginning of a 704-second presentation, where the first one already was.
+//
+// A start that nothing determines is returned as -1 rather than as 0. That
+// happens when a Period ahead of this one is held in another document behind an
+// xlink:href: it states no duration here, so nothing in this MPD says when it
+// ends. Zero would be a claim, and the absence of a claim is not one.
+func periodTimeline(periods []mpdPeriod, mpdDur float64) (starts, durations []float64) {
+	starts = make([]float64, len(periods))
+	durations = make([]float64, len(periods))
+
+	for i, p := range periods {
+		if s, ok := parseISODurationOK(p.Start); ok {
+			starts[i] = s
+			continue
+		}
+		if i == 0 {
+			// The first Period of a presentation begins at its beginning, which
+			// is what @availabilityStartTime already anchors for a live one.
+			starts[i] = 0
+			continue
+		}
+		prevDur, ok := parseISODurationOK(periods[i-1].Duration)
+		if !ok || starts[i-1] < 0 {
+			starts[i] = -1
+			continue
+		}
+		starts[i] = starts[i-1] + prevDur
+	}
+
+	for i, p := range periods {
+		if d, ok := parseISODurationOK(p.Duration); ok {
+			durations[i] = d
+			continue
+		}
+		if starts[i] < 0 {
+			continue
+		}
+		// The next Period's start is where this one ends; failing that, the end
+		// of the presentation is, but only for the last Period — giving an
+		// interior one the whole presentation's length is how a single-period
+		// assumption survives into a multi-period MPD.
+		if i+1 < len(periods) {
+			if next := starts[i+1]; next > starts[i] {
+				durations[i] = next - starts[i]
+			}
+			continue
+		}
+		if mpdDur > starts[i] {
+			durations[i] = mpdDur - starts[i]
+		}
+	}
+	return starts, durations
 }
 
 // expandTemplate turns a SegmentTemplate into concrete segment URLs — from its
@@ -797,6 +860,21 @@ func applyBaseURLs(base *url.URL, urls []string) *url.URL {
 }
 
 // parseISODuration parses the xs:duration subset MPDs use: PnYnMnDTnHnMnS.
+// parseISODurationOK is parseISODuration for a field whose absence is
+// meaningful. An attribute that is not there is not a duration of zero: on a
+// Period it is the difference between "this Period is empty" and "the MPD did
+// not say, and the answer is somewhere else".
+func parseISODurationOK(s string) (float64, bool) {
+	if strings.TrimSpace(s) == "" {
+		return 0, false
+	}
+	d, err := parseISODuration(s)
+	if err != nil {
+		return 0, false
+	}
+	return d, true
+}
+
 func parseISODuration(s string) (float64, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {

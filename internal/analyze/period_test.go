@@ -240,3 +240,64 @@ func TestRun_HLSHasNoPeriodFinding(t *testing.T) {
 		t.Errorf("an HLS playlist produced a period finding:\n%s", dump(res))
 	}
 }
+
+// A Period held in another document states nothing here, so the Period after it
+// has no derivable start. Placing it anyway would print a number segcheck made
+// up, and the whole `period` check is about where a period sits — so the honest
+// answer is that this one could not be placed. nomor's DASH-IF vector 5_1a has
+// exactly this shape.
+func TestRun_APeriodThatCannotBePlacedIsReportedAsALimit(t *testing.T) {
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	mux.HandleFunc("/manifest.mpd", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/dash+xml")
+		fmt.Fprintf(w, `<?xml version="1.0" encoding="utf-8"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:xlink="http://www.w3.org/1999/xlink" type="static" mediaPresentationDuration="PT8S">
+  <Period id="main" start="PT0S" duration="PT4S">
+    <AdaptationSet mimeType="video/mp4" contentType="video">
+      <SegmentTemplate timescale="%d" duration="%d" media="main-$Number$.m4s" initialization="main-init.mp4" startNumber="0"/>
+      <Representation id="v" bandwidth="%d" width="1280" height="720" codecs="avc1.640028"/>
+    </AdaptationSet>
+  </Period>
+  <Period xlink:href="%s/ad.period" xlink:actuate="onLoad"></Period>
+  <Period id="after" duration="PT4S">
+    <AdaptationSet mimeType="video/mp4" contentType="video">
+      <SegmentTemplate timescale="%d" duration="%d" media="after-$Number$.m4s" initialization="after-init.mp4" startNumber="0"/>
+      <Representation id="v" bandwidth="%d" width="1280" height="720" codecs="avc1.640028"/>
+    </AdaptationSet>
+  </Period>
+</MPD>`, perTimescale, perSegTicks, drmBandwidth, srv.URL, perTimescale, perSegTicks, drmBandwidth)
+	})
+	for _, id := range []string{"main", "after"} {
+		id := id
+		mux.HandleFunc("/"+id+"-init.mp4", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "video/mp4")
+			_, _ = w.Write(mediatest.MP4Init(1, perTimescale, "video", 1280, 720))
+		})
+		for i := 0; i < 2; i++ {
+			i := i
+			mux.HandleFunc(fmt.Sprintf("/%s-%d.m4s", id, i), func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "video/mp4")
+				_, _ = w.Write(mediatest.MP4Segment(1, uint32(i), int64(i)*perSegTicks, perSampleDur, perSamples, 12000))
+			})
+		}
+	}
+
+	res := runPeriod(t, srv.URL+"/manifest.mpd")
+
+	f, ok := findFinding(res, "period", finding.ERROR)
+	if !ok {
+		t.Fatalf("a period segcheck cannot place was not reported as a limit:\n%s", dump(res))
+	}
+	if !strings.Contains(f.Message, "xlink") && !strings.Contains(f.Message, "another document") {
+		t.Errorf("the finding does not say why it could not be placed: %q", f.Message)
+	}
+	// And nothing may claim a position for it.
+	for _, x := range res.Findings {
+		if x.Check == "period" && x.Status == finding.BAD {
+			t.Errorf("a period nobody could place produced a verdict about where it plays: %s", x.Message)
+		}
+	}
+}

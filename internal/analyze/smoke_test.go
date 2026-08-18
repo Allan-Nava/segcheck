@@ -105,6 +105,20 @@ var smokeStreams = []smokeStream{
 		expect: []string{"container", "resolution", "keyframe", "framerate", "continuity", "audio", "ladder"},
 	},
 	{
+		name: "dash-multi-period",
+		url:  "https://dash.akamaized.net/dash264/TestCases/5b/nomor/1.mpd",
+		// Three Periods and not one @start between them: every Period after the
+		// first derives its position from the one before it, and until SC-102
+		// segcheck derived nothing and placed all three at 0.000s — the first
+		// one's position, printed for media 250 and 360 seconds further on. It is
+		// also the only multi-period stream in this suite, which is why the
+		// arithmetic SC-40 added went five months without a real-stream reading.
+		allowed: map[string]string{
+			"bitrate": "several rungs peak 20-40% above the BANDWIDTH they declare",
+		},
+		expect: []string{"container", "resolution", "keyframe", "framerate", "continuity", "audio", "period"},
+	},
+	{
 		name: "dash-cenc",
 		url:  "https://media.axprod.net/TestVectors/v7-MultiDRM-SingleKey/Manifest_1080p.mpd",
 		// Partial encryption: the container parses and the samples do not, which is the
