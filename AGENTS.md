@@ -8,7 +8,9 @@ disagree, this file wins and CLAUDE.md gets fixed.
 ## What this tool is
 
 `segcheck` downloads HLS/DASH media segments and compares the **media** against
-the **manifest's claims**. Every feature has to earn its place against that
+the **manifest's claims**. One static Go binary, zero dependencies — every
+container, bitstream and cipher it reads is handled in-tree with the standard
+library. Every feature has to earn its place against that
 sentence. A check that only reads the manifest belongs in
 [checkfleet](https://github.com/Allan-Nava/checkfleet), not here.
 
@@ -44,11 +46,16 @@ sentence. A check that only reads the manifest belongs in
   to parsers (write the `mediatest` builder and the failing assertion first), to
   checks, to the CLI, and to tooling — SC-45 is in the backlog ahead of SC-43
   for that reason.
-- **No binary fixtures.** `internal/media/mediatest` builds MPEG-TS, fMP4 and
-  ADTS segments with known timestamps, durations and resolutions. A parser test
-  asserts against a value that is known by construction, which is also how the
-  SPS reader is validated: `mediatest.SPS` is the writer, and the round trip
-  catches bit-level mistakes.
+- **No binary fixtures.** `internal/media/mediatest` builds every shape this tool
+  reads — MPEG-TS, fMP4/CMAF, ADTS and MPEG audio, WebVTT and TTML, caption SEI and
+  `c608` tracks, SCTE-35 sections and `emsg` boxes, AES-128 ciphertext — with
+  timestamps, durations and resolutions known by construction. That is also how the
+  bitstream readers are validated: `mediatest.SPS` is the writer, `media.ParseSPS` the
+  reader, and the round trip catches bit-level mistakes.
+- **A round trip cannot catch a shared misreading.** A builder and a reader written
+  from the same misunderstanding of a layout agree with each other perfectly. Where an
+  outside authority exists, assert against it: RFC 3602's vectors for AES-CBC, bytes
+  decoded by hand from the specification for an SCTE-35 `segmentation_descriptor`.
 - **Every check needs two tests**: one that plants the defect and asserts it is
   found *and correctly attributed*, and the clean-stream test
   (`TestRun_CleanStreamHasNoProblems`) which asserts nothing above OK. A checker
@@ -58,10 +65,23 @@ sentence. A check that only reads the manifest belongs in
   measurement. That is what stops a check from being right by accident.
 - `go test -race ./...` must pass: the segment fan-out writes into a shared
   slice.
-- Before releasing, run the binary against real streams. Apple's fMP4 and
-  MPEG-TS reference streams and a public DASH stream must all come back with
-  **zero findings above OK** — every false positive found so far was found that
-  way, not by the unit tests.
+- `scripts/coverage.sh check` must pass: coverage is a ratchet against
+  `scripts/coverage.floor`, and `update` refuses to lower it.
+- **Run the binary against real streams — this is where the design gets corrected.**
+  Automated as the smoke suite:
+
+  ```
+  go build -o /tmp/segcheck ./cmd/segcheck
+  SEGCHECK_BIN=/tmp/segcheck go test -tags smoke -run TestSmokeReferenceStreams ./internal/analyze/ -v
+  ```
+
+  The assertion is **not** "nothing above OK". Apple's advanced example legitimately
+  over-declares BANDWIDTH and ships an inverted ladder, so each stream carries a
+  baseline of the checks allowed to exceed OK, plus a list of checks that must not fall
+  silent. A finding outside the baseline is a regression; so is a check that stops
+  speaking, and that second half is what catches a parser which quietly stopped
+  reading. Every false positive this project has shipped was found here rather than by
+  a unit test — and going looking for a real encrypted stream is what found three more.
 
 ## Releases
 

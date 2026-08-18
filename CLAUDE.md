@@ -2,8 +2,9 @@
 
 `segcheck` (`github.com/Allan-Nava/segcheck`) downloads HLS/DASH media segments
 and compares the **media** against the **manifest's claims**. One static Go
-binary, zero dependencies: MPEG-TS, fMP4/CMAF, H.264 SPS and ADTS are all parsed
-in-tree with the standard library. `cmd/segcheck` is the CLI, `internal/manifest`
+binary, zero dependencies: MPEG-TS, fMP4/CMAF, H.264 and HEVC parameter sets, ADTS
+and MPEG audio, WebVTT and TTML, CEA-608/708 caption SEI, SCTE-35 splice sections and
+AES-128 decryption are all done in-tree with the standard library. `cmd/segcheck` is the CLI, `internal/manifest`
 reads HLS/DASH, `internal/media` reads segment bytes, `internal/analyze` runs the
 checks, `internal/finding` is the result model, `internal/output` renders.
 
@@ -140,6 +141,45 @@ AGENTS.md wins and this file gets fixed.
   `scripts/backlog.sh lint` + `check`. A doc-only commit can still fail CI on a
   stale `ROADMAP.md`.
 
+- **A number the container states is not always the number.** Three codecs lie in a
+  way that reads as data: AC-3 and E-AC-3 write `2` into the `AudioSampleEntry`
+  `channelcount` whatever the programme is (the layout is in `dac3`/`dec3`, and with
+  dependent substreams present the count is genuinely unknowable); HLS
+  `CHANNELS="16/JOC"` counts a rendered Atmos presentation, not the coded 5.1 bed;
+  and HE-AAC (`mp4a.40.5`, `mp4a.40.29`) codes at half the rate it plays, so a
+  sample entry saying 24 kHz against a manifest saying 48 kHz is correct. Each of
+  these produced a BAD on a public reference stream before it was understood.
+- **Partial encryption is more dangerous than full.** With AES-128 nothing parses and
+  every check says it could not look. With SAMPLE-AES or CENC the container parses,
+  the timing checks pass, and the bitstream readers *succeed and find nothing* — a
+  caption scan over ciphertext reported "scanned, no captions" and turned a manifest
+  correctly declaring CC1 into a BAD. Anything that reads inside a sample must consult
+  `bitstreamOpaque`. The distinction is per container: in fMP4 the resolution is in
+  the sample entry and the sync flag in the `trun`, both in the clear.
+- **`X-TIMESTAMP-MAP` is an HLS mechanism.** DASH does not use the tag and puts WebVTT
+  cue times on the presentation timeline directly, so its absence is a defect in one
+  format and normal in the other. `renditionData.dash` is what tells them apart.
+- **A TTML document in an `stpp` sample states presentation times**, not times relative
+  to the fragment carrying it (ISO/IEC 14496-30 puts them relative to the period).
+  Adding the fragment's `tfdt` double-counts it and reports correct media as adrift.
+- **A `trun` data offset is signed.** A fragment may place its samples before the box
+  that describes them, and reading it unsigned puts them four gigabytes away.
+- **An `EXT-X-KEY` with no `IV` is an instruction, not a gap**: the IV is then the
+  segment's media sequence number as a 128-bit big-endian value. Defaulting to zeroes
+  decrypts to noise, and noise is indistinguishable from a wrong key — which is why
+  the PKCS#7 padding is verified rather than trusted.
+- **A subtitle or caption rendition's timestamps are a cue span, not a segment
+  extent.** `continuity`, `duration` and `keyframe` read them as an extent and
+  produced six BADs and a 26% duration mismatch on Apple's own reference stream; all
+  three now skip `manifest.Text`.
+- **Signalling is not media.** A splice-information PID or an ID3 PID appears only in
+  the segments that carry a cue, so `trackShape` excludes them — counting them made
+  `tracks` warn about a decoder reset on every ad break in a healthy stream.
+- **A round trip against `mediatest` cannot catch a shared misreading.** Where an
+  external authority exists, use it: RFC 3602's vectors for the cipher, bytes decoded
+  by hand from the specification for a `segmentation_descriptor`. Where a real stream
+  exists, prefer that — five of this project's design errors were found only there.
+
 ## Backlog and roadmap (the dynamic part)
 
 `BACKLOG.md` is the source of truth; `ROADMAP.md` is **generated** from it and
@@ -172,7 +212,12 @@ never by deleting it and reusing the number.
   — planned work · [ROADMAP.md](ROADMAP.md) — generated view ·
   [CHANGELOG.md](CHANGELOG.md) — Keep a Changelog
 - `internal/media/mediatest/` — the segment builders every parser test is
-  asserted against; start here before touching a parser
+  asserted against; start here before touching a parser. A round trip against them
+  cannot catch a shared misreading of a layout, so where an outside authority exists
+  (RFC 3602's AES-CBC vectors, spec bytes decoded by hand) assert against that too
+- `internal/media/samples.go` — locating a fragment's samples from the `trun` data
+  offsets. Everything that reads *inside* a sample depends on it: a `c608` caption
+  track's field, a `stpp` track's cues
 - `internal/analyze/checks.go` — every check lives here; `analyze.go` does the
   manifest load, rendition pick, segment fan-out
 - `docs/index.html` — the GitHub Pages site

@@ -333,15 +333,23 @@ footer{border-top:1px solid var(--border);padding:34px 0;color:var(--muted);font
     <div class="grid g3">
       <div class="card">
         <div class="card-head"><span class="k">MPEG-TS</span></div>
-        <p>PAT/PMT, PES presentation timestamps, continuity counters, and the H.264 or HEVC parameter set for the resolution the bitstream really codes.</p>
+        <p>PAT/PMT, PES presentation timestamps, continuity counters, the H.264 or HEVC parameter set for the resolution the bitstream really codes, the ATSC A/53 SEI carrying CEA-608/708 captions, and the SCTE-35 splice sections on a stream-type 0x86 PID.</p>
       </div>
       <div class="card">
         <div class="card-head"><span class="k">fMP4 / CMAF</span></div>
-        <p><code>moov</code> for timescale, codec and coded size; <code>tfdt</code> and <code>trun</code> for the timeline the fragment actually carries.</p>
+        <p><code>moov</code> for timescale, codec, coded size and audio layout; <code>tfdt</code> and <code>trun</code> for the timeline the fragment actually carries, and for locating the samples themselves — which is where a <code>c608</code> caption track's field and a <code>stpp</code> track's cues live. <code>sidx</code> for single-file DASH, <code>emsg</code> for inband ad breaks, <code>sinf</code>/<code>schm</code> for the CENC scheme.</p>
       </div>
       <div class="card">
         <div class="card-head"><span class="k">Packed audio</span></div>
-        <p>ADTS AAC with the ID3 <code>transportStreamTimestamp</code> that gives an audio-only rendition a timeline to compare against.</p>
+        <p>ADTS AAC and MPEG-1/2 audio, with the ID3 <code>transportStreamTimestamp</code> that gives an audio-only rendition a timeline to compare against.</p>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="k">WebVTT &amp; TTML</span></div>
+        <p>Subtitle segments as text or wrapped in fMP4, with the cue times that have to line up with the picture — and the <code>X-TIMESTAMP-MAP</code> that anchors them in HLS, which DASH does not use.</p>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="k">AES-128</span></div>
+        <p>Full-segment encryption decrypted with a key given by name, so the content checks run on a protected stream instead of reporting that nothing could be read.</p>
       </div>
     </div>
   </div>
@@ -411,6 +419,7 @@ segcheck check https://cdn.example/master.m3u8 --exit-on bad</pre></div>
           <tr><td><code>--segments N</code></td><td>Segments to sample per rendition</td><td><code>6</code></td></tr>
           <tr><td><code>--renditions N</code></td><td>Video renditions to inspect, <code>0</code> = all</td><td><code>0</code></td></tr>
           <tr><td><code>--audio N</code></td><td>Audio renditions to inspect</td><td><code>1</code></td></tr>
+          <tr><td><code>--subtitles N</code></td><td>Subtitle renditions to inspect</td><td><code>1</code></td></tr>
           <tr><td><code>--from MODE</code></td><td>Where to sample: <code>auto|edge|start</code> (auto = edge for live, start for VOD)</td><td><code>auto</code></td></tr>
           <tr><td><code>--duration-tolerance PCT</code></td><td>Allowed declared-vs-real duration drift</td><td><code>5</code></td></tr>
           <tr><td><code>--gap-tolerance MS</code></td><td>Allowed timeline gap or overlap between segments</td><td><code>100</code></td></tr>
@@ -423,12 +432,23 @@ segcheck check https://cdn.example/master.m3u8 --exit-on bad</pre></div>
           <tr><td><code>--output FORMAT</code></td><td><code>text|json|markdown</code></td><td><code>text</code></td></tr>
           <tr><td><code>--no-color</code></td><td>Plain text even on a TTY (<code>NO_COLOR</code> is honoured too)</td><td>off</td></tr>
           <tr><td><code>--exit-on STATUS</code></td><td>Exit 1 when a finding reaches <code>warn|bad|error</code></td><td>never</td></tr>
+          <tr><td><code>--key-file PATH</code></td><td>Read the AES-128 content key from a file (16 raw bytes or 32 hex digits)</td><td>—</td></tr>
+          <tr><td><code>--key-env NAME</code></td><td>Read it from an environment variable, as hex</td><td>—</td></tr>
+          <tr><td><code>--fetch-keys</code></td><td>Fetch the key from the URI <code>EXT-X-KEY</code> states</td><td>off</td></tr>
         </tbody>
       </table>
     </div>
 
     <div class="note"><strong>No secrets on the command line.</strong> Credentials belong in a <code>--header</code> value your shell reads from the environment, never in a flag that lands in shell history or a CI log:<br>
-    <code>segcheck check "$URL" --header "Authorization: Bearer $TOKEN"</code></div>
+    <code>segcheck check "$URL" --header "Authorization: Bearer $TOKEN"</code><br><br>
+    The same rule governs the content key, which is why it is given by name and never by
+    value. A key in <code>argv</code> lands in shell history, in the process list and in
+    every CI log that echoes its own invocation — and unlike a password it cannot be
+    rotated without re-encrypting the content:<br>
+    <code>segcheck check "$URL" --key-env SEGCHECK_KEY</code><br><br>
+    <code>--fetch-keys</code> is off by default for a related reason: pointing a checker at
+    a key server is a request to a system that logs, rate-limits and sometimes bills, and a
+    manifest mentioning a URL is not a reason to make it.</div>
   </div>
 </section>
 
@@ -525,12 +545,12 @@ segcheck check https://cdn.example/master.m3u8 --exit-on bad</pre></div>
 
     <div class="grid g3" style="margin-top:22px">
       <div class="card">
-        <div class="card-head"><span class="k">v0.2.0</span><span class="pill p-ok">in flight</span></div>
-        <p><code>sidx</code>/<code>SegmentBase</code>, AV1/VP9, parser fuzzing. HEVC coded resolution, keyframe alignment and frame rate are done.</p>
+        <div class="card-head"><span class="k">v0.2.0</span><span class="pill p-ok">shipped</span></div>
+        <p>HEVC coded resolution, keyframe alignment, frame rate, <code>sidx</code>/<code>SegmentBase</code>, AV1/VP9 and parser fuzzing.</p>
       </div>
       <div class="card">
-        <div class="card-head"><span class="k">v0.3.0</span></div>
-        <p>Audio, captions, subtitles and SCTE-35 ad signalling — everything in a stream that is not the video track.</p>
+        <div class="card-head"><span class="k">v0.3.0</span><span class="pill p-ok">in flight</span></div>
+        <p>Everything in a stream that is not the video track: audio layout and rate, CEA-608/708 captions, WebVTT and TTML subtitles, SCTE-35 ad signalling, and AES-128 so the content checks run on a protected stream at all.</p>
       </div>
       <div class="card">
         <div class="card-head"><span class="k">v0.4.0</span></div>

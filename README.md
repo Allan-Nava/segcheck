@@ -180,16 +180,20 @@ next, what is deliberately later. It is generated from [BACKLOG.md](BACKLOG.md),
 which is the single source of truth for planned work: every item has a stable
 `SC-n` id that commits and CHANGELOG entries reference.
 
-In flight for **v0.2.0**: HEVC coded resolution, keyframe alignment, frame rate,
-`sidx`/`SegmentBase`, AV1/VP9, parser fuzzing. For **v0.3.0**: audio, captions,
-subtitles and SCTE-35. For **v0.4.0**: the live edge and CDN behaviour, and
-wallclock correctness — `EXT-X-PROGRAM-DATE-TIME` and the DVR window checked
-against the media rather than taken at their word. For **v0.5.0**: metrics and
-chat outputs, and the measurable subset of the Apple HLS Authoring Spec and
-DASH-IF IOP behind an opt-in `--profile`. For **v0.6.0**: content protection in
-depth — which DRM system the segments really carry, `cenc` versus `cbcs`, and
-media that is in the clear while the manifest says it is protected, none of
-which needs a key.
+Shipped in **v0.2.0**: HEVC coded resolution, keyframe alignment, frame rate,
+`sidx`/`SegmentBase`, AV1/VP9, parser fuzzing. In flight for **v0.3.0**:
+everything in a stream that is not the video track — audio layout and rate,
+CEA-608/708 captions, WebVTT and TTML subtitles, SCTE-35 ad signalling, and
+AES-128 so the content checks run on a protected stream at all. For **v0.4.0**:
+the live edge and CDN behaviour, and wallclock correctness —
+`EXT-X-PROGRAM-DATE-TIME` and the DVR window checked against the media rather
+than taken at their word. For **v0.5.0**: metrics and chat outputs, and the
+measurable subset of the Apple HLS Authoring Spec and DASH-IF IOP behind an
+opt-in `--profile`. For **v0.6.0**: content protection in depth — which DRM
+system the segments really carry, and media that is in the clear while the
+manifest says it is protected, neither of which needs a key. (`cenc` versus
+`cbcs` is already read, since the bitstream checks had to know which half of
+the media they could see.)
 
 ## License
 
