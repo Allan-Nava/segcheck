@@ -1517,7 +1517,7 @@ func checkAudio(rends []*renditionData) []finding.Finding {
 				humanSampleRate(got.rate), humanSampleRate(rd.r.SampleRate)))
 			value, unit = float64(got.rate), "Hz"
 		}
-		if rd.r.Channels > 0 && got.channels > 0 && !channelsAgree(got.channels, rd.r.Channels, rd.r.Codecs) {
+		if rd.r.Channels > 0 && got.channels > 0 && !channelsAgree(got.channels, rd.r.Channels, rd.r.Codecs, audioConfigOf(rd)) {
 			problems = append(problems, fmt.Sprintf("media is %s but the manifest declares %s",
 				humanChannels(got.channels), humanChannels(rd.r.Channels)))
 			if unit == "" {
@@ -1828,11 +1828,28 @@ func ratesAgree(coded, declared int, codecs string) bool {
 //
 // The allowance is that profile and that pair only: 5.1 declared as mono is still wrong
 // however the audio is coded.
-func channelsAgree(coded, declared int, codecs string) bool {
+// channelsAgree decides whether a declared channel count and a coded one are the
+// same claim.
+//
+// The exception is Parametric Stereo, which codes one channel and renders two, so
+// a declared 2 over a coded 1 is correct. Which is a real exemption and a
+// dangerous one: granted on the strength of the codec string alone — because it
+// said mp4a.40.29 — it forgave a genuine mono-declared-stereo mismatch on any
+// stream that merely *claimed* to be HE-AAC v2, and that is a receiver upmixing
+// mono into a stereo pair with nothing reported.
+//
+// The AudioSpecificConfig states PS outright (SC-81), so where the media says,
+// the media decides. The codec string is the fallback for media that states
+// nothing, which is where it was the only evidence to begin with.
+func channelsAgree(coded, declared int, codecs string, cfg media.AudioConfig) bool {
 	if coded == declared {
 		return true
 	}
-	if !codecSignalsParametricStereo(codecs) {
+	parametricStereo := codecSignalsParametricStereo(codecs)
+	if cfg.Stated {
+		parametricStereo = cfg.PS
+	}
+	if !parametricStereo {
 		return false
 	}
 	return (coded == 1 && declared == 2) || (coded == 2 && declared == 1)
@@ -2206,6 +2223,22 @@ func parsedSegs(rd *renditionData) []segmentData {
 // manifest rendition rather than the sampled one so the watch loop — which
 // re-reads the manifest and never samples — names the same rendition the same
 // way: two spellings of one rung in one report reads as two rungs.
+// audioConfigOf is what this rendition's audio configuration box states, or the
+// zero value when nothing did.
+func audioConfigOf(rd *renditionData) media.AudioConfig {
+	for _, sd := range rd.segs {
+		if !sd.parsed {
+			continue
+		}
+		for _, t := range sd.info.Tracks {
+			if cfg, ok := t.AudioConfig(); ok {
+				return cfg
+			}
+		}
+	}
+	return media.AudioConfig{}
+}
+
 func rendLabel(r manifest.Rendition) string {
 	if r.Name != "" {
 		if r.Kind == manifest.Audio && !strings.HasPrefix(r.Name, "audio") {

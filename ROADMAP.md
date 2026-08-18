@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**101 items · 70 shipped · 31 open · 13 milestones.**
+**101 items · 71 shipped · 30 open · 13 milestones.**
 
 ## At a glance
 
@@ -22,7 +22,7 @@
 | **M10** — Authoring-spec conformance | `v0.5.0` | later | `######....` 60% | 2 | 3 |
 | **M11** — Content protection, in depth | `v0.6.0` | later | `######....` 60% | 2 | 3 |
 | **M12** — Colour, HDR and the codec string | `v0.7.0` | later | `#####.....` 50% | 3 | 3 |
-| **M13** — Audio, past the sanity check | `v0.8.0` | later | `##........` 17% | 5 | 1 |
+| **M13** — Audio, past the sanity check | `v0.8.0` | later | `###.......` 33% | 4 | 2 |
 | **M8** — Container image and supply chain | `v0.1.1` | shipped | `##########` 100% | 0 | 5 |
 | **M7** — Project and release | `ongoing` | ongoing | `#######...` 65% | 7 | 13 |
 
@@ -183,16 +183,16 @@ Target `v0.7.0` · later · 3 open · 3 shipped · `#####.....` 50%
 
 ### M13 — Audio, past the sanity check
 
-Target `v0.8.0` · later · 5 open · 1 shipped · `##........` 17%
+Target `v0.8.0` · later · 4 open · 2 shipped · `###.......` 33%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
-| **SC-82** — `CHANNELS` against the real channel count | high | M | check,parser | open |
 | **SC-83** — Audio codec string against the configuration | high | M | check | open |
 | **SC-84** — Loudness metadata | med | M | check,parser | open |
 | **SC-85** — Immersive audio against the badge | med | M | check,parser | open |
 | **SC-86** — Encoder delay and priming | med | L | check,parser | open |
 | **SC-81** — Audio configuration boxes | high | L | parser | shipped `0.8.0` |
+| **SC-82** — `CHANNELS` against the real channel count | high | M | check,parser | shipped `0.8.0` |
 
 ### M8 — Container image and supply chain
 
@@ -237,8 +237,8 @@ Target `ongoing` · ongoing · 7 open · 13 shipped · `#######...` 65%
 
 | Label | Items | Open |
 |---|---|---|
-| `check` | 47 | 18 |
-| `parser` | 44 | 10 |
+| `check` | 47 | 17 |
+| `parser` | 44 | 9 |
 | `cli` | 8 | 4 |
 | `delivery` | 6 | 4 |
 | `integration` | 4 | 4 |

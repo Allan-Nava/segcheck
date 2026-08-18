@@ -19,6 +19,17 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   a stall rather than jitter. Watching a VOD playlist is not a defect and is reported as
   an OK finding saying there is no live edge, not as a problem in the stream. Only
   manifests are re-fetched: the segments are downloaded once, at the start.
+- **`CHANNELS` is checked against the coded configuration, not the codec string** (SC-82).
+  It is the claim a player acts on before it decodes anything: a receiver reads "6",
+  selects a surround output, and upmixes stereo into it — so the defect is audible on
+  exactly the systems surround was shipped for. The comparison itself landed with SC-18;
+  what SC-81 makes possible is getting the Parametric Stereo exemption right.
+  HE-AAC v2 codes one channel and renders two, so a declared 2 over a coded 1 is correct.
+  That exemption used to be granted on the strength of the codec string saying
+  `mp4a.40.29`, which forgave a genuine mono-declared-stereo mismatch on any stream that
+  merely *claimed* to be HE-AAC v2 — a receiver upmixing mono into a stereo pair with
+  nothing reported. The AudioSpecificConfig states PS outright, so where the media says,
+  the media decides; the codec string is the fallback only for media that states nothing.
 - **Audio configuration boxes** (SC-81), with nothing consuming them yet: `esds` and the
   AudioSpecificConfig inside it for `mp4a` — audio object type, sampling frequency index,
   channel configuration, and the SBR and PS extensions — plus `dOps` for Opus, `dfLa` for

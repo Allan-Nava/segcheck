@@ -730,14 +730,15 @@ which is why SC-18 already rules it out and why nothing here reintroduces it.
   *coded* rate and channel count and records SBR and PS, because the sample entry
   describes the rendered output and for HE-AAC those are deliberately different.
   <!-- sc: prio=high size=L labels=parser ver=0.8.0 -->
-- [ ] **SC-82 — `CHANNELS` against the real channel count**: HLS
-  `EXT-X-MEDIA CHANNELS` and DASH `AudioChannelConfiguration@value`, neither of
-  which is parsed today, against what SC-81 reads. Distinct from SC-18, which
-  compares renditions with each other and with `CODECS`: this is the manifest's
-  own channel claim, and it is the one a player acts on before it ever decodes a
-  frame. A stereo track advertised as 5.1 makes a receiver select a surround
-  output and upmix into it, so the defect is audible on exactly the systems that
-  were the reason for shipping surround. <!-- sc: prio=high size=M labels=check,parser -->
+- [x] **SC-82 — `CHANNELS` against the real channel count**: the comparison itself
+  shipped with SC-18; what SC-81 made possible was getting the Parametric Stereo
+  exemption right. HE-AAC v2 codes one channel and renders two, so a declared 2 over a
+  coded 1 is correct — but that exemption was granted on the codec string saying
+  `mp4a.40.29`, which forgave a genuine mono-declared-stereo mismatch on any stream
+  that merely claimed to be HE-AAC v2. The AudioSpecificConfig states PS outright, so
+  where the media says, the media decides, and the codec string is the fallback only
+  for media that states nothing.
+  <!-- sc: prio=high size=M labels=check,parser ver=0.8.0 -->
 - [ ] **SC-83 — Audio codec string against the configuration**: the audio
   counterpart of SC-74 — `mp4a.40.2` against an audio object type that is really
   5 or 29, `ec-3` declared over an `ac-3` sample entry, `mp4a.40.5` over content
