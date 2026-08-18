@@ -954,14 +954,21 @@ checks roadmap and blocks nothing.
   can change the plan — under a `concurrency` group, because two runs racing would
   both see "no issue for SC-n" and open it twice. Does not close SC-64: `lint` and
   `roadmap` are still untested. <!-- sc: prio=med size=M labels=project,tests ver=0.2.0 -->
-- [ ] **SC-64 — `scripts/backlog.sh` has no tests**: the test-first rule covers
-  tooling and this is the one place it was not applied — which is how it shipped
-  a generator that split a table row in three the first time an item title
-  contained a `|` (SC-63). A shell test fixture with a small BACKLOG, asserting
-  the generated ROADMAP for pipes, em dashes, done-versus-open ordering, and the
-  lint failures (duplicate id, gap in the sequence, bad metadata) that are
-  currently only ever exercised by hand.
-  <!-- sc: prio=med size=S labels=tests,project -->
+- [x] **SC-64 — `scripts/backlog.sh` has no tests**: `scripts/backlog_test.sh` covers the
+  generator and the linter against a fixture backlog — 23 assertions, POSIX sh and awk,
+  wired into the `backlog` CI job beside the issue planner's. The roadmap side asserts
+  what SC-63 broke: a `|` inside an item title is escaped, and every row of every table
+  has the same number of cells, which is the invariant a split row violates and nothing
+  else does. Also the em dash round trip, priority ordering inside a milestone, and that
+  `check` fails on a stale roadmap — a CI gate that stopped failing would have gone
+  unnoticed indefinitely. The linter side asserts each rule fails for its own reason:
+  duplicate id, gap in the sequence, unknown prio, unknown size, no metadata comment, a
+  done item with no `ver=`, an open item inside a shipped milestone — and that the
+  well-formed fixture passes, without which every one of those is about a linter that
+  rejects everything. Writing the test first found the seam it needed: `roadmap` wrote
+  to a hard-coded path and the first run overwrote this repository's own ROADMAP.md, so
+  `ROADMAP_FILE` joins `BACKLOG_FILE` as an override.
+  <!-- sc: prio=med size=S labels=tests,project ver=0.4.0 -->
 - [x] **SC-71 — The untested helpers behind the findings** (total was 70.7% of
   statements, now 76.2%; `internal/media` 74.1 → 84.3, `internal/manifest`
   79.4 → 87.9, `internal/analyze` 85.5 → 89.5, `internal/finding` 83.3 → 94.4).

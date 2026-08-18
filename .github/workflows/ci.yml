@@ -162,6 +162,13 @@ jobs:
         run: ./scripts/backlog.sh lint
       - name: ROADMAP.md is in sync with BACKLOG.md
         run: ./scripts/backlog.sh check
+      # The generator itself, against a fixture backlog. The two steps above
+      # only prove this repository's own backlog is consistent with its own
+      # roadmap — both would still pass if the generator started splitting a
+      # table row on the next character an item title happens to contain, which
+      # is exactly what SC-63 was.
+      - name: The roadmap generator and the linter
+        run: sh scripts/backlog_test.sh
       # The issue sync decides what to create and what to close, and it runs on
       # a push with issues:write. Its planner is asserted against a fixture
       # backlog here so a regression shows up before it opens duplicates or

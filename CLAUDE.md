@@ -221,6 +221,11 @@ must never be hand-edited. Items carry an invisible metadata comment:
 | `stats` | one-line summary |
 | `next [n]` | the n highest-priority open items, in flight first |
 
+Both `scripts/backlog_test.sh` (the generator and the linter) and
+`scripts/backlog_issues_test.sh` (the issue planner) run in CI. `BACKLOG_FILE` and
+`ROADMAP_FILE` point the tool at a fixture — never run a test that omits the second,
+because `roadmap` will overwrite this repository's own.
+
 Milestones: **M1/M2** shipped in v0.1.0 · **M3** codec and timing depth (v0.2.0,
 in flight) · **M4** audio, captions, subtitles, ad signalling (v0.3.0) · **M5**
 live and delivery (v0.4.0) · **M6** integration (v0.5.0) · **M7** project and

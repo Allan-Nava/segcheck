@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**103 items · 77 shipped · 26 open · 13 milestones.**
+**103 items · 78 shipped · 25 open · 13 milestones.**
 
 ## At a glance
 
@@ -24,13 +24,12 @@
 | **M12** — Colour, HDR and the codec string | `v0.7.0` | later | `#####.....` 50% | 3 | 3 |
 | **M13** — Audio, past the sanity check | `v0.8.0` | later | `#####.....` 50% | 3 | 3 |
 | **M8** — Container image and supply chain | `v0.1.1` | shipped | `##########` 100% | 0 | 5 |
-| **M7** — Project and release | `ongoing` | ongoing | `######....` 59% | 9 | 13 |
+| **M7** — Project and release | `ongoing` | ongoing | `######....` 64% | 8 | 14 |
 
 ## Next up
 
 The open items with the highest priority in the milestones that are in flight.
 
-- **SC-64** — `scripts/backlog.sh` has no tests · `med` · size `S` · tests,project (M7, target `ongoing`)
 - **SC-94** — Developer ID signing and notarisation · `med` · size `M` · release (M7, target `ongoing`)
 - **SC-99** — No low-latency reference stream in the smoke suite · `med` · size `M` · tests (M7, target `ongoing`)
 - **SC-100** — Two rungs at one resolution get one name · `med` · size `S` · output (M7, target `ongoing`)
@@ -38,6 +37,7 @@ The open items with the highest priority in the milestones that are in flight.
 - **SC-102** — A Period behind an `xlink:href` swallows the periods after it · `med` · size `M` · parser (M7, target `ongoing`)
 - **SC-103** — No reference stream carrying a discontinuity · `med` · size `M` · tests (M7, target `ongoing`)
 - **SC-26** — Byte-range support probe · `low` · size `S` · delivery,check (M5, target `v0.4.0`)
+- **SC-49** — Per-check reference pages · `low` · size `M` · docs (M7, target `ongoing`)
 
 ## Milestones
 
@@ -208,11 +208,10 @@ Target `v0.1.1` · shipped · 0 open · 5 shipped · `##########` 100%
 
 ### M7 — Project and release
 
-Target `ongoing` · ongoing · 9 open · 13 shipped · `######....` 59%
+Target `ongoing` · ongoing · 8 open · 14 shipped · `######....` 64%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
-| **SC-64** — `scripts/backlog.sh` has no tests | med | S | tests,project | open |
 | **SC-94** — Developer ID signing and notarisation | med | M | release | open |
 | **SC-99** — No low-latency reference stream in the smoke suite | med | M | tests | open |
 | **SC-100** — Two rungs at one resolution get one name | med | S | output | open |
@@ -230,6 +229,7 @@ Target `ongoing` · ongoing · 9 open · 13 shipped · `######....` 59%
 | **SC-34** — Backlog and roadmap tooling | med | M | project | shipped `0.1.1` |
 | **SC-47** — SBOM and signed artefacts | med | M | release | shipped `0.1.1` |
 | **SC-48** — Coverage ratchet | med | S | tests | shipped `0.2.0` |
+| **SC-64** — `scripts/backlog.sh` has no tests | med | S | tests,project | shipped `0.4.0` |
 | **SC-65** — The published cask actually installs | med | S | release,docs | shipped `0.3.0` |
 | **SC-80** — GitHub issues generated from the backlog | med | M | project,tests | shipped `0.2.0` |
 | **SC-33** — Docs site | low | M | docs | shipped `0.1.1` |
@@ -243,9 +243,9 @@ Target `ongoing` · ongoing · 9 open · 13 shipped · `######....` 59%
 | `parser` | 45 | 9 |
 | `integration` | 4 | 4 |
 | `output` | 5 | 4 |
-| `tests` | 13 | 3 |
 | `cli` | 8 | 2 |
 | `delivery` | 6 | 2 |
 | `release` | 10 | 2 |
+| `tests` | 13 | 2 |
 | `docs` | 5 | 1 |
-| `project` | 5 | 1 |
+| `project` | 5 | 0 |

@@ -9,6 +9,20 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **The roadmap generator and the backlog linter have tests** (SC-64).
+  `scripts/backlog_test.sh` runs `roadmap`, `check`, `stats`, `next` and `lint` against a
+  fixture backlog: 23 assertions, POSIX sh and awk, in the `backlog` CI job beside the
+  issue planner's. The test-first rule covers the tooling and this was the one place it
+  had not been applied, which is how the generator shipped a bug that split a table row in
+  three the first time an item title contained a `|`. The invariant that catches it is
+  asserted directly — every row of every table has the same number of cells, with an
+  escaped pipe counted as content — along with the em dash round trip, priority ordering
+  inside a milestone, `check` failing on a stale roadmap, and each linter rule failing for
+  its own reason: duplicate id, gap in the sequence, unknown prio, unknown size, no
+  metadata comment, a done item with no `ver=`, an open item inside a shipped milestone.
+  Writing it first immediately found the seam it needed: `roadmap` wrote to a hard-coded
+  path and the first run overwrote this repository's own ROADMAP.md, so `ROADMAP_FILE`
+  now joins `BACKLOG_FILE` as an override.
 - **`--watch` measures the live edge against real time** (SC-55). A live edge has to
   advance at 1x, which is not the same claim as "it advanced" — all a stall check can
   settle. A packager publishing two seconds of media every three moves at every single

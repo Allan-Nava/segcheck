@@ -16,16 +16,17 @@
 # POSIX sh and awk only — this repository has no dependencies, and neither does
 # its tooling.
 #
-# BACKLOG_FILE and BACKLOG_ISSUES_SNAPSHOT override the backlog path and the
-# source of "which issues exist already". Both exist so the issue planner can be
-# tested without a network call and without creating anything on a public
-# repository — see scripts/backlog_issues_test.sh.
+# BACKLOG_FILE, ROADMAP_FILE and BACKLOG_ISSUES_SNAPSHOT override the two file
+# paths and the source of "which issues exist already". They exist so the tooling
+# can be tested against a fixture — without a network call, without creating
+# anything on a public repository, and without overwriting this repository's own
+# ROADMAP.md, which the first run of scripts/backlog_test.sh promptly did.
 
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 backlog="${BACKLOG_FILE:-$root/BACKLOG.md}"
-roadmap="$root/ROADMAP.md"
+roadmap="${ROADMAP_FILE:-$root/ROADMAP.md}"
 
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/segcheck-backlog.XXXXXX")
 trap 'rm -rf "$tmp"' EXIT INT HUP TERM
