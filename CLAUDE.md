@@ -83,8 +83,14 @@ AGENTS.md wins and this file gets fixed.
    SEGCHECK_BIN=/tmp/segcheck go test -tags smoke -run TestSmokeReferenceStreams ./internal/analyze/ -v
    ```
 
-   Apple's fMP4 and MPEG-TS references, a DASH `SegmentTemplate` manifest and a
-   single-file on-demand one. The assertion is **not** "nothing above OK" — Apple's
+   Seven streams: Apple's fMP4 and MPEG-TS references, a DASH `SegmentTemplate`
+   manifest, a single-file on-demand one, one whose AdaptationSet states nothing,
+   a CENC one and a multi-period one. Two more are served from `mediatest` over a
+   loopback origin, for the two features no public stream declares — LL-HLS
+   `EXT-X-PART` and `EXT-X-DISCONTINUITY`. A self-served stream cannot catch a
+   shared misreading, only a check falling silent, so it never counts towards the
+   guard that says a real stream was reached. The assertion is **not** "nothing
+   above OK" — Apple's
    advanced example legitimately over-declares BANDWIDTH and ships an inverted
    ladder — but a per-stream baseline of the checks allowed to exceed OK, plus a
    list of checks that must not fall silent. A new finding outside the baseline is

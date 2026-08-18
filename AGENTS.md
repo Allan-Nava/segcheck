@@ -75,6 +75,13 @@ sentence. A check that only reads the manifest belongs in
   SEGCHECK_BIN=/tmp/segcheck go test -tags smoke -run TestSmokeReferenceStreams ./internal/analyze/ -v
   ```
 
+  Seven remote streams, plus two served from `mediatest` over a loopback origin for
+  the two features no public stream declares: LL-HLS `EXT-X-PART` (SC-99) and
+  `EXT-X-DISCONTINUITY` (SC-103). A stream this repository builds itself cannot catch
+  a shared misreading — the writer and the reader agree by construction — so it never
+  counts towards the guard that says a real stream was reached; what it catches is the
+  other half, a check that falls silent.
+
   The assertion is **not** "nothing above OK". Apple's advanced example legitimately
   over-declares BANDWIDTH and ships an inverted ladder, so each stream carries a
   baseline of the checks allowed to exceed OK, plus a list of checks that must not fall

@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**103 items · 81 shipped · 22 open · 13 milestones.**
+**104 items · 83 shipped · 21 open · 13 milestones.**
 
 ## At a glance
 
@@ -24,18 +24,17 @@
 | **M12** — Colour, HDR and the codec string | `v0.7.0` | later | `#####.....` 50% | 3 | 3 |
 | **M13** — Audio, past the sanity check | `v0.8.0` | later | `#####.....` 50% | 3 | 3 |
 | **M8** — Container image and supply chain | `v0.1.1` | shipped | `##########` 100% | 0 | 5 |
-| **M7** — Project and release | `ongoing` | ongoing | `########..` 77% | 5 | 17 |
+| **M7** — Project and release | `ongoing` | ongoing | `########..` 83% | 4 | 19 |
 
 ## Next up
 
 The open items with the highest priority in the milestones that are in flight.
 
 - **SC-94** — Developer ID signing and notarisation · `med` · size `M` · release (M7, target `ongoing`)
-- **SC-99** — No low-latency reference stream in the smoke suite · `med` · size `M` · tests (M7, target `ongoing`)
-- **SC-103** — No reference stream carrying a discontinuity · `med` · size `M` · tests (M7, target `ongoing`)
 - **SC-26** — Byte-range support probe · `low` · size `S` · delivery,check (M5, target `v0.4.0`)
 - **SC-49** — Per-check reference pages · `low` · size `M` · docs (M7, target `ongoing`)
 - **SC-98** — The generated cask fails the tap's style audit · `low` · size `S` · release (M7, target `ongoing`)
+- **SC-104** — The loopback streams prove the check speaks, not that it is right · `low` · size `M` · tests (M7, target `ongoing`)
 
 ## Milestones
 
@@ -206,15 +205,14 @@ Target `v0.1.1` · shipped · 0 open · 5 shipped · `##########` 100%
 
 ### M7 — Project and release
 
-Target `ongoing` · ongoing · 5 open · 17 shipped · `########..` 77%
+Target `ongoing` · ongoing · 4 open · 19 shipped · `########..` 83%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
 | **SC-94** — Developer ID signing and notarisation | med | M | release | open |
-| **SC-99** — No low-latency reference stream in the smoke suite | med | M | tests | open |
-| **SC-103** — No reference stream carrying a discontinuity | med | M | tests | open |
 | **SC-49** — Per-check reference pages | low | M | docs | open |
 | **SC-98** — The generated cask fails the tap's style audit | low | S | release | open |
+| **SC-104** — The loopback streams prove the check speaks, not that it is right | low | M | tests | open |
 | **SC-36** — Real-stream smoke suite | high | S | tests,release | shipped `0.2.0` |
 | **SC-57** — `internal/fetch` tests | high | M | tests | shipped `0.1.1` |
 | **SC-58** — `cmd/segcheck` tests | high | M | tests,cli | shipped `0.1.1` |
@@ -227,9 +225,11 @@ Target `ongoing` · ongoing · 5 open · 17 shipped · `########..` 77%
 | **SC-64** — `scripts/backlog.sh` has no tests | med | S | tests,project | shipped `0.4.0` |
 | **SC-65** — The published cask actually installs | med | S | release,docs | shipped `0.3.0` |
 | **SC-80** — GitHub issues generated from the backlog | med | M | project,tests | shipped `0.2.0` |
+| **SC-99** — No low-latency reference stream in the smoke suite | med | M | tests | shipped `0.4.0` |
 | **SC-100** — Two rungs at one resolution get one name | med | S | output | shipped `0.4.0` |
 | **SC-101** — A failed DVR window reports the claim, not the truth | med | M | check,delivery | shipped `0.4.0` |
 | **SC-102** — A Period behind an `xlink:href` swallows the periods after it | med | M | parser | shipped `0.4.0` |
+| **SC-103** — No reference stream carrying a discontinuity | med | M | tests | shipped `0.4.0` |
 | **SC-33** — Docs site | low | M | docs | shipped `0.1.1` |
 | **SC-50** — Brand assets | low | S | docs | shipped `0.1.1` |
 
@@ -243,7 +243,7 @@ Target `ongoing` · ongoing · 5 open · 17 shipped · `########..` 77%
 | `output` | 5 | 3 |
 | `cli` | 8 | 2 |
 | `release` | 10 | 2 |
-| `tests` | 13 | 2 |
 | `delivery` | 6 | 1 |
 | `docs` | 5 | 1 |
+| `tests` | 14 | 1 |
 | `project` | 5 | 0 |

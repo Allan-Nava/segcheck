@@ -42,6 +42,20 @@ import (
 type smokeStream struct {
 	name string
 	url  string
+	// local, when set, serves the stream from mediatest over a loopback origin
+	// and returns its manifest URL, instead of reaching the open internet. It is
+	// the consolation prize for a feature no public stream declares: LL-HLS parts
+	// (SC-99) and EXT-X-DISCONTINUITY (SC-103) were both searched for across
+	// Apple's, mux's, Unified Streaming's, JW's and Akamai's vectors and every
+	// FAST channel that answered, and not one of them carries either tag.
+	//
+	// A stream this repository builds itself cannot catch a shared misreading —
+	// the writer and the reader agree by construction, which is the whole reason
+	// the remote entries exist. What it can catch is the other half, and the half
+	// that has actually gone wrong here before: a check that falls silent. A
+	// parser that stops reading reports nothing, and nothing reads exactly like a
+	// clean bill of health.
+	local func(t *testing.T) string
 	// allowed maps a check name to why that check legitimately exceeds OK on this
 	// stream. A finding from any other check is a regression.
 	allowed map[string]string
@@ -130,6 +144,50 @@ var smokeStreams = []smokeStream{
 		},
 		expect: []string{"container", "resolution", "keyframe", "framerate", "continuity", "encryption"},
 	},
+	{
+		// SC-103. Nothing public declares EXT-X-DISCONTINUITY, so this one is
+		// served from mediatest: four 2s segments with a real timeline reset
+		// under the tag before the third, which is what a splice into other
+		// content looks like. The check has to stay quiet — the tag is honoured
+		// — and it has to speak, which is the half a loopback origin can prove.
+		//
+		// The reset sits at index 2 because runSmoke samples three segments and
+		// this playlist is VOD, so segments 0, 1 and 2 are what gets fetched: the
+		// tag and a segment on either side of it. Moving it later would fetch
+		// none of it and the check would fall silent for a reason that has
+		// nothing to do with the check.
+		name: "local-discontinuity",
+		local: func(t *testing.T) string {
+			segs := discSegments(4, 2, 1280, 720)
+			segs[2].discontinuity = true
+			return newHLSOrigin(t, []variantSpec{{
+				name: "720p", bandwidth: syntheticBandwidth,
+				width: 1280, height: 720, segments: segs,
+			}}).URL + "/master.m3u8"
+		},
+		allowed: map[string]string{},
+		expect:  []string{"container", "resolution", "keyframe", "framerate", "continuity", "discontinuity"},
+	},
+	{
+		// SC-99. Same reason: no public LL-HLS endpoint was reachable when
+		// `parts` was written, and none was reachable when this was. Two plain
+		// segments and two the packager is still publishing parts for, with the
+		// parts reconstructing the segment they make up — so `parts` must report
+		// and must report nothing wrong.
+		name: "local-ll-hls",
+		local: func(t *testing.T) string {
+			return newPartsOrigin(t, 2, []partedSeg{
+				{parts: cleanParts()},
+				{parts: cleanParts()},
+			})
+		},
+		allowed: map[string]string{},
+		// No `resolution` and no `ladder`: newPartsOrigin serves the media
+		// playlist directly, and with no master there is no RESOLUTION attribute
+		// for the media to be checked against. A check with nothing to compare
+		// staying quiet is the contract, not a gap.
+		expect: []string{"container", "keyframe", "continuity", "parts"},
+	},
 }
 
 type smokeResult struct {
@@ -148,11 +206,21 @@ func TestSmokeReferenceStreams(t *testing.T) {
 	for _, s := range smokeStreams {
 		s := s
 		t.Run(s.name, func(t *testing.T) {
-			res, code, ok := runSmoke(t, bin, s.url)
-			if !ok {
-				t.Skipf("%s is not reachable from here", s.url)
+			url := s.url
+			if s.local != nil {
+				url = s.local(t)
 			}
-			reached++
+			res, code, ok := runSmoke(t, bin, url)
+			if !ok {
+				t.Skipf("%s is not reachable from here", url)
+			}
+			// Only a remote stream counts. A loopback origin is always reachable,
+			// so letting it satisfy the guard below would hide a total outage of
+			// every real reference behind two streams this repository serves to
+			// itself.
+			if s.local == nil {
+				reached++
+			}
 
 			// The contract, first: a check that ran is a success however bad the
 			// findings, and only --exit-on may change that.
@@ -198,7 +266,7 @@ func TestSmokeReferenceStreams(t *testing.T) {
 	// A suite that skips every stream passes while asserting nothing, which is
 	// worse than failing: it would hide a total outage behind a green run.
 	if reached == 0 {
-		t.Fatal("no reference stream was reachable; the suite asserted nothing")
+		t.Fatal("no remote reference stream was reachable; the suite asserted nothing a loopback origin could not")
 	}
 }
 

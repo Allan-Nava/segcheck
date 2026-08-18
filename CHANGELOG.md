@@ -9,6 +9,22 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **The smoke suite covers the two features no public stream declares** (SC-99, SC-103).
+  `parts` and `discontinuity` both shipped without the real-stream pass that has caught
+  every false positive this project has had, because no reachable endpoint carries an
+  `EXT-X-PART` or an `EXT-X-DISCONTINUITY` — the search was run again, into the media
+  playlists this time rather than only the masters, across Apple's, mux's, JW's, Unified
+  Streaming's, Akamai's and Red Bull's streams, and it came back empty. Both checks now
+  have a stream in the suite served from `mediatest` over a loopback origin and run
+  through the built binary like every other entry, with the check in that stream's
+  must-not-fall-silent list. What that buys is stated rather than overclaimed: a stream
+  this repository builds itself cannot catch a shared misreading, because `mediatest`
+  writes what `internal/media` reads and the two agree even where both are wrong, so a
+  local stream never counts towards the guard that says a real reference was reached.
+  What it catches is a check going quiet, which was verified by stubbing each check out
+  and watching the suite go red. The residue — a real packager's discontinuity at a real
+  codec change, and a live LL-HLS endpoint — is SC-104.
+
 - **A Period that states no `@start` is placed where it really begins** (SC-102). ISO/IEC
   23009-1 makes `@start` optional: a Period without one begins where the previous Period
   ended, and only a Period that stated a `@duration` says where that was. segcheck read

@@ -1130,17 +1130,18 @@ checks roadmap and blocks nothing.
   Streaming live demo this was filed from: its two `container 720p` rows are now
   `720p 1316kbps` and `720p 658kbps`.
   <!-- sc: prio=med size=S labels=output ver=0.4.0 -->
-- [ ] **SC-99 — No low-latency reference stream in the smoke suite**: every check this
-  project has shipped a false positive in was caught by SC-36 against real media rather
-  than by a unit test, and `parts` (SC-39) is the first check to ship without that pass:
-  no public LL-HLS endpoint was reachable when it was written. It needs a live stream
-  publishing `EXT-X-PART`, which rules out the static reference URLs the rest of the
-  suite uses — the parts are aged out of the window seconds after their segment
-  completes, so the fixture has to be live at the moment CI runs, or the suite has to
-  serve one itself from `mediatest` over a loopback origin and accept that a
-  self-served stream cannot catch a shared misreading. The second is worth less and
-  still worth more than nothing.
-  <!-- sc: prio=med size=M labels=tests -->
+- [x] **SC-99 — No low-latency reference stream in the smoke suite**: the search was run
+  again and came back empty — Apple's `ll-hls-test.apple.com` vectors, Unified
+  Streaming's low-latency endpoints and THEO's demo are all gone or unreachable — so the
+  second option is what shipped: `local-ll-hls` serves two plain segments and two the
+  packager is still publishing parts for, from `mediatest` over a loopback origin,
+  through the built binary like every other entry. The limit is stated rather than
+  papered over: a stream this repository builds itself cannot catch a shared misreading,
+  because the writer and the reader agree by construction, so it never counts towards the
+  guard that says a real stream was reached. What it does catch is the half that has
+  actually gone wrong here — `parts` falling silent, which was verified by stubbing the
+  check out and watching the suite go red. A real endpoint is still worth having: SC-104.
+  <!-- sc: prio=med size=M labels=tests ver=0.4.0 -->
 - [x] **SC-102 — A Period behind an `xlink:href` swallows the periods after it**: the
   wider defect underneath it turned out to be simpler and to fire on a stream with no
   `xlink` in it at all. `@start` is optional — ISO/IEC 23009-1 makes an absent one the
@@ -1156,15 +1157,30 @@ checks roadmap and blocks nothing.
   position nobody computed. The suite's first multi-period reference stream lands with
   it — the arithmetic SC-40 added had never had the real-stream pass.
   <!-- sc: prio=med size=M labels=parser ver=0.4.0 -->
-- [ ] **SC-103 — No reference stream carrying a discontinuity**: `discontinuity` (SC-54)
-  is the second check after `parts` (SC-99) to ship without the real-stream pass that has
-  caught every false positive this project has had. Nothing reachable and public declares
-  an `EXT-X-DISCONTINUITY`: Apple's bipbop variants and their subtitle and audio
-  playlists, mux.dev's test streams, Unified Streaming's `live` and `scte35` endpoints and
-  Akamai's HLS vectors were all read and every one of them has zero. An ad-inserted live
-  endpoint would do it, and so — less well — would serving one from `mediatest` over a
-  loopback origin in the smoke suite, which cannot catch a shared misreading but can catch
-  the check falling silent. The specific risk left open is the encoding-change exemption:
-  a real packager's discontinuity at a codec change has to keep the check quiet, and only
-  a real packager can prove it does.
-  <!-- sc: prio=med size=M labels=tests -->
+- [x] **SC-103 — No reference stream carrying a discontinuity**: the search was widened
+  before settling — the media playlists behind Apple's, mux's, JW's, Unified Streaming's
+  and Red Bull's masters were all read this time, not only the masters — and every one of
+  them still declares zero. So `local-discontinuity` serves four 2s segments with a real
+  timeline reset under the tag, from `mediatest` over a loopback origin, through the built
+  binary. `discontinuity` is in that stream's must-not-fall-silent list and stubbing the
+  check out was watched turning the suite red. The reset sits at index 2 deliberately: the
+  suite samples three segments from the head of a VOD playlist, so the tag and a segment
+  either side of it are what gets fetched. The encoding-change exemption is **not** closed
+  by this and is not claimed to be — a synthetic shape change proves only that the code
+  agrees with itself, and it is a real packager's discontinuity at a real codec change
+  that has to keep the check quiet. That residue is SC-104.
+  <!-- sc: prio=med size=M labels=tests ver=0.4.0 -->
+- [ ] **SC-104 — The loopback streams prove the check speaks, not that it is right**:
+  SC-99 and SC-103 closed the silence half of two checks with origins this repository
+  serves to itself, and the other half is still open by construction. `mediatest` writes
+  what `internal/media` reads, so the two agree even where both are wrong, and that is
+  exactly the failure the remote entries exist to catch. Two specifics are worth a real
+  stream. A live LL-HLS endpoint publishing `EXT-X-PART` would settle whether `parts`
+  reads a packager that muxes parts and segments separately, which is the disagreement
+  the check exists for and which no fixture built from one writer can stage. A real
+  packager's `EXT-X-DISCONTINUITY` at a genuine codec change would settle the
+  encoding-change exemption — RFC 8216 makes the tag signal a change of file format,
+  track layout or codec as well as of timestamps, so the check has to stay quiet there,
+  and only media a real encoder produced can show it does. Neither was reachable in
+  August 2026; this is a standing invitation to look again, not a design gap.
+  <!-- sc: prio=low size=M labels=tests -->
