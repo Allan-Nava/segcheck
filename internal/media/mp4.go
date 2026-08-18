@@ -165,8 +165,25 @@ func ParseMP4(data, init []byte) (SegmentInfo, error) {
 		if t.Kind == Text {
 			// The cues are in the samples, not in the wrapper. Counting the samples
 			// could not tell a rendition that says nothing from one that says plenty.
-			if cues, ok := subtitleSampleCues(t.Codec, data, samples[id]); ok {
-				t.Cues, t.CuesRead = cues, true
+			if sc, ok := subtitleSampleCues(t.Codec, data, samples[id]); ok {
+				t.Cues, t.CuesRead = sc.cues, true
+				if sc.haveSpan && t.Timescale > 0 {
+					// A TTML document inside an stpp sample states its times on the
+					// media presentation timeline, not relative to the fragment
+					// carrying it — ISO/IEC 14496-30 puts them relative to the period,
+					// and livesim's DASH subtitles are written that way. Adding the
+					// fragment's decode time double-counts it, which is how a first
+					// draft reported every one of that stream's correct segments as
+					// four seconds adrift.
+					//
+					// What does need converting is the clock: the subtitle readers
+					// report on 90kHz, while this track counts on its own timescale.
+					scale := func(ticks90k int64) int {
+						return int(ticks90k * int64(t.Timescale) / int64(TSTimescale))
+					}
+					t.CueMin, t.CueMax = scale(sc.min), scale(sc.max)
+					t.HasCueSpan = true
+				}
 			}
 		}
 

@@ -312,3 +312,71 @@ func TestMediaOrigin(t *testing.T) {
 		}
 	}
 }
+
+// SC-97: a wrapped rendition gets the same drift check a text one does. A TTML document
+// inside a stpp sample states its times on the presentation timeline, so a document
+// pointing somewhere else fails exactly the way a WebVTT one with a bad X-TIMESTAMP-MAP
+// does — and until the cues were timed, nothing said so.
+func TestCheckSubtitles_WrappedCuesDrift(t *testing.T) {
+	wrapped := func(cueMin, cueMax int) *renditionData {
+		return &renditionData{
+			r: manifest.Rendition{Name: "en", Kind: manifest.Text},
+			segs: []segmentData{{
+				seg:    manifest.Segment{Duration: 2, Sequence: 0},
+				parsed: true,
+				info: media.SegmentInfo{Container: media.ContainerMP4, Tracks: []media.Track{{
+					Kind: media.Text, Codec: "ttml", Timescale: 90000,
+					HasPTS: true, MinPTS: 0, MaxPTS: 180000, Samples: 1,
+					Cues: 1, CuesRead: true,
+					CueMin: cueMin, CueMax: cueMax, HasCueSpan: true,
+				}}},
+			}},
+		}
+	}
+	// Cues inside the segment's own window: nothing to report.
+	for _, f := range checkSubtitles([]*renditionData{wrapped(45000, 135000)}, Defaults()) {
+		if f.Status != finding.OK {
+			t.Errorf("aligned wrapped cues produced %s: %s", f.Status, f.Message)
+		}
+	}
+
+	// Cues an hour away from the segment the manifest put them in.
+	out := checkSubtitles([]*renditionData{wrapped(3600*90000, 3601*90000)}, Defaults())
+	f, ok := findingIn(out, finding.BAD)
+	if !ok {
+		t.Fatalf("wrapped cues an hour adrift were not reported: %+v", out)
+	}
+	if !strings.Contains(f.Message, "does not overlap") {
+		t.Errorf("the finding does not say what is wrong: %q", f.Message)
+	}
+}
+
+// The guards inside the drift comparison, each of which leaves a rendition unjudged
+// rather than judged against a number nobody measured.
+func TestDriftFrom_Guards(t *testing.T) {
+	sd := segmentData{
+		seg:  manifest.Segment{Duration: 2, Sequence: 0},
+		info: media.SegmentInfo{Container: media.ContainerWebVTT},
+	}
+	starts := map[int]float64{0: 0}
+
+	// No timescale to convert the cue span with.
+	noScale := media.Track{Kind: media.Text, Cues: 1}
+	if got := driftFrom(starts, sd, noScale, 0, true, Defaults(), 0, 90000); got != "" {
+		t.Errorf("a track with no timescale was judged: %q", got)
+	}
+	// No cues to place.
+	noCues := media.Track{Kind: media.Text, Timescale: 90000}
+	if got := driftFrom(starts, sd, noCues, 0, true, Defaults(), 0, 0); got != "" {
+		t.Errorf("a track with no cues was judged: %q", got)
+	}
+	// A text rendition with no video origin to anchor its cue clock to.
+	text := media.Track{Kind: media.Text, Timescale: 90000, Cues: 1}
+	if got := driftFrom(starts, sd, text, 0, false, Defaults(), 3600*90000, 3601*90000); got != "" {
+		t.Errorf("a text rendition was judged with no origin: %q", got)
+	}
+	// And with one, the same cues are adrift.
+	if got := driftFrom(starts, sd, text, 0, true, Defaults(), 3600*90000, 3601*90000); got == "" {
+		t.Error("cues an hour adrift were not reported")
+	}
+}

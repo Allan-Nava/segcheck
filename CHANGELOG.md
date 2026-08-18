@@ -114,6 +114,19 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   noise — but *not* against a real encrypted stream, because no public AES-128 test
   stream was reachable. SC-96 tracks that, and it matters: every other reader in this
   project had a design error that only a real stream found.
+- **A wrapped subtitle rendition gets the same drift check a text one does** (SC-97).
+  SC-93 counted the cues inside a `stpp` sample; now they are placed. A document that is
+  internally perfect and pointing somewhere else fails the way a WebVTT one with a bad
+  `X-TIMESTAMP-MAP` does.
+
+  The backlog item said a TTML document's times are relative to the fragment carrying it.
+  They are not — ISO/IEC 14496-30 puts them on the presentation timeline, and livesim's
+  DASH subtitles are written that way. The first draft added the fragment's `tfdt` on top
+  and reported every one of that stream's correct segments as four seconds adrift; the
+  real stream is what corrected it, for the fifth time in this project. A `wvtt` sample
+  times its cue by the sample's own duration and states no span at all, so there is
+  nothing to compare and the check says so rather than reporting the fragment's window as
+  the cues'.
 - **SCTE-35 says what kind of break it is, and the manifest's own copy is checked**
   (SC-92). A `splice_info_section` says *when*; its `segmentation_descriptor` says
   *what* — a provider advertisement, a distributor placement opportunity, a programme

@@ -111,6 +111,15 @@ type Track struct {
 	// or the empty-cue box that holds none.
 	Cues     int  `json:"cues,omitempty"`
 	CuesRead bool `json:"cues_read,omitempty"`
+	// CueMin and CueMax are where the cues actually sit on the media timeline, on
+	// this track's timescale: the earliest cue start to the latest cue end. For a
+	// text segment they are MinPTS and MaxPTS; for an fMP4-wrapped one they come from
+	// the cue times inside the samples plus the fragment's own decode time, which is
+	// the only way a wrapped rendition can be checked for the same drift a WebVTT one
+	// is. HasCueSpan is false when the format states no per-cue timing to derive them
+	// from — a wvtt sample times its cue by the sample's duration, not inside it.
+	CueMin, CueMax int  `json:"-"`
+	HasCueSpan     bool `json:"has_cue_span,omitempty"`
 	// Captions is the closed-caption data found in a video track's bitstream.
 	// Its Scanned field is what separates "no captions here" from "nobody
 	// looked", which lead to opposite verdicts.

@@ -564,3 +564,85 @@ func TestSubtitleSampleCues_Unreadable(t *testing.T) {
 		t.Error("an unmodelled subtitle codec produced a cue count")
 	}
 }
+
+// SC-97: a wrapped cue's own timing, not just its existence.
+//
+// A TTML document inside a stpp sample counts from the start of the fragment carrying
+// it, so its begin and end plus the fragment's tfdt is where the cue actually is. That
+// is the same drift check a WebVTT rendition already gets — and the shape of failure is
+// the same too: a document that is internally perfect and anchored to the wrong place.
+func TestParseMP4_SubtitleCueSpan(t *testing.T) {
+	init := mediatest.MP4InitSubtitle(1, 90000, "stpp")
+	// Two samples in a fragment that starts at 10s. A TTML document states its times
+	// on the presentation timeline rather than relative to the fragment, so the cues
+	// are where the documents say they are — 1s to 6s — and the fragment's own decode
+	// time must not be added on top.
+	docA := mediatest.TTML(mediatest.TTMLOptions{Cues: []mediatest.Cue{{Start: 1, End: 3}}})
+	docB := mediatest.TTML(mediatest.TTMLOptions{Cues: []mediatest.Cue{{Start: 4, End: 6}}})
+	frag := mediatest.MP4SegmentSamples(1, mediatest.TrackSamples{
+		TrackID: 1, BaseDecodeTime: 10 * 90000, SampleDuration: 90000,
+		Samples: [][]byte{docA, docB},
+	})
+	info, err := ParseMP4(frag, init)
+	if err != nil {
+		t.Fatalf("ParseMP4: %v", err)
+	}
+	tr, ok := info.Track(Text)
+	if !ok {
+		t.Fatal("no text track")
+	}
+	if tr.Cues != 2 {
+		t.Fatalf("cues = %d, want 2", tr.Cues)
+	}
+	// The cue span runs from the earliest begin to the latest end across the samples.
+	if !tr.HasCueSpan || tr.CueMin != 1*90000 || tr.CueMax != 6*90000 {
+		t.Errorf("cue span = %d..%d (have %v), want %d..%d",
+			tr.CueMin, tr.CueMax, tr.HasCueSpan, 1*90000, 6*90000)
+	}
+}
+
+// A wvtt sample states its cue timing in the sample's own duration rather than inside
+// the payload, so there is no cue span to derive — and reporting the fragment's span as
+// the cues' would claim a placement nobody stated.
+func TestParseMP4_WVTTHasNoCueSpan(t *testing.T) {
+	init := mediatest.MP4InitSubtitle(1, 90000, "wvtt")
+	frag := mediatest.MP4SegmentSamples(1, mediatest.TrackSamples{
+		TrackID: 1, BaseDecodeTime: 0, SampleDuration: 90000,
+		Samples: [][]byte{mediatest.VTTCSample("one")},
+	})
+	info, err := ParseMP4(frag, init)
+	if err != nil {
+		t.Fatalf("ParseMP4: %v", err)
+	}
+	tr, _ := info.Track(Text)
+	if tr.Cues != 1 {
+		t.Errorf("cues = %d, want 1", tr.Cues)
+	}
+	if tr.HasCueSpan {
+		t.Errorf("a cue span was derived from a wvtt sample: %d..%d", tr.CueMin, tr.CueMax)
+	}
+}
+
+// The cue times inside a TTML document are seconds, which the subtitle readers report on
+// the 90kHz clock, while the track counts on its own timescale. Reporting one as the
+// other is wrong by whatever ratio separates them — ninety to one on a track that counts
+// in milliseconds.
+func TestParseMP4_SubtitleCueSpanConvertsTheTimescale(t *testing.T) {
+	init := mediatest.MP4InitSubtitle(1, 1000, "stpp") // a millisecond timescale
+	doc := mediatest.TTML(mediatest.TTMLOptions{Cues: []mediatest.Cue{{Start: 1, End: 3}}})
+	frag := mediatest.MP4SegmentSamples(1, mediatest.TrackSamples{
+		TrackID: 1, BaseDecodeTime: 10000, SampleDuration: 1000, // 10s in
+		Samples: [][]byte{doc},
+	})
+	info, err := ParseMP4(frag, init)
+	if err != nil {
+		t.Fatalf("ParseMP4: %v", err)
+	}
+	tr, _ := info.Track(Text)
+	// A cue at 1–3s on a 1000 timescale is 1000..3000, whatever the fragment's own
+	// decode time is.
+	if !tr.HasCueSpan || tr.CueMin != 1000 || tr.CueMax != 3000 {
+		t.Errorf("cue span = %d..%d (have %v), want 1000..3000",
+			tr.CueMin, tr.CueMax, tr.HasCueSpan)
+	}
+}

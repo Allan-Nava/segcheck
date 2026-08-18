@@ -328,11 +328,13 @@ stream that break in production and that no manifest-only checker can see.
   is the usual shape of a broken subtitle pipeline, and the sample count alone could not
   tell it from a working one.
   <!-- sc: prio=med size=M labels=parser ver=0.3.0 -->
-- [ ] **SC-97 — Place a wrapped subtitle cue on the timeline**: SC-93 counts the cues in
-  a `stpp`/`wvtt` sample but does not time them. A TTML document's own `begin` and `end`
-  are relative to the fragment that carries it, so comparing them against the fragment's
-  `tfdt` would give a CMAF rendition the same drift check a WebVTT one already gets.
-  <!-- sc: prio=med size=M labels=check -->
+- [x] **SC-97 — Place a wrapped subtitle cue on the timeline**: a `stpp` sample's TTML
+  states its times on the presentation timeline — *not* relative to the fragment carrying
+  it, which is what the backlog item assumed and what livesim's real stream corrected —
+  so a CMAF rendition now gets the same drift check a WebVTT one does. A `wvtt` sample
+  times its cue by the sample's duration and states no span, which leaves nothing to
+  compare and is reported as such.
+  <!-- sc: prio=med size=M labels=check ver=0.3.0 -->
 - [x] **SC-21 — MP3 packed audio**: the frame-size tables for every version and layer,
   so a packed MP3 rendition's duration can be measured instead of the container being
   recognised and skipped. A header stating a reserved or free-format field is refused

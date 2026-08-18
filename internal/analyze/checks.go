@@ -885,14 +885,21 @@ func checkSubtitles(rends []*renditionData, opts Options) []finding.Finding {
 
 			switch {
 			case sd.info.Container == media.ContainerMP4:
-				// The wrapper states the timing, and the cues inside the samples are
-				// counted but not timed: a cue's own begin and end are inside a TTML
-				// document or a vttc box, and the fragment's timeline is what
-				// `timeline` and `continuity` already check. Cue *placement* for a
-				// wrapped rendition is SC-97.
 				wrapped++
 				if !t.CuesRead {
 					unreadable++
+					continue
+				}
+				// A stpp sample's TTML states its own cue times, anchored to the
+				// fragment carrying it, so a wrapped rendition gets the same drift
+				// check a text one does. A wvtt sample times its cue by the sample's
+				// duration instead and states no span, which leaves nothing to
+				// compare — the fragment's own timeline is what `timeline` checks.
+				if !t.HasCueSpan {
+					continue
+				}
+				if d := driftFrom(starts, sd, t, origin, haveOrigin, opts, t.CueMin, t.CueMax); d != "" {
+					drifted = append(drifted, d)
 				}
 			case !t.HasPTS:
 				// A WebVTT segment whose cues could not be placed on the media
@@ -907,16 +914,8 @@ func checkSubtitles(rends []*renditionData, opts Options) []finding.Finding {
 				// have no frame of reference. Counting them is still worth something.
 				unanchored++
 			default:
-				// Where the manifest says this segment sits, against where its cues
-				// actually are.
-				segStart := origin + starts[sd.seg.Sequence]
-				segEnd := segStart + sd.seg.Duration
-				cueStart := float64(t.MinPTS) / float64(t.Timescale)
-				cueEnd := float64(t.MaxPTS) / float64(t.Timescale)
-				tol := opts.GapToleranceMS / 1000
-				if t.Samples > 0 && (cueEnd < segStart-tol || cueStart > segEnd+tol) {
-					drifted = append(drifted, fmt.Sprintf("segment %d covers %.3f–%.3fs but its cues are at %.3f–%.3fs",
-						sd.seg.Sequence, segStart, segEnd, cueStart, cueEnd))
+				if d := driftFrom(starts, sd, t, origin, haveOrigin, opts, t.CueMin, t.CueMax); d != "" {
+					drifted = append(drifted, d)
 				}
 			}
 		}
@@ -968,9 +967,8 @@ func checkSubtitles(rends []*renditionData, opts Options) []finding.Finding {
 		case wrapped == readable:
 			out = append(out, finding.Finding{
 				Check: "subtitles", Target: label, Status: finding.OK,
-				Message: fmt.Sprintf("%d cues across %d fMP4-wrapped segments; their placement is stated by the fragments, which `timeline` checks",
-					cues, readable),
-				Value: finding.Num(float64(cues)), Unit: "cues",
+				Message: fmt.Sprintf("%d cues across %d fMP4-wrapped segments, on the media timeline", cues, readable),
+				Value:   finding.Num(float64(cues)), Unit: "cues",
 			})
 		default:
 			msg := fmt.Sprintf("%d cues across %d segments, on the media timeline", cues, readable)
@@ -984,6 +982,39 @@ func checkSubtitles(rends []*renditionData, opts Options) []finding.Finding {
 		}
 	}
 	return out
+}
+
+// driftFrom reports whether a segment's cues fall anywhere near the window the manifest
+// put that segment in, and returns the finding text when they do not.
+//
+// Overlap, not containment: a cue continuing across a boundary appears in both segments
+// and overhangs one of them at each end, so demanding containment would flag correct
+// media. A wrapped rendition is anchored by its fragment rather than by an
+// X-TIMESTAMP-MAP, which is why the origin only applies to the text one — the fragment's
+// decode time is already on the media timeline.
+func driftFrom(starts map[int]float64, sd segmentData, t media.Track, origin float64, haveOrigin bool, opts Options, cueMin, cueMax int) string {
+	if t.Timescale == 0 || t.Cues == 0 {
+		return ""
+	}
+	segStart := starts[sd.seg.Sequence]
+	if sd.info.Container != media.ContainerMP4 {
+		// A WebVTT cue clock is anchored by X-TIMESTAMP-MAP to the media timeline,
+		// which begins wherever the video's first timestamp is; accumulated EXTINF
+		// counts from zero.
+		if !haveOrigin {
+			return ""
+		}
+		segStart += origin
+	}
+	segEnd := segStart + sd.seg.Duration
+	cueStart := float64(cueMin) / float64(t.Timescale)
+	cueEnd := float64(cueMax) / float64(t.Timescale)
+	tol := opts.GapToleranceMS / 1000
+	if cueEnd < segStart-tol || cueStart > segEnd+tol {
+		return fmt.Sprintf("segment %d covers %.3f–%.3fs but its cues are at %.3f–%.3fs",
+			sd.seg.Sequence, segStart, segEnd, cueStart, cueEnd)
+	}
+	return ""
 }
 
 // mediaOrigin is where the sampled media timeline begins, in seconds: the earliest

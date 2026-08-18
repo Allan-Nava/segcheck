@@ -83,6 +83,10 @@ func ParseWebVTT(data []byte) (SegmentInfo, error) {
 		track.MinPTS = int64((first + mapOffset) * TSTimescale)
 		track.MaxPTS = int64((last + mapOffset) * TSTimescale)
 		track.HasPTS = true
+		// For a text segment the cues *are* the track's timestamps, and the check
+		// reads one pair of fields whichever way the rendition arrived.
+		track.CueMin, track.CueMax = int(track.MinPTS), int(track.MaxPTS)
+		track.HasCueSpan = true
 	}
 	info.Tracks = append(info.Tracks, track)
 	return info, nil
@@ -276,6 +280,8 @@ func ParseTTML(data []byte) (SegmentInfo, error) {
 		track.MinPTS = int64(first * TSTimescale)
 		track.MaxPTS = int64(last * TSTimescale)
 		track.HasPTS = true
+		track.CueMin, track.CueMax = int(track.MinPTS), int(track.MaxPTS)
+		track.HasCueSpan = true
 	}
 	info.Tracks = append(info.Tracks, track)
 	return info, nil
@@ -342,11 +348,12 @@ func looksTTML(data []byte) bool {
 //
 // It reports false when nothing was readable: zero cues and no cue count are opposite
 // answers, and conflating them would report a broken rendition as merely quiet.
-func subtitleSampleCues(codec string, data []byte, ranges []sampleRange) (int, bool) {
+func subtitleSampleCues(codec string, data []byte, ranges []sampleRange) (sampleCues, bool) {
 	if len(ranges) == 0 {
-		return 0, false
+		return sampleCues{}, false
 	}
-	cues, read := 0, false
+	var out sampleCues
+	read := false
 	for _, r := range ranges {
 		sample := data[r.start:r.end]
 		switch codec {
@@ -357,7 +364,18 @@ func subtitleSampleCues(codec string, data []byte, ranges []sampleRange) (int, b
 			}
 			read = true
 			if t, ok := info.Track(Text); ok {
-				cues += t.Samples
+				out.cues += t.Samples
+				// A TTML document counts from the start of the fragment carrying it,
+				// so its own span is an offset the caller adds the decode time to.
+				if t.HasPTS {
+					if !out.haveSpan || t.MinPTS < out.min {
+						out.min = t.MinPTS
+					}
+					if !out.haveSpan || t.MaxPTS > out.max {
+						out.max = t.MaxPTS
+					}
+					out.haveSpan = true
+				}
 			}
 		case "webvtt":
 			// The boxes a wvtt sample is made of. An empty sample is a vtte box,
@@ -366,10 +384,13 @@ func subtitleSampleCues(codec string, data []byte, ranges []sampleRange) (int, b
 			if len(boxes) == 0 {
 				continue
 			}
+			// A wvtt sample times its cue by the sample's own duration rather than
+			// inside the payload, so there is no per-cue span to derive: reporting
+			// the fragment's would claim a placement nobody stated.
 			for _, b := range boxes {
 				switch b.typ {
 				case "vttc":
-					cues++
+					out.cues++
 					read = true
 				case "vtte":
 					read = true
@@ -377,5 +398,12 @@ func subtitleSampleCues(codec string, data []byte, ranges []sampleRange) (int, b
 			}
 		}
 	}
-	return cues, read
+	return out, read
+}
+
+// sampleCues is what reading inside a wrapped subtitle track's samples yields.
+type sampleCues struct {
+	cues     int
+	min, max int64
+	haveSpan bool
 }
