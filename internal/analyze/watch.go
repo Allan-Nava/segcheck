@@ -64,11 +64,7 @@ func watchLiveEdge(ctx context.Context, c *fetch.Client, rawurl string, pl manif
 	}
 
 	series := []observation{pollEdges(ctx, c, rawurl, opts)}
-<<<<<<< HEAD
 	interval, stated := pollInterval(pl, series[0])
-=======
-	interval := pollInterval(pl, series[0])
->>>>>>> 06c6ab8bc09632a6b994473826ce341950c2dbc1
 	if interval > opts.Watch {
 		interval = opts.Watch
 	}
@@ -89,11 +85,7 @@ func watchLiveEdge(ctx context.Context, c *fetch.Client, rawurl string, pl manif
 		series = append(series, pollEdges(ctx, c, rawurl, opts))
 	}
 
-<<<<<<< HEAD
 	return watchFindings(rawurl, series, interval, stated, opts)
-=======
-	return watchFindings(rawurl, series, interval, opts)
->>>>>>> 06c6ab8bc09632a6b994473826ce341950c2dbc1
 }
 
 // pollEdges reads the manifest and every selected rendition's playlist once,
@@ -129,27 +121,16 @@ func pollEdges(ctx context.Context, c *fetch.Client, rawurl string, opts Options
 			// segcheck could not expand this rendition in the first place; it has
 			// no edge to watch and saying so once per poll would be noise.
 		case len(r.Segments) > 0: // DASH: the MPD lists them
-<<<<<<< HEAD
 			obs.edges = append(obs.edges, edgeOf(rendLabel(r), pl.TargetDuration, r.Segments))
-=======
-			obs.edges = append(obs.edges, edgeOf(r.Name, pl.TargetDuration, r.Segments))
->>>>>>> 06c6ab8bc09632a6b994473826ce341950c2dbc1
 		case r.SingleFile:
 			// One file with its index inside it. It has no live edge by construction.
 		case r.URI != "":
 			sub, err := loadMediaPlaylist(ctx, c, r.URI)
 			if err != nil {
-<<<<<<< HEAD
 				obs.edges = append(obs.edges, edgeState{name: rendLabel(r), err: err})
 				continue
 			}
 			obs.edges = append(obs.edges, edgeOf(rendLabel(r), sub.TargetDuration, sub.Segments))
-=======
-				obs.edges = append(obs.edges, edgeState{name: r.Name, err: err})
-				continue
-			}
-			obs.edges = append(obs.edges, edgeOf(r.Name, sub.TargetDuration, sub.Segments))
->>>>>>> 06c6ab8bc09632a6b994473826ce341950c2dbc1
 		}
 	}
 	return obs
@@ -168,7 +149,6 @@ func edgeOf(name string, target float64, segs []manifest.Segment) edgeState {
 
 // pollInterval is how often to re-read, taken from what the manifest itself
 // says a player would do: TARGETDURATION in HLS, @minimumUpdatePeriod in DASH.
-<<<<<<< HEAD
 // Failing both, the segments' own declared duration is the best evidence of how
 // often a new one appears — a manifest that says every segment is two seconds
 // long is saying one should show up about every two seconds.
@@ -178,11 +158,6 @@ func edgeOf(name string, target float64, segs []manifest.Segment) edgeState {
 // must never be used to judge the stream: a gap measured against an invented
 // interval is an invented measurement.
 func pollInterval(pl manifest.Playlist, first observation) (time.Duration, bool) {
-=======
-// Failing both, the longest segment in the window is the best evidence of how
-// often a new one appears.
-func pollInterval(pl manifest.Playlist, first observation) time.Duration {
->>>>>>> 06c6ab8bc09632a6b994473826ce341950c2dbc1
 	secs := pl.TargetDuration
 	if pl.UpdatePeriod > 0 && (secs == 0 || pl.UpdatePeriod < secs) {
 		secs = pl.UpdatePeriod
@@ -200,7 +175,6 @@ func pollInterval(pl manifest.Playlist, first observation) time.Duration {
 		}
 	}
 	if secs <= 0 {
-<<<<<<< HEAD
 		return defaultPollInterval, false
 	}
 	d := time.Duration(secs * float64(time.Second))
@@ -208,15 +182,6 @@ func pollInterval(pl manifest.Playlist, first observation) time.Duration {
 		return minPollInterval, true
 	}
 	return d, true
-=======
-		return defaultPollInterval
-	}
-	d := time.Duration(secs * float64(time.Second))
-	if d < minPollInterval {
-		return minPollInterval
-	}
-	return d
->>>>>>> 06c6ab8bc09632a6b994473826ce341950c2dbc1
 }
 
 // edgePoint is one rendition's edge at one moment, lifted out of the
@@ -230,11 +195,7 @@ type edgePoint struct {
 
 // watchFindings turns the series of observations into findings, one rendition
 // at a time.
-<<<<<<< HEAD
 func watchFindings(rawurl string, series []observation, interval time.Duration, stated bool, opts Options) []finding.Finding {
-=======
-func watchFindings(rawurl string, series []observation, interval time.Duration, opts Options) []finding.Finding {
->>>>>>> 06c6ab8bc09632a6b994473826ce341950c2dbc1
 	var out []finding.Finding
 
 	// A manifest that stopped loading part-way through is a hole in the
@@ -281,11 +242,7 @@ func watchFindings(rawurl string, series []observation, interval time.Duration, 
 		})
 	}
 	for _, name := range order {
-<<<<<<< HEAD
 		out = append(out, edgeFindings(name, byRendition[name], interval, stated, opts)...)
-=======
-		out = append(out, edgeFindings(name, byRendition[name], interval, opts)...)
->>>>>>> 06c6ab8bc09632a6b994473826ce341950c2dbc1
 	}
 	return out
 }
@@ -300,11 +257,7 @@ func firstPollError(series []observation) error {
 }
 
 // edgeFindings judges one rendition's edge over the whole window.
-<<<<<<< HEAD
 func edgeFindings(name string, points []edgePoint, interval time.Duration, stated bool, opts Options) []finding.Finding {
-=======
-func edgeFindings(name string, points []edgePoint, interval time.Duration, opts Options) []finding.Finding {
->>>>>>> 06c6ab8bc09632a6b994473826ce341950c2dbc1
 	var out []finding.Finding
 
 	var good []edgePoint
@@ -358,7 +311,6 @@ func edgeFindings(name string, points []edgePoint, interval time.Duration, opts 
 		}
 	}
 
-<<<<<<< HEAD
 	// What this rendition's edge is judged against: its own playlist's
 	// TARGETDURATION if it has one, otherwise the run-level interval — but only
 	// when the manifest is where that came from. A DASH representation states no
@@ -369,9 +321,6 @@ func edgeFindings(name string, points []edgePoint, interval time.Duration, opts 
 	if target <= 0 && stated {
 		target = interval.Seconds()
 	}
-=======
-	target := edgeTarget(good)
->>>>>>> 06c6ab8bc09632a6b994473826ce341950c2dbc1
 	if len(advances) == 0 {
 		return append(out, finding.Finding{
 			Check: "watch", Target: name, Status: finding.BAD,

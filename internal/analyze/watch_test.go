@@ -39,7 +39,6 @@ func newLiveOrigin(t *testing.T, published, window int) (*liveOrigin, string) {
 	return o, srv.URL + "/live.m3u8"
 }
 
-<<<<<<< HEAD
 // newLiveLadder is the same packager behind a master playlist, which is how a
 // live HLS stream is actually delivered.
 func newLiveLadder(t *testing.T, published, window int) (*liveOrigin, string) {
@@ -50,8 +49,6 @@ func newLiveLadder(t *testing.T, published, window int) (*liveOrigin, string) {
 	return o, srv.URL + "/master.m3u8"
 }
 
-=======
->>>>>>> 06c6ab8bc09632a6b994473826ce341950c2dbc1
 // publish appends one segment to the live edge.
 func (o *liveOrigin) publish() {
 	o.mu.Lock()
@@ -61,15 +58,12 @@ func (o *liveOrigin) publish() {
 
 func (o *liveOrigin) handler() http.Handler {
 	mux := http.NewServeMux()
-<<<<<<< HEAD
 	mux.HandleFunc("/master.m3u8", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
 		fmt.Fprintf(w, "#EXTM3U\n#EXT-X-VERSION:4\n"+
 			"#EXT-X-STREAM-INF:BANDWIDTH=%d,RESOLUTION=1280x720,CODECS=\"avc1.4d401f\"\nlive.m3u8\n",
 			syntheticBandwidth)
 	})
-=======
->>>>>>> 06c6ab8bc09632a6b994473826ce341950c2dbc1
 	mux.HandleFunc("/live.m3u8", func(w http.ResponseWriter, _ *http.Request) {
 		o.mu.Lock()
 		published, window, endlist := o.published, o.window, o.endlist
@@ -233,7 +227,6 @@ func TestWatch_VODPlaylistHasNoEdgeToWatch(t *testing.T) {
 	}
 }
 
-<<<<<<< HEAD
 // A live HLS stream is delivered behind a master playlist, and a master playlist
 // never carries EXT-X-ENDLIST — or any other liveness signal. Only the variant
 // playlists know, which is why liveness has to be taken from them: judging it
@@ -278,8 +271,6 @@ func TestWatch_DASHStallIsJudgedAgainstTheSegmentDuration(t *testing.T) {
 	}
 }
 
-=======
->>>>>>> 06c6ab8bc09632a6b994473826ce341950c2dbc1
 // Without --watch nothing changes: the loop costs a request per poll and must
 // never run unasked.
 func TestWatch_OffByDefault(t *testing.T) {
@@ -291,7 +282,6 @@ func TestWatch_OffByDefault(t *testing.T) {
 		t.Errorf("the watch loop ran without --watch:\n%s", dump(res))
 	}
 }
-<<<<<<< HEAD
 
 // newLiveDASHOrigin is a dynamic MPD whose SegmentTimeline grows as the packager
 // publishes, and which states no @minimumUpdatePeriod — the common shape, and
@@ -341,5 +331,3 @@ func newLiveDASHOrigin(t *testing.T, published int) (*liveOrigin, string) {
 	})
 	return o, srv.URL + "/live.mpd"
 }
-=======
->>>>>>> 06c6ab8bc09632a6b994473826ce341950c2dbc1
