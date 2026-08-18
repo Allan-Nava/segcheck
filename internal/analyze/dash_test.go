@@ -57,7 +57,7 @@ func newDASHOrigin(t *testing.T, segs []dashSeg) *httptest.Server {
       <SegmentTemplate timescale="%d" media="seg-$Number$.m4s" initialization="init.mp4" startNumber="0">
         <SegmentTimeline>%s</SegmentTimeline>
       </SegmentTemplate>
-      <Representation id="v0" bandwidth="%d" width="1280" height="720" codecs="avc1.4d401f"/>
+      <Representation id="v0" bandwidth="%d" width="1280" height="720" codecs="avc1.640028"/>
     </AdaptationSet>
   </Period>
 </MPD>`, len(segs)*2, dashTimescale, tl.String(), dashBandwidth)

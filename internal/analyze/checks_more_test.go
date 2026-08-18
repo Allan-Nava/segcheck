@@ -100,7 +100,7 @@ func TestCheckTracks_CodecMismatchAgainstTheManifest(t *testing.T) {
 	hevc := videoTrack()
 	hevc.Codec = "hevc"
 	rd := rend("720p", withSegs(okSeg(1, media.ContainerMP4, hevc)))
-	rd.r.Codecs = "avc1.4d401f" // the manifest promised H.264
+	rd.r.Codecs = "avc1.640028" // the manifest promised H.264
 	rd.r.Width, rd.r.Height = 1280, 720
 
 	got := checkTracks([]*renditionData{rd})

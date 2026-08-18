@@ -132,7 +132,7 @@ func hlsOriginHandler(variants []variantSpec) *http.ServeMux {
 		for _, v := range variants {
 			codecs := v.codecs
 			if codecs == "" {
-				codecs = "avc1.4d401f"
+				codecs = "avc1.640028"
 			}
 			cc := ""
 			if v.captions != "" {
@@ -478,7 +478,7 @@ func TestRun_FindsUndefinedAudioGroup(t *testing.T) {
 	t.Cleanup(srv.Close)
 	mux.HandleFunc("/master.m3u8", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`#EXTM3U
-#EXT-X-STREAM-INF:BANDWIDTH=2000000,RESOLUTION=1280x720,CODECS="avc1.4d401f",AUDIO="missing-group"
+#EXT-X-STREAM-INF:BANDWIDTH=2000000,RESOLUTION=1280x720,CODECS="avc1.640028",AUDIO="missing-group"
 720p/index.m3u8
 `))
 	})

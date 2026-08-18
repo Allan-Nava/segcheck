@@ -156,7 +156,7 @@ func newAudioOrigin(t *testing.T, spec audioSpec) string {
 		fmt.Fprintf(w, "#EXTM3U\n#EXT-X-VERSION:4\n"+
 			"#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"aud\",NAME=\"English\","+
 			"LANGUAGE=\"en\",DEFAULT=YES,%sURI=\"audio.m3u8\"\n"+
-			"#EXT-X-STREAM-INF:BANDWIDTH=%d,RESOLUTION=1280x720,CODECS=\"avc1.4d401f,mp4a.40.2\",AUDIO=\"aud\"\n"+
+			"#EXT-X-STREAM-INF:BANDWIDTH=%d,RESOLUTION=1280x720,CODECS=\"avc1.640028,mp4a.40.2\",AUDIO=\"aud\"\n"+
 			"720p/index.m3u8\n", attrs, syntheticBandwidth)
 	})
 	mux.HandleFunc("/audio.m3u8", func(w http.ResponseWriter, r *http.Request) {
@@ -217,7 +217,7 @@ func newDASHAudioOrigin(t *testing.T, spec dashAudioSpec) string {
       <SegmentTemplate timescale="%d" media="seg-$Number$.m4s" initialization="init.mp4" startNumber="0">
         <SegmentTimeline>%s</SegmentTimeline>
       </SegmentTemplate>
-      <Representation id="v0" bandwidth="%d" width="1280" height="720" codecs="avc1.4d401f"/>
+      <Representation id="v0" bandwidth="%d" width="1280" height="720" codecs="avc1.640028"/>
     </AdaptationSet>
     <AdaptationSet mimeType="audio/mp4" contentType="audio" lang="en" audioSamplingRate="%d">
       <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="%d"/>
@@ -443,7 +443,7 @@ func TestCheckAudio_HEAACDeclaresTheOutputRate(t *testing.T) {
 
 	// A CODECS value that is not an AAC object type at all, and one whose object
 	// type is not a number: neither signals SBR, and neither may panic.
-	for _, codecs := range []string{"avc1.640028", "mp4a.40.x", "", "avc1.4d401f,mp4a.40.2"} {
+	for _, codecs := range []string{"avc1.640028", "mp4a.40.x", "", "avc1.640028,mp4a.40.2"} {
 		if codecSignalsSBR(codecs) {
 			t.Errorf("codecSignalsSBR(%q) = true", codecs)
 		}
@@ -491,7 +491,7 @@ func TestCheckAudio_CodecsThatAgree(t *testing.T) {
 		init   []byte
 	}{
 		{"mp4a.40.2", mediatest.MP4InitAudio(1, 90000, "mp4a", 2, 48000)},
-		{"avc1.4d401f,mp4a.40.2", mediatest.MP4InitAudio(1, 90000, "mp4a", 2, 48000)},
+		{"avc1.640028,mp4a.40.2", mediatest.MP4InitAudio(1, 90000, "mp4a", 2, 48000)},
 		{"ec-3", mediatest.MP4InitEAC3(1, 90000, 6, 48000, 0)},
 		{"ac-3", mediatest.MP4InitAC3(1, 90000, 6, 48000)},
 		// Nothing declared cannot be contradicted.
@@ -522,7 +522,7 @@ func TestDeclaredAudioCodec(t *testing.T) {
 		ok     bool
 	}{
 		{"mp4a.40.2", "aac", "mp4a.40.2", true},
-		{"avc1.4d401f,mp4a.40.2", "aac", "mp4a.40.2", true},
+		{"avc1.640028,mp4a.40.2", "aac", "mp4a.40.2", true},
 		{"ec-3", "eac3", "ec-3", true},
 		{"fLaC", "flac", "fLaC", true},
 		{"mp4a.6B", "mp3", "mp4a.6B", true},
@@ -532,7 +532,7 @@ func TestDeclaredAudioCodec(t *testing.T) {
 		// states nothing to compare. Neither does a video-only value, a codec this
 		// table does not know, an empty one, or a token too short to read.
 		{"mp4a.40.2,ec-3", "", "", false},
-		{"avc1.4d401f", "", "", false},
+		{"avc1.640028", "", "", false},
 		{"zzzz", "", "", false},
 		{"", "", "", false},
 		{"a,,b", "", "", false},

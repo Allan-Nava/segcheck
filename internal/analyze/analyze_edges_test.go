@@ -423,7 +423,7 @@ func TestCheckLadder_DanglingAudioGroupReference(t *testing.T) {
 	video := func(audioGroup string) manifest.Rendition {
 		return manifest.Rendition{
 			Name: "720p", Kind: manifest.Video, Width: 1280, Height: 720,
-			Bandwidth: 2400000, Codecs: "avc1.4d401f", AudioGroup: audioGroup,
+			Bandwidth: 2400000, Codecs: "avc1.640028", AudioGroup: audioGroup,
 		}
 	}
 	audio := manifest.Rendition{

@@ -150,6 +150,10 @@ type Track struct {
 	// ClearSamples and EncryptedSamples are how many of this fragment's samples
 	// carry no encryption information and how many do, from `saiz`.
 	// LeadingClearSamples counts the run at the very start, which is what a clear
+	// Profile is what the media says about which decoder can play it: the
+	// configuration record in fMP4, the parameter set in MPEG-TS. Check its
+	// Stated field — an unstated level is not level zero.
+	Profile CodecProfile `json:"profile,omitempty"`
 	// ColourDesc is how the samples' code values map to light: the VUI of an
 	// H.264 or HEVC parameter set, or the `colr` box of an fMP4 sample entry.
 	// Check its Stated field, never its zeros — code point 0 is reserved, and
@@ -265,6 +269,15 @@ func (t Track) StartsOnKeyframe() (bool, bool) {
 		return false, false
 	}
 	return t.OpensOnKeyframe, t.KeyframeKnown
+}
+
+// CodecProfile is the profile, level and tier the media states, and whether
+// anything stated them.
+func (t Track) CodecProfile() (CodecProfile, bool) {
+	if !t.Profile.Stated {
+		return CodecProfile{}, false
+	}
+	return t.Profile, true
 }
 
 // Colour is the track's colour description and whether anything stated the

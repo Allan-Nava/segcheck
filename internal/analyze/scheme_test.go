@@ -47,7 +47,7 @@ func newSchemeOrigin(t *testing.T, rungs []schemeRung) string {
       <SegmentTemplate timescale="%d" duration="%d" media="%s-$Number$.m4s" initialization="%s-init.mp4" startNumber="0">
         <SegmentTimeline><S t="0" d="%d" r="3"/></SegmentTimeline>
       </SegmentTemplate>
-      <Representation id="%s" bandwidth="%d" width="%d" height="%d" codecs="avc1.4d401f"/>
+      <Representation id="%s" bandwidth="%d" width="%d" height="%d" codecs="avc1.640028"/>
     </AdaptationSet>
 `, r.declared, drmTimescale, drmSegTicks, r.id, r.id, drmSegTicks, r.id, drmBandwidth, r.width, r.height)
 		}

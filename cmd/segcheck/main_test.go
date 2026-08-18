@@ -42,7 +42,7 @@ func origin(t *testing.T, count, gapAt int) string {
 
 	mux.HandleFunc("/master.m3u8", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
-		fmt.Fprintf(w, "#EXTM3U\n#EXT-X-VERSION:4\n#EXT-X-STREAM-INF:BANDWIDTH=%d,RESOLUTION=1280x720,CODECS=\"avc1.4d401f\"\n720p/index.m3u8\n", syntheticBandwidth)
+		fmt.Fprintf(w, "#EXTM3U\n#EXT-X-VERSION:4\n#EXT-X-STREAM-INF:BANDWIDTH=%d,RESOLUTION=1280x720,CODECS=\"avc1.640028\"\n720p/index.m3u8\n", syntheticBandwidth)
 	})
 	mux.HandleFunc("/720p/index.m3u8", func(w http.ResponseWriter, _ *http.Request) {
 		var b strings.Builder

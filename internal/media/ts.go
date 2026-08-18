@@ -269,6 +269,9 @@ func (s *tsStream) track() Track {
 			if c, cok := hevcColour(s.es); cok {
 				t.ColourDesc = c
 			}
+			if p, pok := hevcProfileLevel(s.es); pok {
+				t.Profile = p
+			}
 		default:
 			w, h, ok = h264Resolution(s.es)
 			kf := h264Keyframes(s.es)
@@ -277,6 +280,9 @@ func (s *tsStream) track() Track {
 			t.Captions = h264Captions(s.es)
 			if c, cok := h264Colour(s.es); cok {
 				t.ColourDesc = c
+			}
+			if p, pok := h264ProfileLevel(s.es); pok {
+				t.Profile = p
 			}
 		}
 		if ok {

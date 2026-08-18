@@ -41,7 +41,7 @@ func newClearOrigin(t *testing.T, clearLeadingPerSegment []int) string {
       <SegmentTemplate timescale="%d" duration="%d" media="seg-$Number$.m4s" initialization="init.mp4" startNumber="0">
         <SegmentTimeline><S t="0" d="%d" r="%d"/></SegmentTimeline>
       </SegmentTemplate>
-      <Representation id="v0" bandwidth="%d" width="1280" height="720" codecs="avc1.4d401f"/>
+      <Representation id="v0" bandwidth="%d" width="1280" height="720" codecs="avc1.640028"/>
     </AdaptationSet>
   </Period>
 </MPD>`, drmTimescale, drmSegTicks, drmSegTicks, len(clearLeadingPerSegment)-1, drmBandwidth)

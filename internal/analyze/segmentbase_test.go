@@ -61,7 +61,7 @@ func singleFileOrigin(t *testing.T) (*httptest.Server, *rangeLog) {
 <MPD type="static" mediaPresentationDuration="PT3S">
   <Period>
     <AdaptationSet mimeType="video/mp4">
-      <Representation id="v0" bandwidth="2400000" width="1280" height="720" codecs="avc1.4d401f">
+      <Representation id="v0" bandwidth="2400000" width="1280" height="720" codecs="avc1.640028">
         <BaseURL>media.mp4</BaseURL>
         <SegmentBase indexRange="` + itoa(idxStart) + `-` + itoa(idxEnd) + `" timescale="90000">
           <Initialization range="0-` + itoa(idxStart-1) + `"/>
@@ -387,7 +387,7 @@ func TestRun_OnDemandProfileWithNoSegmentBase(t *testing.T) {
 	mpd := `<?xml version="1.0"?>
 <MPD type="static" mediaPresentationDuration="PT2S">
   <Period><AdaptationSet mimeType="video/mp4">
-    <Representation id="v0" bandwidth="2400000" width="1280" height="720" codecs="avc1.4d401f">
+    <Representation id="v0" bandwidth="2400000" width="1280" height="720" codecs="avc1.640028">
       <BaseURL>media.mp4</BaseURL>
     </Representation>
   </AdaptationSet></Period>

@@ -38,11 +38,11 @@ func TestDeclaredCodec(t *testing.T) {
 		{"opus", "opus", media.Audio, "opus", true},
 
 		// A muxed variant declares both, and each kind must pick its own.
-		{"muxed, video", "avc1.4d401f,mp4a.40.2", media.Video, "h264", true},
-		{"muxed, audio", "avc1.4d401f,mp4a.40.2", media.Audio, "aac", true},
+		{"muxed, video", "avc1.640028,mp4a.40.2", media.Video, "h264", true},
+		{"muxed, audio", "avc1.640028,mp4a.40.2", media.Audio, "aac", true},
 
 		// Real manifests carry spaces after the comma and mixed case.
-		{"spaces", "avc1.4d401f, mp4a.40.2", media.Audio, "aac", true},
+		{"spaces", "avc1.640028, mp4a.40.2", media.Audio, "aac", true},
 		{"upper case", "AVC1.640028", media.Video, "h264", true},
 
 		// Asking for a kind the CODECS attribute does not describe is not a

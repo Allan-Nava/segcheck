@@ -202,7 +202,7 @@ func newSubtitleOrigin(t *testing.T, spec subtitleSpec) string {
 		fmt.Fprintf(w, "#EXTM3U\n#EXT-X-VERSION:4\n"+
 			"#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\",NAME=\"English\","+
 			"LANGUAGE=\"en\",DEFAULT=YES,AUTOSELECT=YES,URI=\"subs.m3u8\"\n"+
-			"#EXT-X-STREAM-INF:BANDWIDTH=%d,RESOLUTION=1280x720,CODECS=\"avc1.4d401f\",SUBTITLES=\"subs\"\n"+
+			"#EXT-X-STREAM-INF:BANDWIDTH=%d,RESOLUTION=1280x720,CODECS=\"avc1.640028\",SUBTITLES=\"subs\"\n"+
 			"720p/index.m3u8\n", syntheticBandwidth)
 	})
 	mux.HandleFunc("/subs.m3u8", func(w http.ResponseWriter, r *http.Request) {

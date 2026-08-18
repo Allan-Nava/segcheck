@@ -64,7 +64,7 @@ func newPDTOrigin(t *testing.T, variants []pdtVariant) string {
 		var b strings.Builder
 		b.WriteString("#EXTM3U\n#EXT-X-VERSION:4\n")
 		for i, v := range variants {
-			fmt.Fprintf(&b, "#EXT-X-STREAM-INF:BANDWIDTH=%d,RESOLUTION=%dx%d,CODECS=\"avc1.4d401f\"\n%s/index.m3u8\n",
+			fmt.Fprintf(&b, "#EXT-X-STREAM-INF:BANDWIDTH=%d,RESOLUTION=%dx%d,CODECS=\"avc1.640028\"\n%s/index.m3u8\n",
 				syntheticBandwidth+i*1000, v.width, v.height, v.name)
 		}
 		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")

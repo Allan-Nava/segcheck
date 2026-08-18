@@ -75,7 +75,7 @@ func newAvailOrigin(t *testing.T, o *availOrigin) string {
 %s  <Period id="0" start="PT0S">
     <AdaptationSet mimeType="video/mp4" contentType="video">
       <SegmentTemplate timescale="%d" duration="%d" media="seg-$Number$.m4s" initialization="init.mp4" startNumber="1"/>
-      <Representation id="v0" bandwidth="%d" width="1280" height="720" codecs="avc1.4d401f"/>
+      <Representation id="v0" bandwidth="%d" width="1280" height="720" codecs="avc1.640028"/>
     </AdaptationSet>
   </Period>
 </MPD>`, availEpoch.Format(time.RFC3339), timing, availTimescale, availSegTicks, availBandwidth)

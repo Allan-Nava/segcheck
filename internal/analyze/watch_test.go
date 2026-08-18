@@ -61,7 +61,7 @@ func (o *liveOrigin) handler() http.Handler {
 	mux.HandleFunc("/master.m3u8", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
 		fmt.Fprintf(w, "#EXTM3U\n#EXT-X-VERSION:4\n"+
-			"#EXT-X-STREAM-INF:BANDWIDTH=%d,RESOLUTION=1280x720,CODECS=\"avc1.4d401f\"\nlive.m3u8\n",
+			"#EXT-X-STREAM-INF:BANDWIDTH=%d,RESOLUTION=1280x720,CODECS=\"avc1.640028\"\nlive.m3u8\n",
 			syntheticBandwidth)
 	})
 	mux.HandleFunc("/live.m3u8", func(w http.ResponseWriter, _ *http.Request) {
@@ -313,7 +313,7 @@ func newLiveDASHOrigin(t *testing.T, published int) (*liveOrigin, string) {
       <SegmentTemplate timescale="%d" media="seg-$Number$.m4s" initialization="init.mp4" startNumber="0">
         <SegmentTimeline>%s</SegmentTimeline>
       </SegmentTemplate>
-      <Representation id="v0" bandwidth="%d" width="1280" height="720" codecs="avc1.4d401f"/>
+      <Representation id="v0" bandwidth="%d" width="1280" height="720" codecs="avc1.640028"/>
     </AdaptationSet>
   </Period>
 </MPD>`, dashTimescale, tl.String(), dashBandwidth)

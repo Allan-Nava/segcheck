@@ -41,6 +41,8 @@ type initTrack struct {
 	hasPattern bool
 	// colour is the colour description the sample entry's `colr` box states.
 	colour ColourDescription
+	// profile is the profile, level and tier its configuration record states.
+	profile CodecProfile
 	// nalLengthSize is how many bytes prefix each NAL unit in the mdat, from the
 	// avcC or hvcC box. fMP4 uses a length prefix where an elementary stream uses
 	// start codes, so a walk that assumes Annex-B finds nothing at all.
@@ -356,6 +358,7 @@ func (it *initTrack) track() Track {
 		// around them is not, and every reader that looks inside one has to stay out.
 		SamplesEncrypted: it.encrypted,
 		ColourDesc:       it.colour,
+		Profile:          it.profile,
 		KeyID:            it.keyID,
 		CryptByteBlock:   it.cryptBlock,
 		SkipByteBlock:    it.skipBlock,
@@ -439,6 +442,7 @@ func parseMoov(moov []byte, out map[uint32]*initTrack) {
 					t.protection = scheme
 					t.keyID, t.cryptBlock, t.skipBlock, t.hasPattern = tenc.keyID, tenc.crypt, tenc.skip, tenc.hasPattern
 					t.colour = colourFromStsd(stsd)
+					t.profile = profileFromStsd(stsd)
 					// The sample entries follow stsd's version, flags and entry
 					// count. A truncated stsd has none, and slicing past its end
 					// panics — which is how the fuzzer found this.
@@ -776,6 +780,38 @@ func parseSaiz(b []byte, f *fragTrack) {
 	}
 }
 
+// profileFromStsd reads the profile and level out of the first sample entry's
+// configuration record.
+func profileFromStsd(stsd []byte) CodecProfile {
+	children, ok := visualEntryChildren(stsd)
+	if !ok {
+		return CodecProfile{}
+	}
+	p, _ := profileFromCodecConfig(children)
+	return p
+}
+
+// visualEntryChildren is the boxes that follow the fixed fields of the first
+// visual sample entry — the configuration record, the colr box, and for a
+// protected entry the sinf beside them.
+func visualEntryChildren(stsd []byte) ([]byte, bool) {
+	if len(stsd) <= 8 {
+		return nil, false
+	}
+	entries := boxesIn(stsd[8:])
+	if len(entries) == 0 {
+		return nil, false
+	}
+	e := entries[0]
+	if !isVisualSampleEntry(e.typ) && e.typ != "encv" {
+		return nil, false
+	}
+	if len(e.payload) <= visualSampleEntrySize {
+		return nil, false
+	}
+	return e.payload[visualSampleEntrySize:], true
+}
+
 // colourFromStsd reads the `colr` box out of the first sample entry.
 //
 // Only the nclx profile states code points. An ICC profile — colour_type
@@ -783,25 +819,12 @@ func parseSaiz(b []byte, f *fragTrack) {
 // primaries or transfer field at all, so reading its bytes as though they were
 // one would produce a confident wrong answer.
 func colourFromStsd(stsd []byte) ColourDescription {
-	if len(stsd) <= 8 {
+	children, ok := visualEntryChildren(stsd)
+	if !ok {
 		return ColourDescription{}
 	}
-	entries := boxesIn(stsd[8:])
-	if len(entries) == 0 {
-		return ColourDescription{}
-	}
-	e := entries[0]
-	if !isVisualSampleEntry(e.typ) && e.typ != "encv" {
-		return ColourDescription{}
-	}
-	if len(e.payload) <= visualSampleEntrySize {
-		return ColourDescription{}
-	}
-	// A protected entry keeps the original sample entry's boxes beside sinf, so
-	// the search is the same in both cases.
-	children := e.payload[visualSampleEntrySize:]
-	colr, ok := findBox(children, "colr")
-	if !ok || len(colr) < 4 || string(colr[:4]) != "nclx" || len(colr) < 11 {
+	colr, found := findBox(children, "colr")
+	if !found || len(colr) < 4 || string(colr[:4]) != "nclx" || len(colr) < 11 {
 		// Most real fMP4 carries no colr box: the colour is in the VUI of the
 		// parameter set inside the decoder configuration record. Apple's own
 		// H.264 rungs are that shape, so stopping here found nothing on the

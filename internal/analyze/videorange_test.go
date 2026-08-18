@@ -43,7 +43,7 @@ func newRangeOrigin(t *testing.T, rungs []rangeRung) string {
 			if r.declared != "" {
 				vr = ",VIDEO-RANGE=" + r.declared
 			}
-			fmt.Fprintf(&b, "#EXT-X-STREAM-INF:BANDWIDTH=%d,RESOLUTION=1280x720,CODECS=\"avc1.4d401f\"%s\n%s/index.m3u8\n",
+			fmt.Fprintf(&b, "#EXT-X-STREAM-INF:BANDWIDTH=%d,RESOLUTION=1280x720,CODECS=\"avc1.640028\"%s\n%s/index.m3u8\n",
 				syntheticBandwidth+i*1000, vr, r.name)
 		}
 		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")

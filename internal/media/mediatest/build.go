@@ -1118,3 +1118,75 @@ func MP4InitWithSPS(trackID, timescale uint32, width, height int, sampleEntry st
 	))
 	return mp4InitFrom(trackID, timescale, "vide", entry, nil, width, height)
 }
+
+// MP4InitAVCProfile writes an avcC stating a profile, its constraint byte and a
+// level. Those three bytes are exactly what an `avc1.PPCCLL` codec string spells
+// out, which is what makes the comparison direct.
+func MP4InitAVCProfile(trackID, timescale uint32, width, height int, profile, constraints, level int) []byte {
+	cfg := box("avcC", []byte{
+		0x01, byte(profile), byte(constraints), byte(level),
+		0xFF, // three reserved bits and lengthSizeMinusOne 3
+		0xE0, // three reserved bits and no parameter sets
+		0x00,
+	})
+	return visualEntryInit(trackID, timescale, width, height, "avc1", cfg)
+}
+
+// MP4InitHEVCProfile writes an hvcC stating general_profile_idc,
+// general_tier_flag and general_level_idc at the fixed offsets the record puts
+// them in — the same three values an `hvc1.P.LX` codec string spells.
+func MP4InitHEVCProfile(trackID, timescale uint32, width, height int, profile, tier, level int) []byte {
+	rec := make([]byte, 23)
+	rec[0] = 0x01
+	// Byte 1: general_profile_space (2 bits), general_tier_flag (1),
+	// general_profile_idc (5).
+	rec[1] = byte(tier&1)<<5 | byte(profile&0x1F)
+	rec[12] = byte(level) // general_level_idc
+	rec[21] = 0xFF        // lengthSizeMinusOne 3
+	rec[22] = 0x00        // numOfArrays
+	return visualEntryInit(trackID, timescale, width, height, "hvc1", box("hvcC", rec))
+}
+
+// MP4InitAV1Profile writes an av1C stating seq_profile, seq_level_idx_0 and
+// seq_tier_0, which is where AV1 states them in a container — no sequence header
+// parsing needed, the same way a visual sample entry states the resolution.
+func MP4InitAV1Profile(trackID, timescale uint32, width, height int, profile, level, tier int) []byte {
+	rec := []byte{
+		0x81,                                     // marker 1, version 1
+		byte(profile&0x07)<<5 | byte(level&0x1F), // seq_profile, seq_level_idx_0
+		byte(tier&1) << 7,                        // seq_tier_0 and the depth flags
+		0x00,
+	}
+	return visualEntryInit(trackID, timescale, width, height, "av01", box("av1C", rec))
+}
+
+// MP4InitVP9Profile writes a vpcC stating a profile and a level.
+func MP4InitVP9Profile(trackID, timescale uint32, width, height int, profile, level int) []byte {
+	rec := []byte{
+		0x01, 0x00, 0x00, 0x00, // version and flags
+		byte(profile),
+		byte(level),
+		0x80, // bitDepth 8, chromaSubsampling 0, full range 0
+		0x00, 0x00,
+	}
+	return visualEntryInit(trackID, timescale, width, height, "vp09", box("vpcC", rec))
+}
+
+// visualEntryInit is an init whose single visual sample entry carries the given
+// configuration record and nothing else.
+func visualEntryInit(trackID, timescale uint32, width, height int, sampleEntry string, cfg []byte) []byte {
+	entry := box(sampleEntry, concat(
+		make([]byte, 6),
+		[]byte{0x00, 0x01},
+		make([]byte, 16),
+		u16(uint16(width)),
+		u16(uint16(height)),
+		u32(0x00480000), u32(0x00480000), u32(0),
+		u16(1),
+		make([]byte, 32),
+		u16(0x0018),
+		[]byte{0xFF, 0xFF},
+		cfg,
+	))
+	return mp4InitFrom(trackID, timescale, "vide", entry, nil, width, height)
+}

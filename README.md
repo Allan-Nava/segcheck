@@ -163,6 +163,7 @@ environment.
 | `alignment` | Segment boundaries across renditions, so ABR switching does not glitch | BAD |
 | `encryption` | Declared protection against what the segments carry, whether a supplied key actually decrypts them, and — for SAMPLE-AES and CENC, which protect the samples and not the container — which half of the tool could run at all | BAD |
 | `ladder` | Duplicate rungs, inverted rungs, dangling `AUDIO` groups, missing `CODECS` | BAD |
+| `codecstring` | The whole `CODECS` string, not just its first component: profile, level and tier against `avcC`/`hvcC`/`av1C`/`vpcC` or the parameter set — reported in both directions, because declaring below the media hides a rung and declaring above it hides viewers | BAD |
 | `videorange` | `VIDEO-RANGE=SDR\|HLG\|PQ` and DASH's CICP transfer descriptor against the transfer characteristic the media really codes — the difference between an HDR delivery and one the audience sees two different ways | BAD |
 | `clear` | Whether protected media is actually encrypted, sample by sample (`saiz`), and how long its clear lead really is — the defect nobody notices until a rights-holder audit | BAD |
 | `scheme` | The common encryption scheme the media really uses — `schm`, cross-checked against the `tenc` crypt pattern — against the one the manifest declares, and a ladder that mixes schemes | BAD |

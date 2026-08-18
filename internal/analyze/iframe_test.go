@@ -53,8 +53,8 @@ func newIFrameOrigin(t *testing.T, entries []ifEntry) string {
 	mux.HandleFunc("/master.m3u8", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
 		fmt.Fprintf(w, "#EXTM3U\n#EXT-X-VERSION:7\n"+
-			"#EXT-X-STREAM-INF:BANDWIDTH=%d,RESOLUTION=1280x720,CODECS=\"avc1.4d401f\"\n720p/index.m3u8\n"+
-			"#EXT-X-I-FRAME-STREAM-INF:BANDWIDTH=94000,RESOLUTION=1280x720,CODECS=\"avc1.4d401f\",URI=\"720p/iframe.m3u8\"\n",
+			"#EXT-X-STREAM-INF:BANDWIDTH=%d,RESOLUTION=1280x720,CODECS=\"avc1.640028\"\n720p/index.m3u8\n"+
+			"#EXT-X-I-FRAME-STREAM-INF:BANDWIDTH=94000,RESOLUTION=1280x720,CODECS=\"avc1.640028\",URI=\"720p/iframe.m3u8\"\n",
 			syntheticBandwidth)
 	})
 
@@ -246,8 +246,8 @@ func newIFrameOriginTS(t *testing.T, n int) string {
 	mux.HandleFunc("/master.m3u8", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
 		fmt.Fprintf(w, "#EXTM3U\n#EXT-X-VERSION:4\n"+
-			"#EXT-X-STREAM-INF:BANDWIDTH=%d,RESOLUTION=1280x720,CODECS=\"avc1.4d401f\"\n720p/index.m3u8\n"+
-			"#EXT-X-I-FRAME-STREAM-INF:BANDWIDTH=94000,RESOLUTION=1280x720,CODECS=\"avc1.4d401f\",URI=\"720p/iframe.m3u8\"\n",
+			"#EXT-X-STREAM-INF:BANDWIDTH=%d,RESOLUTION=1280x720,CODECS=\"avc1.640028\"\n720p/index.m3u8\n"+
+			"#EXT-X-I-FRAME-STREAM-INF:BANDWIDTH=94000,RESOLUTION=1280x720,CODECS=\"avc1.640028\",URI=\"720p/iframe.m3u8\"\n",
 			syntheticBandwidth)
 	})
 	playlist := func(prefix string) func(http.ResponseWriter, *http.Request) {

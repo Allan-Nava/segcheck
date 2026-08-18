@@ -660,44 +660,17 @@ not checking, and stays out.
   box and states its colour only in the VUI of the parameter set inside `avcC`/`hvcC`,
   so looking for a `colr` and giving up found nothing on the majority of content.
   <!-- sc: prio=high size=M labels=check,parser ver=0.7.0 -->
-- [ ] **SC-74 — Codec string profile and level** (includes the `av1C`/`vpcC`
-  configuration boxes, moved here from SC-42: they carry profile and level, not a
-  resolution, so they belong with the codec string rather than with the frame
-  size): parse the whole string rather
-  than its first component — `avc1.PPCCLL` against `profile_idc`,
-  `constraint_set` flags and `level_idc` in the SPS; `hvc1.P.C.LX.B` against the
-  profile-tier-level `skipHEVCProfileTierLevel` currently walks past;
-  `av01.P.LL.BB` against the AV1 sequence header. Report both directions, since
-  they fail differently: a level declared below the media's is a decoder that
-  rejects the stream up front, a profile declared above it silently excludes
-  devices that could have played it. The comparison must stay honest about
-  strings it cannot decompose — an unparseable codec string is an OK-level "not
-  verifiable", never a mismatch. <!-- sc: prio=high size=L labels=check,parser -->
-- [ ] **SC-75 — HDR10 static metadata**: a rendition that declares PQ should
-  carry mastering-display colour volume and content light level — SEI 137 and
-  144 in the elementary stream, `mdcv` and `clli` in the sample entry. Missing
-  metadata is not fatal, which is exactly why it ships: the picture is merely
-  tone-mapped by the display's guess instead of the grade's intent, on every
-  panel that would have honoured it. Reported at OK level with the measurement
-  attached when present, one rung above when a PQ ladder carries none at all.
-  <!-- sc: prio=med size=M labels=check,parser -->
-- [ ] **SC-76 — Dolby Vision**: `dvh1`/`dvhe`/`dvav` sample entries and the
-  `dvcC`/`dvvC` configuration box against HLS `SUPPLEMENTAL-CODECS` and the DASH
-  `dvb:` / `ContentProtection`-adjacent DV descriptors — profile, level and the
-  cross-compatibility id that decides whether a non-DV device sees a usable
-  base layer at all. `dvh1` and `dvhe` already parse as visual sample entries so
-  resolution works, which makes the gap quiet: the ladder looks checked. Profile
-  8.4 declared with a cross-compatibility id of 0 is an HDR stream that plays as
-  nothing on every device without a DV decoder.
-  <!-- sc: prio=med size=L labels=check,parser -->
-- [ ] **SC-77 — Colour consistency across the ladder**: one `VIDEO-RANGE` group
-  whose rungs disagree — an SDR 360p rung inside a PQ ladder, a rung that
-  switches matrix coefficients, a full-range flag set on one rendition only.
-  ABR switches between these mid-playback and the picture shifts on the switch,
-  which reads as a network problem to everyone watching. Needs SC-72 and the
-  per-rendition fan-out `ladder` already walks; the check is the comparison
-  between rungs rather than against the manifest, which is what makes it worth
-  its own item. <!-- sc: prio=med size=M labels=check -->
+- [x] **SC-74 — Codec string profile and level** (includes the `av1C`/`vpcC`
+  configuration boxes, moved here from SC-42): the whole string, decomposed per
+  grammar — `avc1.PPCCLL` in hex and its older dotted decimal form, `hvc1.P.C.LX.B`
+  with its tier letter, `av01.P.LL[MH].BB` with the tier glued to the level, `vp09` —
+  against `avcC`/`hvcC`/`av1C`/`vpcC` in fMP4 and the SPS or profile_tier_level in
+  MPEG-TS. Both directions, reported differently: below the media is a rung no device
+  asks for (BAD), above it is viewers silently excluded (WARN). An undecomposable
+  string is OK-level "not verifiable". Apple's bipbop confirmed the check on its first
+  run — a 1080p rung declaring level 3.1 — and fourteen of segcheck's own fixtures
+  turned out to declare a profile and level their media did not carry.
+  <!-- sc: prio=high size=L labels=check,parser ver=0.7.0 -->
 
 ## M13 — Audio, past the sanity check <!-- ms: target=v0.8.0 phase=later -->
 

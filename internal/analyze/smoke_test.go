@@ -66,8 +66,15 @@ var smokeStreams = []smokeStream{
 		url:  "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8",
 		// Byte-range segments off one main.ts, which is what made the first
 		// keyframe rule report this stream three times over.
-		allowed: map[string]string{},
-		expect:  []string{"container", "resolution", "keyframe", "framerate", "continuity", "audio", "captions", "subtitles"},
+		allowed: map[string]string{
+			// A real finding, checked by hand: the 1080p rung declares
+			// avc1.4d401f — Main profile, level 3.1 — and its SPS codes level 4.0.
+			// Level 3.1 tops out at 1280x720, so a device that honours the
+			// manifest decides it cannot decode a rung it certainly could. The
+			// asset is from 2016 and over-declares BANDWIDTH too.
+			"codecstring": "the 1080p rung declares level 3.1 for level-4.0 media",
+		},
+		expect: []string{"container", "resolution", "keyframe", "framerate", "continuity", "audio", "captions", "subtitles", "codecstring"},
 	},
 	{
 		name:    "dash-segment-template",

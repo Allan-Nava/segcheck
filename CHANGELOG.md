@@ -19,6 +19,25 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   a stall rather than jitter. Watching a VOD playlist is not a defect and is reported as
   an OK finding saying there is no live edge, not as a problem in the stream. Only
   manifests are re-fetched: the segments are downloaded once, at the start.
+- **The whole `CODECS` string is checked, not just its first component** (SC-74). Profile,
+  level and tier against what the media states: `avcC`, `hvcC`, `av1C` and `vpcC` in fMP4 —
+  where the container states them at fixed offsets and no bitstream reader is needed — and
+  the SPS or profile_tier_level in MPEG-TS. All four codec-string grammars are decomposed
+  separately, because they are genuinely different: `avc1.PPCCLL` packs three fields into
+  six hex digits (and its older dotted form is decimal, so reading it as hex would turn
+  level 30 into 48), `hvc1.P.C.LX.B` marks the tier with a letter of its own, and
+  `av01.P.LL[MH].BB` glues the tier to the end of the level.
+  The two directions are reported differently because they fail differently. Declared
+  *below* the media, a device reads the manifest, decides it cannot decode this, and never
+  asks for a segment: the rung is dark and the origin sees no request to fail — that is a
+  BAD. Declared *above*, every device that could have played it is excluded, nobody sees an
+  error and the rung simply has fewer viewers than it should — that is a WARN. A string
+  segcheck cannot decompose reports OK-level "not verifiable", never a mismatch.
+  Apple's `bipbop_16x9` corrected nothing and confirmed everything: its 1080p rung declares
+  `avc1.4d401f` — Main profile, level 3.1, which tops out at 1280x720 — over media that
+  codes level 4.0. Verified by hand and recorded in the smoke baseline. Fourteen of
+  segcheck's own fixtures declared a level and profile their media did not carry, which is
+  what happens when only the first component of a string is ever read; they are honest now.
 - **`VIDEO-RANGE` against the transfer function** (SC-73). A player reads it — or DASH's
   CICP transfer descriptor — to decide whether to ask the display for HDR, before it has
   decoded a single frame, so it is acted on earlier than any other claim segcheck checks
