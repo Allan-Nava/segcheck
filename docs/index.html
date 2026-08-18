@@ -325,6 +325,7 @@ footer{border-top:1px solid var(--border);padding:34px 0;color:var(--muted);font
           <tr><td><code>alignment</code></td><td>Segment boundaries across renditions, so ABR switching does not glitch</td><td><span class="pill p-bad">BAD</span></td></tr>
           <tr><td><code>encryption</code></td><td>Declared protection against what the segments carry, whether a supplied key actually decrypts them, and — for SAMPLE-AES and CENC, which protect the samples and not the container — which half of the tool could run at all</td><td><span class="pill p-bad">BAD</span></td></tr>
           <tr><td><code>ladder</code></td><td>Duplicate rungs, inverted rungs, dangling <code>AUDIO</code> groups, missing <code>CODECS</code></td><td><span class="pill p-bad">BAD</span></td></tr>
+          <tr><td><code>watch</code></td><td>With <code>--watch</code>, whether the live edge actually advances: new-segment latency, a stall, and a packager that stopped publishing</td><td><span class="pill p-bad">BAD</span></td></tr>
         </tbody>
       </table>
     </div>
@@ -400,6 +401,10 @@ segcheck check https://cdn.example/live.m3u8 --from edge --segments 12
 # DASH is the same command
 segcheck check https://cdn.example/manifest.mpd
 
+# Watch the live edge for two minutes: a packager that stopped publishing
+# serves a flawless playlist, and only a second look tells the two apart
+segcheck check https://cdn.example/live.m3u8 --watch 2m
+
 # Keep it cheap on a big ladder: top and bottom rungs plus a spread between
 segcheck check https://cdn.example/master.m3u8 --renditions 3 --segments 4
 
@@ -421,6 +426,8 @@ segcheck check https://cdn.example/master.m3u8 --exit-on bad</pre></div>
           <tr><td><code>--audio N</code></td><td>Audio renditions to inspect</td><td><code>1</code></td></tr>
           <tr><td><code>--subtitles N</code></td><td>Subtitle renditions to inspect</td><td><code>1</code></td></tr>
           <tr><td><code>--from MODE</code></td><td>Where to sample: <code>auto|edge|start</code> (auto = edge for live, start for VOD)</td><td><code>auto</code></td></tr>
+          <tr><td><code>--watch DUR</code></td><td>Keep re-reading the manifest for <code>DUR</code> and report what the live edge did</td><td>off</td></tr>
+          <tr><td><code>--stall-tolerance N</code></td><td>Re-read intervals the edge may go without a new segment before that is a stall</td><td><code>3</code></td></tr>
           <tr><td><code>--duration-tolerance PCT</code></td><td>Allowed declared-vs-real duration drift</td><td><code>5</code></td></tr>
           <tr><td><code>--gap-tolerance MS</code></td><td>Allowed timeline gap or overlap between segments</td><td><code>100</code></td></tr>
           <tr><td><code>--bitrate-tolerance PCT</code></td><td>Allowed excess over the declared <code>BANDWIDTH</code></td><td><code>10</code></td></tr>
@@ -512,6 +519,10 @@ segcheck check https://cdn.example/master.m3u8 --exit-on bad</pre></div>
       <div class="card">
         <div class="card-head"><span class="k">--renditions 3</span></div>
         <p>A capped ladder always keeps the top and bottom rungs, then spreads evenly between them — that is where ladder defects concentrate.</p>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="k">--watch 2m</span></div>
+        <p>Manifests, not media: one request per selected rendition every re-read interval. The segments are downloaded once, at the start.</p>
       </div>
       <div class="card">
         <div class="card-head"><span class="k">User-Agent</span></div>

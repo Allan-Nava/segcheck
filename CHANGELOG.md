@@ -7,8 +7,38 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **`--watch DUR` observes the live edge** (SC-25). A packager that stopped publishing an
+  hour ago serves a flawless playlist: every segment downloads, parses and lines up, and a
+  single-shot check has nothing to compare it against. `--watch` re-reads the manifest for
+  as long as it is asked to, on the interval the manifest itself implies —
+  `TARGETDURATION` in HLS, `minimumUpdatePeriod` in DASH — and reports, per rendition,
+  whether the edge advanced at all, how long it ever stood still, and how that compares
+  with the interval. `--stall-tolerance` (default 3) is how many intervals of silence are
+  a stall rather than jitter. Watching a VOD playlist is not a defect and is reported as
+  an OK finding saying there is no live edge, not as a problem in the stream. Only
+  manifests are re-fetched: the segments are downloaded once, at the start.
+- `manifest.Playlist.UpdatePeriod` carries DASH `@minimumUpdatePeriod`, which is the MPD
+  stating how often it will change and therefore how often `--watch` has to look.
+
 ### Fixed
 
+- **A live HLS ladder was reported as VOD.** `EXT-X-ENDLIST` is a media-playlist tag, so
+  a master playlist carries no liveness signal at all and every live HLS stream parsed as
+  VOD until its variants were loaded. The report said "HLS VOD" about a live stream, and
+  `--watch` dismissed a live ladder as having no edge to watch. Liveness is now taken from
+  the variants, and the manifest line is written after they load. Found by pointing the
+  new `--watch` at a public live stream, not by a unit test.
+- **One rendition had two names in one report.** `rendLabel` took the sampled rendition,
+  so the watch loop — which re-reads the manifest and never samples — spelled an audio rung
+  `150kbps` where every other check called it `audio 150kbps`. It takes the manifest
+  rendition now, and there is one vocabulary again.
+- **A stalled DASH live edge was measured and then declared unjudgeable.** A DASH
+  representation has no `TARGETDURATION` and most MPDs state no `@minimumUpdatePeriod`,
+  but every MPD states how long its segments are — which is the manifest saying how often
+  a new one should appear. `--watch` now judges against that, and reserves "no interval to
+  compare against" for a manifest that really states none.
 - The Homebrew cask's `postflight` used `exit_status == 0`, which fails `brew style`'s
   `Style/NumericPredicate` and so fails the tap's own audit. It is `.exit_status.zero?`
   now. The cask is generated from `.goreleaser.yaml`, so correcting it in the tap by hand

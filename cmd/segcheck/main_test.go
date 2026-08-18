@@ -112,6 +112,8 @@ func TestRun_UsageErrorsExitTwo(t *testing.T) {
 		{"negative --segments", []string{"check", "http://x/m.m3u8", "--segments", "-1"}, "--segments"},
 		{"malformed --header", []string{"check", "http://x/m.m3u8", "--header", "no-colon"}, "header"},
 		{"unknown flag", []string{"check", "http://x/m.m3u8", "--nope"}, "nope"},
+		{"negative --watch", []string{"check", "http://x/m.m3u8", "--watch", "-5s"}, "--watch"},
+		{"zero --stall-tolerance", []string{"check", "http://x/m.m3u8", "--watch", "30s", "--stall-tolerance", "0"}, "--stall-tolerance"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -123,6 +125,35 @@ func TestRun_UsageErrorsExitTwo(t *testing.T) {
 				t.Errorf("stderr does not mention %q, so the user cannot tell what is wrong:\n%s", tc.want, stderr)
 			}
 		})
+	}
+}
+
+// --watch reaches the analysis. A VOD playlist has no live edge, so the loop
+// returns without waiting — which is what makes this assertable in a unit test
+// at all, and is also the behaviour an operator who pointed --watch at the wrong
+// URL needs to see.
+func TestRun_WatchOnVODSaysThereIsNoEdge(t *testing.T) {
+	url := origin(t, 4, 0)
+	code, stdout, stderr := exec(t, "check", url, "--watch", "30s", "--output", "json", "--no-color")
+	if code != 0 {
+		t.Fatalf("exited %d, want 0\nstderr: %s", code, stderr)
+	}
+
+	var res finding.Result
+	if err := json.Unmarshal([]byte(stdout), &res); err != nil {
+		t.Fatalf("--output json is not parseable: %v\n%s", err, stdout)
+	}
+	var said bool
+	for _, f := range res.Findings {
+		if f.Check == "watch" {
+			said = true
+			if f.Status != finding.OK {
+				t.Errorf("watching a VOD playlist reported %s: %s", f.Status, f.Message)
+			}
+		}
+	}
+	if !said {
+		t.Errorf("--watch produced no watch finding at all:\n%s", stdout)
 	}
 }
 

@@ -36,6 +36,18 @@ Sampling:
   --subtitles N       subtitle renditions to inspect (default 1)
   --from MODE         where to sample: auto|edge|start (default auto: edge for live, start for VOD)
 
+Live edge:
+  --watch DUR         after checking the segments, keep re-reading the manifest
+                      for DUR and report what the live edge did (default: off)
+  --stall-tolerance N how many re-read intervals the edge may go without a new
+                      segment before that is a stall (default 3)
+
+A frozen packager serves a flawless playlist: every segment downloads, parses
+and lines up, and only a second look a TARGETDURATION later tells it from a
+healthy stream. --watch re-reads at the interval the manifest itself implies —
+TARGETDURATION in HLS, minimumUpdatePeriod in DASH — and costs one request per
+selected rendition per poll, so --renditions bounds what it costs.
+
 Thresholds:
   --duration-tolerance PCT   allowed declared-vs-real duration drift (default 5)
   --gap-tolerance MS         allowed timeline gap or overlap between segments (default 100)
@@ -72,6 +84,7 @@ Examples:
   segcheck check https://cdn.example/manifest.mpd --segments 12 --from edge
   segcheck check https://cdn.example/master.m3u8 --output markdown > report.md
   segcheck check https://cdn.example/master.m3u8 --exit-on bad
+  segcheck check https://cdn.example/live.m3u8 --watch 2m --exit-on bad
 `
 
 type headerFlag map[string]string
@@ -128,6 +141,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 	fs.Float64Var(&opts.DurationTolerancePct, "duration-tolerance", opts.DurationTolerancePct, "")
 	fs.Float64Var(&opts.GapToleranceMS, "gap-tolerance", opts.GapToleranceMS, "")
 	fs.Float64Var(&opts.BitrateTolerancePct, "bitrate-tolerance", opts.BitrateTolerancePct, "")
+	fs.DurationVar(&opts.Watch, "watch", opts.Watch, "")
+	fs.Float64Var(&opts.StallTolerance, "stall-tolerance", opts.StallTolerance, "")
 	fs.IntVar(&opts.Concurrency, "concurrency", opts.Concurrency, "")
 	timeout := fs.Duration("timeout", 15*time.Second, "")
 	maxBytes := fs.Int64("max-bytes", fetch.DefaultMaxBytes, "")
@@ -244,6 +259,14 @@ func validate(opts analyze.Options, format, exitOn string) error {
 	}
 	if opts.Segments < 0 {
 		return fmt.Errorf("--segments cannot be negative")
+	}
+	if opts.Watch < 0 {
+		return fmt.Errorf("--watch cannot be negative")
+	}
+	// A tolerance of zero would make every advance a stall, including the
+	// healthy one, which is a checker that cries wolf on every live stream.
+	if opts.Watch > 0 && opts.StallTolerance <= 0 {
+		return fmt.Errorf("--stall-tolerance must be greater than zero")
 	}
 	return nil
 }

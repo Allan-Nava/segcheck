@@ -96,6 +96,10 @@ segcheck check https://cdn.example/live.m3u8 --from edge --segments 12
 # DASH is the same command
 segcheck check https://cdn.example/manifest.mpd
 
+# Watch the live edge for two minutes: a packager that stopped publishing
+# serves a flawless playlist, and only a second look tells the two apart
+segcheck check https://cdn.example/live.m3u8 --watch 2m
+
 # Keep it cheap on a big ladder: top and bottom rungs plus a spread between
 segcheck check https://cdn.example/master.m3u8 --renditions 3 --segments 4
 
@@ -147,6 +151,7 @@ environment.
 | `alignment` | Segment boundaries across renditions, so ABR switching does not glitch | BAD |
 | `encryption` | Declared protection against what the segments carry, whether a supplied key actually decrypts them, and — for SAMPLE-AES and CENC, which protect the samples and not the container — which half of the tool could run at all | BAD |
 | `ladder` | Duplicate rungs, inverted rungs, dangling `AUDIO` groups, missing `CODECS` | BAD |
+| `watch` | With `--watch`, whether the live edge actually advances: new-segment latency, a stall, and a packager that stopped publishing | BAD |
 
 Containers understood: **MPEG-TS** (PAT/PMT, PES timestamps, continuity counters, H.264 and HEVC/H.265 parameter sets for the real resolution), **fragmented MP4 / CMAF** (`moov` for timescale, codec and coded size; `mvex`/`trex` defaults; `tfdt`/`trun` for the timeline; `sidx` for single-file DASH, addressed by byte range), **packed audio** (ADTS AAC and MPEG-1/2 audio, with the ID3 `transportStreamTimestamp` that gives audio-only renditions a timeline), and **WebVTT and TTML/IMSC** subtitle segments. Audio format is read where each container actually states it: the `AudioSampleEntry` in fMP4, the `dac3`/`dec3` box for AC-3 and E-AC-3 (whose `channelcount` field is not to be trusted), and the ADTS header everywhere else.
 
@@ -160,6 +165,8 @@ Containers understood: **MPEG-TS** (PAT/PMT, PES timestamps, continuity counters
 ## Sampling, and what it costs
 
 segcheck downloads real media, so it is worth knowing what it will pull. Per run: `renditions × segments` segments, plus one initialisation segment per rendition. Defaults (6 segments, all renditions) against a five-rung 1080p ladder is roughly 100–200 MB. Trim it with `--renditions` and `--segments`; a capped `--renditions` always keeps the top and bottom rungs, because that is where ladder defects concentrate.
+
+`--watch` adds manifests, not media: one request per selected rendition every re-read interval — `TARGETDURATION` in HLS, `minimumUpdatePeriod` in DASH — for as long as you asked for. The segments are downloaded once, at the start.
 
 Requests carry a `segcheck/<version>` User-Agent so you can tell a check apart from real traffic in your access logs.
 

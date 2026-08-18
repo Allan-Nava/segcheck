@@ -19,7 +19,7 @@ import (
 func checkFetch(rends []*renditionData) []finding.Finding {
 	var out []finding.Finding
 	for _, rd := range rends {
-		label := rendLabel(rd)
+		label := rendLabel(rd.r)
 		if rd.err != nil {
 			out = append(out, finding.Finding{
 				Check: "fetch", Target: label, Status: finding.ERROR,
@@ -84,7 +84,7 @@ func checkInit(rends []*renditionData) []finding.Finding {
 			continue
 		}
 		out = append(out, finding.Finding{
-			Check: "init", Target: rendLabel(rd), Status: finding.ERROR,
+			Check: "init", Target: rendLabel(rd.r), Status: finding.ERROR,
 			Message: rd.initErr.Error(),
 			Hint:    "no player can start this rendition without its EXT-X-MAP / initialisation segment; codec, timescale and resolution checks were skipped",
 		})
@@ -130,7 +130,7 @@ func checkContainer(rends []*renditionData) []finding.Finding {
 			containers[sd.info.Container]++
 		}
 
-		label := rendLabel(rd)
+		label := rendLabel(rd.r)
 		if unsupported != "" {
 			out = append(out, finding.Finding{
 				Check: "container", Target: label, Status: finding.OK,
@@ -189,7 +189,7 @@ func checkContinuity(rends []*renditionData, opts Options) []finding.Finding {
 		if rd.r.Kind == manifest.Text {
 			continue
 		}
-		label := rendLabel(rd)
+		label := rendLabel(rd.r)
 
 		// Transport-level packet loss, before any timeline reasoning.
 		ccTotal := 0
@@ -291,7 +291,7 @@ func checkDuration(rends []*renditionData, opts Options) []finding.Finding {
 		if rd.r.Kind == manifest.Text {
 			continue
 		}
-		label := rendLabel(rd)
+		label := rendLabel(rd.r)
 		var sumDeclared, sumActual float64
 		worst := 0.0
 		var worstSeg segmentData
@@ -392,7 +392,7 @@ func checkTimeline(rends []*renditionData, opts Options) []finding.Finding {
 		}
 		if compared > 0 && mismatches == 0 {
 			out = append(out, finding.Finding{
-				Check: "timeline", Target: rendLabel(rd), Status: finding.OK,
+				Check: "timeline", Target: rendLabel(rd.r), Status: finding.OK,
 				Message: fmt.Sprintf("SegmentTimeline matches the media timeline on %d segments", compared),
 			})
 		}
@@ -412,7 +412,7 @@ func checkBitrate(rends []*renditionData, opts Options) []finding.Finding {
 		if rd.err != nil || rd.r.Bandwidth <= 0 {
 			continue
 		}
-		label := rendLabel(rd)
+		label := rendLabel(rd.r)
 		var sumBytes int64
 		var sumDur float64
 		peak := 0.0
@@ -479,7 +479,7 @@ func checkResolution(rends []*renditionData) []finding.Finding {
 		if rd.r.Width == 0 || rd.r.Height == 0 {
 			continue // nothing declared to compare against
 		}
-		label := rendLabel(rd)
+		label := rendLabel(rd.r)
 		reported := false
 		for _, sd := range parsedSegs(rd) {
 			v, ok := sd.info.Track(media.Video)
@@ -523,7 +523,7 @@ func checkTracks(rends []*renditionData) []finding.Finding {
 		if len(segs) == 0 {
 			continue
 		}
-		label := rendLabel(rd)
+		label := rendLabel(rd.r)
 
 		if rd.r.Kind == manifest.Video {
 			missing := 0
@@ -620,7 +620,7 @@ func checkKeyframe(rends []*renditionData) []finding.Finding {
 		if len(segs) == 0 {
 			continue
 		}
-		label := rendLabel(rd)
+		label := rendLabel(rd.r)
 
 		readable := 0
 		var noKeyframe []segmentData // no random access point at all: unswitchable
@@ -739,7 +739,7 @@ func checkFrameRate(rends []*renditionData, opts Options) []finding.Finding {
 		fps := medianFloat(rates)
 		seen = append(seen, measured{rd, fps})
 
-		label := rendLabel(rd)
+		label := rendLabel(rd.r)
 		declared := rd.r.FrameRate
 		if declared <= 0 {
 			out = append(out, finding.Finding{
@@ -785,14 +785,14 @@ func checkFrameRate(rends []*renditionData, opts Options) []finding.Finding {
 	var odd []string
 	for _, m := range seen {
 		if !relatedRate(fastest.fps, m.fps, opts.FrameRateTolerancePct) {
-			odd = append(odd, fmt.Sprintf("%s %s", rendLabel(m.rd), humanFPS(m.fps)))
+			odd = append(odd, fmt.Sprintf("%s %s", rendLabel(m.rd.r), humanFPS(m.fps)))
 		}
 	}
 	if len(odd) > 0 {
 		out = append(out, finding.Finding{
 			Check: "framerate", Target: "ladder", Status: finding.WARN,
 			Message: fmt.Sprintf("ladder mixes frame rates: %s against %s at %s",
-				strings.Join(odd, ", "), rendLabel(fastest.rd), humanFPS(fastest.fps)),
+				strings.Join(odd, ", "), rendLabel(fastest.rd.r), humanFPS(fastest.fps)),
 			Hint: "switching between rungs at unrelated rates is visibly uneven; an exact fraction of the top rate is fine, an unrelated one is not",
 		})
 	}
@@ -919,7 +919,7 @@ func checkSubtitles(rends []*renditionData, opts Options) []finding.Finding {
 		if len(segs) == 0 {
 			continue
 		}
-		label := rendLabel(rd)
+		label := rendLabel(rd.r)
 
 		// Where the manifest says each segment sits, accumulated over *every*
 		// segment rather than the parsed ones: a segment that failed to parse still
@@ -1144,7 +1144,7 @@ func checkAdBreak(rends []*renditionData, opts Options) []finding.Finding {
 			continue
 		}
 
-		label := rendLabel(rd)
+		label := rendLabel(rd.r)
 		bounds, ok := segmentBoundaries(segs)
 		if !ok {
 			out = append(out, finding.Finding{
@@ -1450,7 +1450,7 @@ func checkAudio(rends []*renditionData) []finding.Finding {
 		if rd.err != nil || rd.initErr != nil {
 			continue
 		}
-		label := rendLabel(rd)
+		label := rendLabel(rd.r)
 
 		// Collect every distinct format across the sampled segments. More than
 		// one means the rendition reconfigures part-way through.
@@ -1578,7 +1578,7 @@ func checkCaptions(rends []*renditionData) []finding.Finding {
 			continue
 		}
 
-		label := rendLabel(rd)
+		label := rendLabel(rd.r)
 		got, scanned := captionsSeen(rd)
 		if !scanned {
 			if len(declared) == 0 {
@@ -1963,7 +1963,7 @@ func checkEncryption(rends []*renditionData) []finding.Finding {
 		if total == 0 {
 			continue
 		}
-		label := rendLabel(rd)
+		label := rendLabel(rd.r)
 
 		// A key that does not decrypt is a fact about the key, not about the stream.
 		// Reporting it as unreadable media would send an operator hunting a defect in
@@ -2053,7 +2053,7 @@ func checkAlignment(rends []*renditionData, opts Options) []finding.Finding {
 			if !ok || t.Timescale == 0 {
 				continue
 			}
-			bySeq[sd.seg.Sequence] = append(bySeq[sd.seg.Sequence], point{rendLabel(rd), toSec(t.MinPTS, t.Timescale)})
+			bySeq[sd.seg.Sequence] = append(bySeq[sd.seg.Sequence], point{rendLabel(rd.r), toSec(t.MinPTS, t.Timescale)})
 		}
 	}
 	if videoRends < 2 {
@@ -2202,18 +2202,22 @@ func parsedSegs(rd *renditionData) []segmentData {
 	return out
 }
 
-func rendLabel(rd *renditionData) string {
-	if rd.r.Name != "" {
-		if rd.r.Kind == manifest.Audio && !strings.HasPrefix(rd.r.Name, "audio") {
-			return "audio " + rd.r.Name
+// rendLabel is how a rendition is named in every finding about it. It takes the
+// manifest rendition rather than the sampled one so the watch loop — which
+// re-reads the manifest and never samples — names the same rendition the same
+// way: two spellings of one rung in one report reads as two rungs.
+func rendLabel(r manifest.Rendition) string {
+	if r.Name != "" {
+		if r.Kind == manifest.Audio && !strings.HasPrefix(r.Name, "audio") {
+			return "audio " + r.Name
 		}
-		return rd.r.Name
+		return r.Name
 	}
-	return shortTarget(rd.r.URI)
+	return shortTarget(r.URI)
 }
 
 func segLabel(rd *renditionData, sd segmentData) string {
-	return fmt.Sprintf("%s seg %d", rendLabel(rd), sd.seg.Sequence)
+	return fmt.Sprintf("%s seg %d", rendLabel(rd.r), sd.seg.Sequence)
 }
 
 func toSec(ticks int64, timescale uint32) float64 {

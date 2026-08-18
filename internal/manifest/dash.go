@@ -145,6 +145,7 @@ func ParseDASH(body []byte, baseURL string, now time.Time) (Playlist, error) {
 		}
 	}
 	mpdDur, _ := parseISODuration(doc.MediaPresentationDuration)
+	pl.UpdatePeriod, _ = parseISODuration(doc.MinimumUpdatePeriod)
 
 	for pi, period := range doc.Periods {
 		pbase := applyBaseURLs(base, period.BaseURL)

@@ -129,6 +129,13 @@ func TestParseDASH_LiveEdgeFromWallClock(t *testing.T) {
 	if want := "https://cdn.example/live/v/25.m4s"; last.URI != want {
 		t.Errorf("newest segment = %q, want %q", last.URI, want)
 	}
+	// @minimumUpdatePeriod is the MPD saying how often it will change, which is
+	// how often --watch has to re-read it to see the edge move. HLS has no such
+	// attribute — a player re-reads at TARGETDURATION — so this is the only place
+	// a DASH poll interval can come from.
+	if pl.UpdatePeriod != 4 {
+		t.Errorf("UpdatePeriod = %v, want 4 from minimumUpdatePeriod=\"PT4S\"", pl.UpdatePeriod)
+	}
 }
 
 // SC-19 changed what this asserts. A SegmentBase representation used to be

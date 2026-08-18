@@ -64,8 +64,21 @@ type Options struct {
 	// 29.97 where the media runs at 30000/1001, and those are the same rate
 	// spelled two ways.
 	FrameRateTolerancePct float64
+	// Watch is how long to keep re-reading the manifest after the segments have
+	// been checked, observing what the live edge does. Zero is a single shot,
+	// which is every run that did not ask for otherwise.
+	Watch time.Duration
+	// StallTolerance is how many re-read intervals the live edge may go without
+	// a new segment before --watch calls it a stall. Two is ordinary jitter on a
+	// playlist polled at TARGETDURATION; three is a segment that never arrived.
+	StallTolerance float64
 	// Now fixes the clock (live-edge maths, DASH template expansion).
 	Now func() time.Time
+	// Sleep waits for d, or until ctx is cancelled. It is injectable for the
+	// same reason Now is: the watch tests drive a fake clock, and a loop that
+	// really waited a TARGETDURATION per poll would take minutes to assert one
+	// finding.
+	Sleep func(ctx context.Context, d time.Duration) error
 }
 
 // Defaults returns the option set the CLI starts from.
@@ -81,7 +94,9 @@ func Defaults() Options {
 		GapToleranceMS:        100,
 		BitrateTolerancePct:   10,
 		FrameRateTolerancePct: 2,
+		StallTolerance:        3,
 		Now:                   time.Now,
+		Sleep:                 waitFor,
 	}
 }
 
@@ -135,6 +150,9 @@ func Run(ctx context.Context, c *fetch.Client, rawurl string, opts Options) find
 	if opts.Now == nil {
 		opts.Now = time.Now
 	}
+	if opts.Sleep == nil {
+		opts.Sleep = waitFor
+	}
 	started := opts.Now()
 	res := finding.Result{Source: rawurl, Started: started}
 
@@ -147,6 +165,21 @@ func Run(ctx context.Context, c *fetch.Client, rawurl string, opts Options) find
 	}
 
 	rends, fs := selectRenditions(ctx, c, *pl, opts)
+
+	// An HLS master playlist carries no liveness signal whatsoever —
+	// EXT-X-ENDLIST is a media-playlist tag — so a live ladder parses as VOD
+	// until its variants have been loaded. Everything downstream that reasons
+	// about a live edge has to be told, and the report has to stop calling a
+	// live stream VOD.
+	if !pl.Live {
+		for _, rd := range rends {
+			if rd.live {
+				pl.Live = true
+				break
+			}
+		}
+	}
+	res.Findings = append(res.Findings, manifestShape(rawurl, *pl))
 	res.Findings = append(res.Findings, fs...)
 
 	// A single-file DASH representation states where its index is, not where its
@@ -185,6 +218,13 @@ func Run(ctx context.Context, c *fetch.Client, rawurl string, opts Options) find
 	res.Findings = append(res.Findings, checkAlignment(rends, opts)...)
 	res.Findings = append(res.Findings, checkLadder(*pl)...)
 
+	// The watch loop runs last and takes as long as it was asked to: everything
+	// a single look can establish is already in res before the first poll, so an
+	// interrupted watch still reports it.
+	if opts.Watch > 0 {
+		res.Findings = append(res.Findings, watchLiveEdge(ctx, c, rawurl, *pl, opts)...)
+	}
+
 	res.Duration = opts.Now().Sub(started)
 	finding.SortWorstFirst(res.Findings)
 	return res
@@ -216,6 +256,15 @@ func loadManifest(ctx context.Context, c *fetch.Client, rawurl string, opts Opti
 		}}
 	}
 
+	return &pl, nil
+}
+
+// manifestShape is the one OK line that says what was loaded. It is emitted
+// after the renditions rather than with the parse, because whether an HLS
+// ladder is live is not knowable from the master playlist — only its variants
+// say so, and a report that called a live stream VOD sat directly above the
+// finding about its live edge.
+func manifestShape(rawurl string, pl manifest.Playlist) finding.Finding {
 	kindLabel := "HLS"
 	if pl.Kind == manifest.KindDASH {
 		kindLabel = "DASH"
@@ -228,10 +277,10 @@ func loadManifest(ctx context.Context, c *fetch.Client, rawurl string, opts Opti
 	if pl.Live {
 		mode = "live"
 	}
-	return &pl, []finding.Finding{{
+	return finding.Finding{
 		Check: "manifest", Target: shortTarget(rawurl), Status: finding.OK,
 		Message: fmt.Sprintf("%s %s, %s", kindLabel, mode, shape),
-	}}
+	}
 }
 
 // selectRenditions decides what to sample and, for HLS, loads each variant's
@@ -249,10 +298,9 @@ func selectRenditions(ctx context.Context, c *fetch.Client, pl manifest.Playlist
 		}}, findings
 	}
 
-	video := pick(byKind(pl.Renditions, manifest.Video), opts.MaxRenditions)
-	audio := pick(byKind(pl.Renditions, manifest.Audio), opts.MaxAudio)
-	text := pick(byKind(pl.Renditions, manifest.Text), opts.MaxText)
-	chosen := append(append(append([]manifest.Rendition{}, video...), audio...), text...)
+	sel := chooseRenditions(pl, opts)
+	video, audio, text := sel.video, sel.audio, sel.text
+	chosen := sel.all()
 
 	if skipped := len(pl.Renditions) - len(chosen); skipped > 0 {
 		findings = append(findings, finding.Finding{
@@ -295,6 +343,26 @@ func selectRenditions(ctx context.Context, c *fetch.Client, pl manifest.Playlist
 		out = append(out, rd)
 	}
 	return out, findings
+}
+
+// chosenRenditions is what a run inspects, kept apart from the sampling so the
+// watch loop polls exactly the renditions the report talks about. A watch that
+// picked its own subset would report an edge for a rendition nothing else in
+// the output mentions.
+type chosenRenditions struct {
+	video, audio, text []manifest.Rendition
+}
+
+func (c chosenRenditions) all() []manifest.Rendition {
+	return append(append(append([]manifest.Rendition{}, c.video...), c.audio...), c.text...)
+}
+
+func chooseRenditions(pl manifest.Playlist, opts Options) chosenRenditions {
+	return chosenRenditions{
+		video: pick(byKind(pl.Renditions, manifest.Video), opts.MaxRenditions),
+		audio: pick(byKind(pl.Renditions, manifest.Audio), opts.MaxAudio),
+		text:  pick(byKind(pl.Renditions, manifest.Text), opts.MaxText),
+	}
 }
 
 func loadMediaPlaylist(ctx context.Context, c *fetch.Client, rawurl string) (manifest.Playlist, error) {

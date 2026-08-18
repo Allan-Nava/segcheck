@@ -363,25 +363,36 @@ func TestCheckTracks_StaysQuietWhenThereIsNothingToLookAt(t *testing.T) {
 // The label is what an operator reads to find the rendition. An audio rendition
 // whose name does not already say so is prefixed, so "English" does not look like
 // a video rung.
+//
+// It takes the manifest rendition rather than the sampled one because the watch
+// loop re-reads the manifest and never samples: two spellings of one rung in one
+// report reads as two rungs, and "150kbps" beside "audio 150kbps" was exactly
+// that on a live stream.
 func TestRendLabel(t *testing.T) {
 	tests := []struct {
 		name string
-		rd   *renditionData
+		r    manifest.Rendition
 		want string
 	}{
-		{"video by name", &renditionData{r: manifest.Rendition{Name: "720p", Kind: manifest.Video}}, "720p"},
-		{"audio gets a prefix", &renditionData{r: manifest.Rendition{Name: "English", Kind: manifest.Audio}}, "audio English"},
-		{"audio already says so", &renditionData{r: manifest.Rendition{Name: "audio-en", Kind: manifest.Audio}}, "audio-en"},
+		{"video by name", manifest.Rendition{Name: "720p", Kind: manifest.Video}, "720p"},
+		{"audio gets a prefix", manifest.Rendition{Name: "English", Kind: manifest.Audio}, "audio English"},
+		{"audio already says so", manifest.Rendition{Name: "audio-en", Kind: manifest.Audio}, "audio-en"},
 		{
 			"no name falls back to the URL tail",
-			&renditionData{r: manifest.Rendition{URI: "https://cdn.example.com/hls/720p/index.m3u8"}},
+			manifest.Rendition{URI: "https://cdn.example.com/hls/720p/index.m3u8"},
 			"…/720p/index.m3u8",
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := rendLabel(tc.rd); got != tc.want {
+			if got := rendLabel(tc.r); got != tc.want {
 				t.Errorf("rendLabel = %q, want %q", got, tc.want)
+			}
+			// The sampled rendition must name itself the same way, since a
+			// finding about a segment and a finding about that rendition's live
+			// edge sit in the same table.
+			if got := rendLabel((&renditionData{r: tc.r}).r); got != tc.want {
+				t.Errorf("rendLabel via renditionData = %q, want %q", got, tc.want)
 			}
 		})
 	}

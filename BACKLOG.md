@@ -374,9 +374,13 @@ A live edge and a CDN are the two things a single-shot check cannot see. These
 items are what turn segcheck from "check this stream once" into "check this
 stream the way a viewer receives it".
 
-- [ ] **SC-25 — Live-edge watch**: `--watch` re-reads the playlist at
-  `TARGETDURATION` and reports new-segment latency, stalls, and a live edge that
-  stops advancing. <!-- sc: prio=high size=L labels=cli,check -->
+- [x] **SC-25 — Live-edge watch**: `--watch` re-reads the manifest at the interval
+  it implies — `TARGETDURATION` in HLS, `minimumUpdatePeriod` in DASH — and reports,
+  per rendition, new-segment latency, stalls and a live edge that stops advancing.
+  The edge's identity is the newest segment's URI, not a sequence number: DASH
+  renumbers a `SegmentTimeline` every time the window slides, and only the URI
+  changes when — and only when — something new is published.
+  <!-- sc: prio=high size=L labels=cli,check ver=0.4.0 -->
 - [ ] **SC-39 — LL-HLS parts**: `EXT-X-PART`, `EXT-X-PRELOAD-HINT` and
   `EXT-X-SERVER-CONTROL` — fetch the parts, check part durations against
   `PART-TARGET`, and check that the parts of a segment reconstruct that
