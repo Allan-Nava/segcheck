@@ -721,14 +721,15 @@ exists to make and which stays honest at zero dependencies. Judging what the
 audio *sounds* like — silence, clipping, measured loudness — needs a decoder,
 which is why SC-18 already rules it out and why nothing here reintroduces it.
 
-- [ ] **SC-81 — Audio configuration boxes**: `esds`/`AudioSpecificConfig` for
-  `mp4a` (audio object type, sampling frequency index, channel configuration,
-  and the SBR/PS extension that changes both), plus `dac3`, `dec3`, `dOps` and
-  `dfLa`. The parser prerequisite for the rest of the milestone: it gives an
-  fMP4 audio track the same footing video already has, where the container
-  states its configuration and no bitstream reader is needed. Lands with the
-  `mediatest` writers and nothing consuming it yet.
-  <!-- sc: prio=high size=L labels=parser -->
+- [x] **SC-81 — Audio configuration boxes**: `esds` and its AudioSpecificConfig for
+  `mp4a` — object type, sampling frequency index, channel configuration, and the SBR
+  and PS extensions — plus `dOps`, `dfLa` and the `dac3`/`dec3` boxes already read.
+  Nothing consumes them yet; they land with the `mediatest` writers and the round trip,
+  and the writer states the sampling-frequency table independently of the reader so the
+  round trip agrees with the standard rather than with itself. `AudioConfig` carries the
+  *coded* rate and channel count and records SBR and PS, because the sample entry
+  describes the rendered output and for HE-AAC those are deliberately different.
+  <!-- sc: prio=high size=L labels=parser ver=0.8.0 -->
 - [ ] **SC-82 — `CHANNELS` against the real channel count**: HLS
   `EXT-X-MEDIA CHANNELS` and DASH `AudioChannelConfiguration@value`, neither of
   which is parsed today, against what SC-81 reads. Distinct from SC-18, which

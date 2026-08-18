@@ -1190,3 +1190,126 @@ func visualEntryInit(trackID, timescale uint32, width, height int, sampleEntry s
 	))
 	return mp4InitFrom(trackID, timescale, "vide", entry, nil, width, height)
 }
+
+// MP4InitESDS is an AAC init whose sample entry carries an `esds` with an
+// AudioSpecificConfig — the only place the *coded* object type, sampling
+// frequency and channel configuration are written down.
+//
+// The sample entry's own channelcount and rate describe what the track renders,
+// and for HE-AAC that is deliberately not what it codes: the core runs at half
+// the rate, and HE-AAC v2 codes a mono core that Parametric Stereo renders as
+// stereo. Writing the two apart is how a test can tell a reader that conflates
+// them.
+func MP4InitESDS(trackID, timescale uint32, objectType, freqIndex, channelCfg int, sbr, ps bool) []byte {
+	asc := &bitWriter{}
+	writeAudioObjectType(asc, objectType)
+	asc.u(4, uint32(freqIndex))
+	asc.u(4, uint32(channelCfg))
+	if objectType == 5 || objectType == 29 {
+		// An explicit hierarchical signalling: the extension states the object
+		// type, then the core's own type follows.
+		asc.u(4, uint32(freqIndex))  // extensionSamplingFrequencyIndex
+		writeAudioObjectType(asc, 2) // the AAC-LC core
+	}
+	// GASpecificConfig: frameLengthFlag, dependsOnCoreCoder, extensionFlag.
+	asc.bit(0)
+	asc.bit(0)
+	asc.bit(0)
+	_ = sbr
+	_ = ps
+	cfg := asc.bytes()
+
+	// The ES_Descriptor, cut to what a reader needs: a DecoderConfigDescriptor
+	// whose DecoderSpecificInfo is the AudioSpecificConfig above.
+	dsi := descriptor(0x05, cfg)
+	dcd := descriptor(0x04, concat([]byte{0x40, 0x15}, make([]byte, 11), dsi))
+	esd := descriptor(0x03, concat(u16(1), []byte{0x00}, dcd))
+	esds := box("esds", concat(u32(0), esd))
+
+	entry := box("mp4a", concat(audioSampleEntryFixed(renderedChannels(channelCfg, ps), renderedRate(freqIndex, sbr)), esds))
+	return mp4InitFrom(trackID, timescale, "soun", entry, nil, 0, 0)
+}
+
+// writeAudioObjectType writes the five-bit form, or the escape plus six bits for
+// a type above 30 — which is where HE-AAC v2's 29 sits comfortably below, but the
+// escape has to exist for the reader to be exercised on the boundary.
+func writeAudioObjectType(w *bitWriter, aot int) {
+	if aot < 31 {
+		w.u(5, uint32(aot))
+		return
+	}
+	w.u(5, 31)
+	w.u(6, uint32(aot-32))
+}
+
+// renderedChannels and renderedRate are what the *sample entry* states: the
+// output of the decoder rather than the coding. Parametric Stereo renders a mono
+// core as two channels, and SBR plays at twice the core rate.
+func renderedChannels(channelCfg int, ps bool) int {
+	if ps && channelCfg == 1 {
+		return 2
+	}
+	return channelCfg
+}
+
+func renderedRate(freqIndex int, sbr bool) int {
+	rate := ascSampleRates[freqIndex]
+	if sbr {
+		return rate * 2
+	}
+	return rate
+}
+
+// ascSampleRates is the sampling frequency table an AudioSpecificConfig indexes
+// into. The writer states it independently of the reader on purpose: a shared
+// table would make the round trip agree with itself rather than with the standard.
+var ascSampleRates = []int{96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350, 0, 0, 0}
+
+// descriptor writes an MPEG-4 descriptor with the short length form, which is
+// all a fixture needs and what most real files use.
+func descriptor(tag byte, payload []byte) []byte {
+	return concat([]byte{tag, byte(len(payload))}, payload)
+}
+
+// MP4InitDOps is an Opus init. Opus always plays at 48 kHz whatever the original
+// material was, and states its channel count in `dOps`.
+func MP4InitDOps(trackID, timescale uint32, channels, inputRate int) []byte {
+	dops := box("dOps", concat(
+		[]byte{0x00},           // Version
+		[]byte{byte(channels)}, // OutputChannelCount
+		u16(312),               // PreSkip
+		u32(uint32(inputRate)), // InputSampleRate
+		u16(0),                 // OutputGain
+		[]byte{0x00},           // ChannelMappingFamily
+	))
+	entry := box("Opus", concat(audioSampleEntryFixed(channels, 48000), dops))
+	return mp4InitFrom(trackID, timescale, "soun", entry, nil, 0, 0)
+}
+
+// MP4InitDFLA is a FLAC init. `dfLa` carries the STREAMINFO metadata block, whose
+// bit-packed fields state the sample rate and channel count.
+func MP4InitDFLA(trackID, timescale uint32, channels, sampleRate int) []byte {
+	// STREAMINFO: min/max block size and frame size (10 bytes), then
+	// sample_rate (20 bits), channels-1 (3), bits_per_sample-1 (5),
+	// total_samples (36).
+	si := &bitWriter{}
+	si.u(16, 4096) // min_blocksize
+	si.u(16, 4096) // max_blocksize
+	si.u(24, 0)    // min_framesize
+	si.u(24, 0)    // max_framesize
+	si.u(20, uint32(sampleRate))
+	si.u(3, uint32(channels-1))
+	si.u(5, 15) // bits_per_sample - 1: 16-bit
+	si.u(18, 0) // the top of total_samples
+	si.u(18, 0)
+	body := si.bytes()
+	body = append(body, make([]byte, 16)...) // the MD5 signature
+
+	dfla := box("dfLa", concat(
+		u32(0),                         // version and flags
+		[]byte{0x80, 0x00, 0x00, 0x22}, // last-block flag, type 0, length 34
+		body,
+	))
+	entry := box("fLaC", concat(audioSampleEntryFixed(channels, sampleRate), dfla))
+	return mp4InitFrom(trackID, timescale, "soun", entry, nil, 0, 0)
+}

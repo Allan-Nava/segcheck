@@ -43,6 +43,9 @@ type initTrack struct {
 	colour ColourDescription
 	// profile is the profile, level and tier its configuration record states.
 	profile CodecProfile
+	// audioCfg is how an audio track's samples are coded, from esds, dOps, dfLa
+	// or the AC-3 boxes.
+	audioCfg AudioConfig
 	// nalLengthSize is how many bytes prefix each NAL unit in the mdat, from the
 	// avcC or hvcC box. fMP4 uses a length prefix where an elementary stream uses
 	// start codes, so a walk that assumes Annex-B finds nothing at all.
@@ -359,6 +362,7 @@ func (it *initTrack) track() Track {
 		SamplesEncrypted: it.encrypted,
 		ColourDesc:       it.colour,
 		Profile:          it.profile,
+		AudioCfg:         it.audioCfg,
 		KeyID:            it.keyID,
 		CryptByteBlock:   it.cryptBlock,
 		SkipByteBlock:    it.skipBlock,
@@ -459,6 +463,7 @@ func parseMoov(moov []byte, out map[uint32]*initTrack) {
 							// sampling rate, in the same place a VisualSampleEntry
 							// states the frame size.
 							t.channels, t.sampleRate = audioSampleEntryFields(entries[0].typ, entries[0].payload)
+							t.audioCfg = audioConfigFromEntry(entries[0].typ, entries[0].payload)
 						}
 					}
 					if w > 0 && h > 0 {

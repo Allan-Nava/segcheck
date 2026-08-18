@@ -150,6 +150,10 @@ type Track struct {
 	// ClearSamples and EncryptedSamples are how many of this fragment's samples
 	// carry no encryption information and how many do, from `saiz`.
 	// LeadingClearSamples counts the run at the very start, which is what a clear
+	// AudioCfg is what a codec configuration box says about how the samples are
+	// coded, as distinct from what the track renders. Check its Stated field: a
+	// zero channel count is not a claim of silence.
+	AudioCfg AudioConfig `json:"audio_config,omitempty"`
 	// Profile is what the media says about which decoder can play it: the
 	// configuration record in fMP4, the parameter set in MPEG-TS. Check its
 	// Stated field — an unstated level is not level zero.
@@ -269,6 +273,15 @@ func (t Track) StartsOnKeyframe() (bool, bool) {
 		return false, false
 	}
 	return t.OpensOnKeyframe, t.KeyframeKnown
+}
+
+// AudioConfig is how the track's samples are coded, and whether any
+// configuration box stated it.
+func (t Track) AudioConfig() (AudioConfig, bool) {
+	if !t.AudioCfg.Stated {
+		return AudioConfig{}, false
+	}
+	return t.AudioCfg, true
 }
 
 // CodecProfile is the profile, level and tier the media states, and whether

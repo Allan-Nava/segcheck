@@ -19,6 +19,19 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   a stall rather than jitter. Watching a VOD playlist is not a defect and is reported as
   an OK finding saying there is no live edge, not as a problem in the stream. Only
   manifests are re-fetched: the segments are downloaded once, at the start.
+- **Audio configuration boxes** (SC-81), with nothing consuming them yet: `esds` and the
+  AudioSpecificConfig inside it for `mp4a` — audio object type, sampling frequency index,
+  channel configuration, and the SBR and PS extensions — plus `dOps` for Opus, `dfLa` for
+  FLAC, and the `dac3`/`dec3` boxes that were already read. It gives an fMP4 audio track
+  the same footing video has: where the container states its configuration, no bitstream
+  reader is needed.
+  The distinction that makes it worth reading is between what a track *codes* and what it
+  *renders*. The sample entry describes the output, and for HE-AAC that is deliberately
+  not the coding — the core runs at half the rate SBR plays it at, and HE-AAC v2 codes a
+  mono core Parametric Stereo renders as stereo — so `AudioConfig` carries the coded
+  figures and records the extensions that explain the doubling. The descriptors inside
+  `esds` use a variable-length length: seven bits and a continuation flag per byte, so a
+  reader that assumed one byte works on most files and lands mid-payload on the rest.
 - **The whole `CODECS` string is checked, not just its first component** (SC-74). Profile,
   level and tier against what the media states: `avcC`, `hvcC`, `av1C` and `vpcC` in fMP4 —
   where the container states them at fixed offsets and no bitstream reader is needed — and
