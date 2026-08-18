@@ -261,7 +261,7 @@ the stream is healthy.
   One rule for both now, and unknown beats wrong.
   <!-- sc: prio=high size=S labels=parser ver=0.2.0 -->
 
-## M4 — Everything that is not the video track <!-- ms: target=v0.3.0 phase=now -->
+## M4 — Everything that is not the video track <!-- ms: target=v0.3.0 phase=shipped -->
 
 Audio, captions, subtitles, ad signalling and protected content — the parts of a
 stream that break in production and that no manifest-only checker can see.
@@ -368,7 +368,7 @@ stream that break in production and that no manifest-only checker can see.
   three false findings fixed alongside it.
   <!-- sc: prio=med size=S labels=tests ver=0.3.0 -->
 
-## M5 — Live and delivery <!-- ms: target=v0.4.0 phase=next -->
+## M5 — Live and delivery <!-- ms: target=v0.4.0 phase=now -->
 
 A live edge and a CDN are the two things a single-shot check cannot see. These
 items are what turn segcheck from "check this stream once" into "check this

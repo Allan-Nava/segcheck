@@ -7,6 +7,35 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-18
+
+The release M4 was for: everything in a stream that is not the video track. Four new
+checks — `audio`, `captions`, `adbreak` and `subtitles` — readers for MPEG audio, WebVTT
+and TTML, the ATSC A/53 caption SEI, SCTE-35 splice sections and `emsg` boxes, AES-128
+decryption so the content checks run on a protected stream at all, and the machinery to
+locate a fragment's samples so what is inside them can be read.
+
+The through-line is that a number a manifest states and a number a container states are
+often both right about different things. AC-3 writes 2 into a field describing a 5.1
+programme; `CHANNELS="16/JOC"` counts a rendered Atmos presentation over a 5.1 bed;
+HE-AAC codes at half the rate it plays and HE-AAC v2 codes a mono core it renders as
+stereo; a TTML document in an `stpp` sample counts on the presentation timeline, not from
+the fragment carrying it; `X-TIMESTAMP-MAP` anchors WebVTT in HLS and does not exist in
+DASH. Every one of those produced a BAD on a public reference stream before it was
+understood, and every one of them was found by running the binary rather than by a unit
+test.
+
+The other through-line is the difference between *no* and *unknown*. Partial encryption is
+the sharpest case: with AES-128 nothing parses and every check honestly says it could not
+look, but with SAMPLE-AES or CENC the container parses, the timing checks pass, and the
+bitstream readers succeed and find nothing — so a caption scan over ciphertext reported
+"scanned, no captions" and turned a manifest correctly declaring CC1 into an accessibility
+failure. Samples nobody could read, cues nobody could place and a key that does not
+decrypt are now all reported as limits of this tool rather than as defects in the stream.
+
+Thirteen distinct false findings against correct media were fixed in the course of it, ten
+of them found only by pointing the binary at a real stream rather than by any test.
+
 ### Added
 
 - **`audio` check — what the audio actually is, against what the manifest says
@@ -774,6 +803,7 @@ compares the media against the manifest's claims.
   stream: all three come back clean, with durations matching to +0.00% and coded
   resolutions read from the bitstream.
 
+[0.3.0]: https://github.com/Allan-Nava/segcheck/releases/tag/v0.3.0
 [0.2.0]: https://github.com/Allan-Nava/segcheck/releases/tag/v0.2.0
 [0.1.1]: https://github.com/Allan-Nava/segcheck/releases/tag/v0.1.1
 [0.1.0]: https://github.com/Allan-Nava/segcheck/releases/tag/v0.1.0

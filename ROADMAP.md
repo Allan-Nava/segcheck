@@ -15,8 +15,8 @@
 | **M1** — Core: read the segments | `v0.1.0` | shipped | `##########` 100% | 0 | 6 |
 | **M2** — The checks | `v0.1.0` | shipped | `##########` 100% | 0 | 8 |
 | **M3** — Codec and timing depth | `v0.2.0` | shipped | `##########` 100% | 0 | 9 |
-| **M4** — Everything that is not the video track | `v0.3.0` | **now** | `##########` 100% | 0 | 14 |
-| **M5** — Live and delivery | `v0.4.0` | next | `..........` 0% | 6 | 0 |
+| **M4** — Everything that is not the video track | `v0.3.0` | shipped | `##########` 100% | 0 | 14 |
+| **M5** — Live and delivery | `v0.4.0` | **now** | `..........` 0% | 6 | 0 |
 | **M9** — Wallclock and DVR correctness | `v0.4.0` | next | `..........` 0% | 5 | 0 |
 | **M6** — Integration | `v0.5.0` | later | `..........` 0% | 6 | 0 |
 | **M10** — Authoring-spec conformance | `v0.5.0` | later | `..........` 0% | 5 | 0 |
@@ -87,7 +87,7 @@ Target `v0.2.0` · shipped · 0 open · 9 shipped · `##########` 100%
 
 ### M4 — Everything that is not the video track
 
-Target `v0.3.0` · **now** · 0 open · 14 shipped · `##########` 100%
+Target `v0.3.0` · shipped · 0 open · 14 shipped · `##########` 100%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
@@ -108,7 +108,7 @@ Target `v0.3.0` · **now** · 0 open · 14 shipped · `##########` 100%
 
 ### M5 — Live and delivery
 
-Target `v0.4.0` · next · 6 open · 0 shipped · `..........` 0%
+Target `v0.4.0` · **now** · 6 open · 0 shipped · `..........` 0%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
