@@ -293,6 +293,7 @@ func Run(ctx context.Context, c *fetch.Client, rawurl string, opts Options) find
 	res.Findings = append(res.Findings, checkParts(rends, opts)...)
 	res.Findings = append(res.Findings, checkIFrame(iframes, rends, opts)...)
 	res.Findings = append(res.Findings, checkLadder(*pl)...)
+	res.Findings = append(res.Findings, checkPeriod(rends)...)
 	res.Findings = append(res.Findings, checkProfile(*pl, rends, opts)...)
 
 	// The watch loop runs last and takes as long as it was asked to: everything

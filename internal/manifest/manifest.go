@@ -139,6 +139,25 @@ type Rendition struct {
 	// collected on purpose rather than only by a viewer scrubbing back, which is
 	// to say in a complaint rather than in monitoring.
 	OldestSegment *Segment `json:"oldest_segment,omitempty"`
+	// PeriodID, PeriodIndex, PeriodStart and PeriodDuration place a DASH
+	// rendition in its Period. A multi-period MPD is several presentations
+	// spliced into one, and the splice is exactly where an encoder change lands —
+	// a new period is how an ad break, a programme junction or a re-encode is
+	// expressed. Each period restarts its own media timeline, so nothing about a
+	// segment says which period it came from and a cross-period comparison
+	// without this is between two things that were never on the same clock.
+	//
+	// PeriodIndex is 0 and the rest are zero for a single-period MPD and for HLS,
+	// which is what every check that predates this already assumes.
+	PeriodID       string  `json:"period_id,omitempty"`
+	PeriodIndex    int     `json:"period_index,omitempty"`
+	PeriodStart    float64 `json:"period_start,omitempty"`
+	PeriodDuration float64 `json:"period_duration,omitempty"`
+	// PresentationTimeOffset is what a segment's own timeline has to have
+	// subtracted from it to land on the presentation timeline, in seconds. A
+	// packager that forgets it after a period restart puts every segment of that
+	// period a whole period-start away from where a seek expects it.
+	PresentationTimeOffset float64 `json:"presentation_time_offset,omitempty"`
 	// Unsupported explains why a rendition could not be expanded into segments
 	// (DASH SegmentBase, for instance). Empty when it was.
 	Unsupported string `json:"unsupported,omitempty"`
@@ -191,6 +210,15 @@ type Segment struct {
 	// not carry this, so HasDeclaredStart is false there.
 	DeclaredStart    float64 `json:"declared_start,omitempty"`
 	HasDeclaredStart bool    `json:"has_declared_start,omitempty"`
+	// PeriodOffset is how far into its DASH Period the segment begins, on the
+	// presentation timeline, in seconds. It is what the manifest's own
+	// arithmetic says — the index times @duration, or @t less
+	// @presentationTimeOffset — and it is the value the segment's own timestamp
+	// has to agree with once that offset is subtracted. HLS has no periods and
+	// HasPeriodOffset is false there, as it is wherever the MPD describes its
+	// segments in a way that states no position at all.
+	PeriodOffset    float64 `json:"period_offset,omitempty"`
+	HasPeriodOffset bool    `json:"has_period_offset,omitempty"`
 	// KeyMethod and KeyURI are the encryption in force (EXT-X-KEY / ContentProtection).
 	KeyMethod string `json:"key_method,omitempty"`
 	KeyURI    string `json:"key_uri,omitempty"`

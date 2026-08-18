@@ -339,6 +339,7 @@ footer{border-top:1px solid var(--border);padding:34px 0;color:var(--muted);font
           <tr><td><code>pdt</code></td><td><code>EXT-X-PROGRAM-DATE-TIME</code> against the media: that it never goes backwards, that it advances at the media's rate, and that every rung of the ladder maps the same media to the same wall clock</td><td><span class="pill p-bad">BAD</span></td></tr>
           <tr><td><code>parts</code></td><td>Low-latency <code>EXT-X-PART</code> parts fetched and compared with the segment they make up: contiguity, coverage, <code>INDEPENDENT=YES</code> against the real sync sample, and measured length against <code>PART-TARGET</code></td><td><span class="pill p-bad">BAD</span></td></tr>
           <tr><td><code>watch</code></td><td>With <code>--watch</code>, whether the live edge actually advances: new-segment latency, a stall, and a packager that stopped publishing</td><td><span class="pill p-bad">BAD</span></td></tr>
+          <tr><td><code>period</code></td><td>A multi-period MPD read as one presentation: whether each Period&rsquo;s media lands where <code>@presentationTimeOffset</code> maps it, and whether the resolution or codec changes across a boundary</td><td><span class="pill p-bad">BAD</span></td></tr>
         </tbody>
       </table>
     </div>

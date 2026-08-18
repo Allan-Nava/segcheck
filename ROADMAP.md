@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**101 items · 74 shipped · 27 open · 13 milestones.**
+**102 items · 75 shipped · 27 open · 13 milestones.**
 
 ## At a glance
 
@@ -16,7 +16,7 @@
 | **M2** — The checks | `v0.1.0` | shipped | `##########` 100% | 0 | 8 |
 | **M3** — Codec and timing depth | `v0.2.0` | shipped | `##########` 100% | 0 | 9 |
 | **M4** — Everything that is not the video track | `v0.3.0` | shipped | `##########` 100% | 0 | 14 |
-| **M5** — Live and delivery | `v0.4.0` | **now** | `#######...` 67% | 2 | 4 |
+| **M5** — Live and delivery | `v0.4.0` | **now** | `########..` 83% | 1 | 5 |
 | **M9** — Wallclock and DVR correctness | `v0.4.0` | next | `######....` 60% | 2 | 3 |
 | **M6** — Integration | `v0.5.0` | later | `..........` 0% | 6 | 0 |
 | **M10** — Authoring-spec conformance | `v0.5.0` | later | `######....` 60% | 2 | 3 |
@@ -24,13 +24,12 @@
 | **M12** — Colour, HDR and the codec string | `v0.7.0` | later | `#####.....` 50% | 3 | 3 |
 | **M13** — Audio, past the sanity check | `v0.8.0` | later | `#####.....` 50% | 3 | 3 |
 | **M8** — Container image and supply chain | `v0.1.1` | shipped | `##########` 100% | 0 | 5 |
-| **M7** — Project and release | `ongoing` | ongoing | `#######...` 65% | 7 | 13 |
+| **M7** — Project and release | `ongoing` | ongoing | `######....` 62% | 8 | 13 |
 
 ## Next up
 
 The open items with the highest priority in the milestones that are in flight.
 
-- **SC-40** — Multi-period DASH · `med` · size `L` · check,parser (M5, target `v0.4.0`)
 - **SC-54** — Discontinuity integrity · `med` · size `M` · check (M9, target `v0.4.0`)
 - **SC-55** — Live-edge drift · `med` · size `M` · check,cli (M9, target `v0.4.0`)
 - **SC-64** — `scripts/backlog.sh` has no tests · `med` · size `S` · tests,project (M7, target `ongoing`)
@@ -38,6 +37,7 @@ The open items with the highest priority in the milestones that are in flight.
 - **SC-99** — No low-latency reference stream in the smoke suite · `med` · size `M` · tests (M7, target `ongoing`)
 - **SC-100** — Two rungs at one resolution get one name · `med` · size `S` · output (M7, target `ongoing`)
 - **SC-101** — A failed DVR window reports the claim, not the truth · `med` · size `M` · check,delivery (M7, target `ongoing`)
+- **SC-102** — A Period behind an `xlink:href` swallows the periods after it · `med` · size `M` · parser (M7, target `ongoing`)
 
 ## Milestones
 
@@ -108,16 +108,16 @@ Target `v0.3.0` · shipped · 0 open · 14 shipped · `##########` 100%
 
 ### M5 — Live and delivery
 
-Target `v0.4.0` · **now** · 2 open · 4 shipped · `#######...` 67%
+Target `v0.4.0` · **now** · 1 open · 5 shipped · `########..` 83%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
-| **SC-40** — Multi-period DASH | med | L | check,parser | open |
 | **SC-26** — Byte-range support probe | low | S | delivery,check | open |
 | **SC-25** — Live-edge watch | high | L | cli,check | shipped `0.4.0` |
 | **SC-39** — LL-HLS parts | high | XL | check,parser | shipped `0.4.0` |
 | **SC-23** — Cache behaviour | med | M | delivery,check | shipped `0.4.0` |
 | **SC-24** — Multi-POP comparison | med | L | delivery,cli | shipped `0.4.0` |
+| **SC-40** — Multi-period DASH | med | L | check,parser | shipped `0.4.0` |
 
 ### M9 — Wallclock and DVR correctness
 
@@ -208,7 +208,7 @@ Target `v0.1.1` · shipped · 0 open · 5 shipped · `##########` 100%
 
 ### M7 — Project and release
 
-Target `ongoing` · ongoing · 7 open · 13 shipped · `#######...` 65%
+Target `ongoing` · ongoing · 8 open · 13 shipped · `######....` 62%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
@@ -217,6 +217,7 @@ Target `ongoing` · ongoing · 7 open · 13 shipped · `#######...` 65%
 | **SC-99** — No low-latency reference stream in the smoke suite | med | M | tests | open |
 | **SC-100** — Two rungs at one resolution get one name | med | S | output | open |
 | **SC-101** — A failed DVR window reports the claim, not the truth | med | M | check,delivery | open |
+| **SC-102** — A Period behind an `xlink:href` swallows the periods after it | med | M | parser | open |
 | **SC-49** — Per-check reference pages | low | M | docs | open |
 | **SC-98** — The generated cask fails the tap's style audit | low | S | release | open |
 | **SC-36** — Real-stream smoke suite | high | S | tests,release | shipped `0.2.0` |
@@ -237,8 +238,8 @@ Target `ongoing` · ongoing · 7 open · 13 shipped · `#######...` 65%
 
 | Label | Items | Open |
 |---|---|---|
-| `check` | 47 | 15 |
-| `parser` | 44 | 9 |
+| `check` | 47 | 14 |
+| `parser` | 45 | 9 |
 | `integration` | 4 | 4 |
 | `output` | 5 | 4 |
 | `cli` | 8 | 3 |

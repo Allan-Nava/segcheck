@@ -2053,12 +2053,35 @@ func checkEncryption(rends []*renditionData) []finding.Finding {
 // video renditions. ABR switching only works if the renditions share one
 // timeline: misaligned boundaries make every switch glitch, and this is the
 // classic defect of a multi-encoder setup without a shared clock.
-func checkAlignment(rends []*renditionData, opts Options) []finding.Finding {
-	type point struct {
-		label string
-		start float64
+// point is one rendition's start at one moment.
+type point struct {
+	label string
+	start float64
+}
+
+// seqKey identifies one moment in one ladder: a segment index within a period.
+// Periods restart their numbering, so the index alone is not a moment.
+type seqKey struct {
+	period int
+	seq    int
+}
+
+func sortedSeqKeys(m map[seqKey][]point) []seqKey {
+	out := make([]seqKey, 0, len(m))
+	for k := range m {
+		out = append(out, k)
 	}
-	bySeq := map[int][]point{}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].period != out[j].period {
+			return out[i].period < out[j].period
+		}
+		return out[i].seq < out[j].seq
+	})
+	return out
+}
+
+func checkAlignment(rends []*renditionData, opts Options) []finding.Finding {
+	bySeq := map[seqKey][]point{}
 	videoRends := 0
 	for _, rd := range rends {
 		if rd.err != nil || rd.r.Kind != manifest.Video {
@@ -2070,7 +2093,12 @@ func checkAlignment(rends []*renditionData, opts Options) []finding.Finding {
 			if !ok || t.Timescale == 0 {
 				continue
 			}
-			bySeq[sd.seg.Sequence] = append(bySeq[sd.seg.Sequence], point{rendLabel(rd.r), toSec(t.MinPTS, t.Timescale)})
+			// Keyed by period as well as index: periods restart their numbering,
+			// so segment 0 of one period and segment 0 of the next are two
+			// different moments and comparing them reported every multi-period
+			// presentation as misaligned.
+			key := seqKey{period: rd.r.PeriodIndex, seq: sd.seg.Sequence}
+			bySeq[key] = append(bySeq[key], point{rendLabel(rd.r), toSec(t.MinPTS, t.Timescale)})
 		}
 	}
 	if videoRends < 2 {
@@ -2080,8 +2108,8 @@ func checkAlignment(rends []*renditionData, opts Options) []finding.Finding {
 	tolSec := opts.GapToleranceMS / 1000
 	var out []finding.Finding
 	compared, misaligned := 0, 0
-	for _, seq := range sortedIntKeys(bySeq) {
-		pts := bySeq[seq]
+	for _, key := range sortedSeqKeys(bySeq) {
+		pts := bySeq[key]
 		if len(pts) < 2 {
 			continue
 		}
@@ -2101,7 +2129,7 @@ func checkAlignment(rends []*renditionData, opts Options) []finding.Finding {
 		}
 		misaligned++
 		out = append(out, finding.Finding{
-			Check: "alignment", Target: fmt.Sprintf("seq %d", seq), Status: finding.BAD,
+			Check: "alignment", Target: fmt.Sprintf("seq %d", key.seq), Status: finding.BAD,
 			Message: fmt.Sprintf("renditions start %s apart at the same segment index (%s at %.3fs, %s at %.3fs)",
 				signedMS(spread), min.label, min.start, max.label, max.start),
 			Value: finding.Num(spread * 1000), Unit: "ms",
@@ -2118,17 +2146,30 @@ func checkAlignment(rends []*renditionData, opts Options) []finding.Finding {
 }
 
 // checkLadder inspects the shape of the ladder itself, from the manifest alone.
-func checkLadder(pl manifest.Playlist) []finding.Finding {
-	if !pl.Master {
-		return nil
+// byPeriod groups renditions by the period they belong to, in period order. For
+// HLS and a single-period MPD that is one group holding everything, which is
+// what every comparison here assumed before multi-period support existed.
+func byPeriod(rs []manifest.Rendition) [][]manifest.Rendition {
+	var order []int
+	groups := map[int][]manifest.Rendition{}
+	for _, r := range rs {
+		if _, seen := groups[r.PeriodIndex]; !seen {
+			order = append(order, r.PeriodIndex)
+		}
+		groups[r.PeriodIndex] = append(groups[r.PeriodIndex], r)
 	}
-	video := pl.VideoRenditions()
-	if len(video) == 0 {
-		return []finding.Finding{{
-			Check: "ladder", Target: shortTarget(pl.URL), Status: finding.BAD,
-			Message: "no video rendition in the manifest",
-		}}
+	sort.Ints(order)
+	out := make([][]manifest.Rendition, 0, len(order))
+	for _, i := range order {
+		out = append(out, groups[i])
 	}
+	return out
+}
+
+// ladderShapeFindings reports the two ways one ladder can be shaped wrongly:
+// a rung a player can never use, and a rung whose extra bandwidth buys fewer
+// pixels.
+func ladderShapeFindings(video []manifest.Rendition) []finding.Finding {
 	var out []finding.Finding
 
 	// Duplicate rungs: two renditions at the same resolution and bitrate are
@@ -2165,6 +2206,30 @@ func checkLadder(pl manifest.Playlist) []finding.Finding {
 				Hint:    "the ladder is inverted at this rung",
 			})
 		}
+	}
+	return out
+}
+
+func checkLadder(pl manifest.Playlist) []finding.Finding {
+	if !pl.Master {
+		return nil
+	}
+	video := pl.VideoRenditions()
+	if len(video) == 0 {
+		return []finding.Finding{{
+			Check: "ladder", Target: shortTarget(pl.URL), Status: finding.BAD,
+			Message: "no video rendition in the manifest",
+		}}
+	}
+	var out []finding.Finding
+
+	// A ladder is what a player chooses between at one moment, and a
+	// multi-period MPD holds several of them end to end. Two periods' identical
+	// rungs are the same rung twice in time, not a duplicate in one ladder, and
+	// comparing across the boundary reported every well-formed multi-period
+	// presentation as full of duplicates.
+	for _, rung := range byPeriod(video) {
+		out = append(out, ladderShapeFindings(rung)...)
 	}
 
 	// An AUDIO group a variant points at must exist, or the variant plays mute.

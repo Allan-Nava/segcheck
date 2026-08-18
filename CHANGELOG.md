@@ -9,6 +9,21 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **A multi-period MPD is read as one presentation** (SC-40). A `Period` is how an ad
+  break, a programme junction and a re-encode are all expressed, and it is the one place
+  in a presentation where every timeline restarts — which makes a defect at a boundary
+  invisible from either side: each period is internally perfect and the join is the thing
+  nobody looked at. Every rendition now carries the period it came from and every segment
+  how far into that period it starts, and the new `period` check settles the two claims
+  the media can arbitrate. Where the period actually plays: `@presentationTimeOffset` says
+  which media time it begins at, the template says how far past that beginning each
+  segment sits, and the `tfdt` decides between them. A period placed wrongly plays
+  perfectly from the start and lands a seek in the wrong place, which is why it survives
+  every other check. And what changes across the join: a resolution change is a WARN and a
+  codec change a BAD, both read from the media rather than from the manifest that declares
+  it. Verified against DASH-IF livesim2's `periods_60` in both its `@duration` and
+  `SegmentTimeline` forms, and nomor's 5_1a and 6 DASH-IF test cases.
+
 - **`--pop ADDR` compares CDN edges** (SC-24). One edge serving different bytes from
   another for the same URL is the defect a single-shot check cannot see by construction:
   it asks one edge, gets a perfect answer, and the viewers routed elsewhere are the ones
@@ -332,6 +347,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **`ladder` and `alignment` no longer compare one period against the next** (SC-40). Both
+  read the whole rendition list as a single ladder, so a well-formed multi-period MPD —
+  the same rungs, one period after another — reported as duplicate rungs a player could
+  never use and as a four-second misalignment at every segment index. A ladder is what a
+  player chooses between at one moment; consecutive periods are the same rung twice in
+  time. Both comparisons are now scoped to a period, and `alignment` keys its segment
+  index by period as well, because periods restart their numbering and segment 0 of one is
+  not the same moment as segment 0 of the next.
 - **The coverage ratchet is honoured again.** Eleven milestones' worth of new parsers and
   checks dropped statement coverage from 99.64% to 93.89%, which `scripts/coverage.sh` is
   there to catch and which caught it. It is back at 99.65% — covered rather than

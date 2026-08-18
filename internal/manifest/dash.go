@@ -220,6 +220,9 @@ func ParseDASH(body []byte, baseURL string, now time.Time) (Playlist, error) {
 						dashChannels(rep.AudioChannelConfiguration),
 						dashChannels(as.AudioChannelConfiguration),
 					),
+					PeriodID:      period.ID,
+					PeriodIndex:   pi,
+					PeriodStart:   periodStart,
 					Captions:      dashCaptions(as.Accessibility),
 					KeyMethod:     dashKeyMethod(protected),
 					KeyScheme:     scheme,
@@ -229,6 +232,20 @@ func ParseDASH(body []byte, baseURL string, now time.Time) (Playlist, error) {
 					Transfer:      transfer,
 					Matrix:        matrix,
 					VideoRange:    VideoRangeForTransfer(transfer),
+				}
+
+				// The period's own extent and the offset that maps its media onto
+				// the presentation timeline. Only multi-period MPDs carry them, and
+				// a single-period one must gain nothing.
+				if len(doc.Periods) > 1 {
+					r.PeriodDuration = periodDur
+					if tmpl != nil && tmpl.PresentationTimeOffset != 0 {
+						ts := tmpl.Timescale
+						if ts == 0 {
+							ts = 1
+						}
+						r.PresentationTimeOffset = float64(tmpl.PresentationTimeOffset) / float64(ts)
+					}
 				}
 
 				switch {
@@ -390,7 +407,13 @@ func expandTemplate(t *mpdSegTemplate, rep mpdRepresentation, base *url.URL, ast
 					// timeline and break the comparison.
 					DeclaredStart:    float64(current) / float64(timescale),
 					HasDeclaredStart: true,
-					KeyMethod:        key,
+					// Where the timeline puts this segment inside its period:
+					// @t is on the media timeline and @presentationTimeOffset
+					// is the media time the period begins at, so the difference
+					// is the offset into the period.
+					PeriodOffset:    float64(current-t.PresentationTimeOffset) / float64(timescale),
+					HasPeriodOffset: true,
+					KeyMethod:       key,
 				})
 				current += s.D
 				number++
@@ -435,11 +458,13 @@ func expandTemplate(t *mpdSegTemplate, rep mpdRepresentation, base *url.URL, ast
 
 	at := func(idx int) *Segment {
 		return &Segment{
-			URI:       Resolve(base, substituteTemplate(t.Media, rep, startNumber+idx, int64(float64(idx)*float64(t.Duration)))),
-			Duration:  segDur,
-			InitURI:   initURI,
-			Sequence:  startNumber + idx,
-			KeyMethod: key,
+			URI:             Resolve(base, substituteTemplate(t.Media, rep, startNumber+idx, int64(float64(idx)*float64(t.Duration)))),
+			Duration:        segDur,
+			InitURI:         initURI,
+			Sequence:        startNumber + idx,
+			PeriodOffset:    float64(idx) * segDur,
+			HasPeriodOffset: true,
+			KeyMethod:       key,
 		}
 	}
 
@@ -477,7 +502,12 @@ func expandTemplate(t *mpdSegTemplate, rep mpdRepresentation, base *url.URL, ast
 			// SegmentTimeline the media-timeline origin depends on
 			// presentationTimeOffset, so an index-derived start is not
 			// comparable with the segment's tfdt and would report phantom drift.
-			KeyMethod: key,
+			// The offset into the period is a different claim and the index does
+			// state it: index i covers [i*segDur, (i+1)*segDur) from the period's
+			// start, whatever the media timeline underneath it counts from.
+			PeriodOffset:    float64(idx) * segDur,
+			HasPeriodOffset: true,
+			KeyMethod:       key,
 		})
 	}
 	return initURI, segs, edges, nil
@@ -614,6 +644,12 @@ func dashKind(as mpdAdaptation, idx int) StreamKind {
 
 func dashName(rep mpdRepresentation, as mpdAdaptation, kind StreamKind, pi, ai, ri int) string {
 	if h := firstNonZero(rep.Height, as.Height); h > 0 {
+		// Two periods' 720p rungs are two different things, and a report naming
+		// both of them "720p" is unreadable. The suffix appears only from the
+		// second period on, so a single-period ladder reads as it always has.
+		if pi > 0 {
+			return fmt.Sprintf("%dp period %d", h, pi+1)
+		}
 		return fmt.Sprintf("%dp", h)
 	}
 	if kind == Audio {

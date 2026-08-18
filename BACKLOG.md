@@ -392,10 +392,21 @@ stream the way a viewer receives it".
   Unit-tested only; no public LL-HLS reference stream was reachable to run it
   against, which is SC-99.
   <!-- sc: prio=high size=XL labels=check,parser ver=0.4.0 -->
-- [ ] **SC-40 — Multi-period DASH**: continuity across a period boundary, where
-  the presentation-time offset resets and an encoder change lands. Today each
-  period is checked as if the others did not exist.
-  <!-- sc: prio=med size=L labels=check,parser -->
+- [x] **SC-40 — Multi-period DASH**: the `period` check reads a multi-period MPD as
+  one presentation. Every rendition carries the Period it came from and every segment
+  how far into that Period it starts, so the two things a boundary hides are visible:
+  a Period whose media does not land where `@presentationTimeOffset` maps it — the
+  seek-only defect that plays perfectly from the start — and a resolution or codec
+  that changes across the join. The ladder-wide comparisons were scoped to a Period
+  at the same time: `ladder` and `alignment` had been reading consecutive Periods as
+  competing rungs and reported every well-formed multi-period MPD as full of
+  duplicates and four seconds misaligned. A Period's first segment may begin before
+  the Period does — the grid does not divide by a boundary and the player trims the
+  head — and audio is left out of the placement reading entirely, because an AAC grid
+  straddles almost every boundary there is: nomor's own DASH-IF vector puts 1.96198s
+  segments against a 250s Period. Verified against DASH-IF livesim2's `periods_60`
+  (both `@duration` and `SegmentTimeline`) and nomor's 5_1a and 6 test cases.
+  <!-- sc: prio=med size=L labels=check,parser ver=0.4.0 -->
 - [x] **SC-23 — Cache behaviour**: the `cache` check reads `X-Cache`,
   `CF-Cache-Status`, `Akamai-Cache-Status`, `X-Cache-Hits` and `Age` — every vendor
   spells it differently, and one vocabulary would call a warm edge cold — and reports
@@ -1102,3 +1113,15 @@ checks roadmap and blocks nothing.
   self-served stream cannot catch a shared misreading. The second is worth less and
   still worth more than nothing.
   <!-- sc: prio=med size=M labels=tests -->
+- [ ] **SC-102 — A Period behind an `xlink:href` swallows the periods after it**: an MPD
+  may put a Period in another document and reference it, which is how an ad decision
+  server splices a break in, and segcheck neither resolves the reference nor accounts for
+  the gap it leaves. A remote Period contributes no renditions — honest enough — but it
+  also states no `@duration`, so every Period after it that derives its start from the
+  previous one derives it from nothing: nomor's `5_1a` DASH-IF vector has three Periods
+  and segcheck places the third at 0.000s, which is where the first one is. Nothing acts
+  on that number today beyond printing it, which is the only reason this is not a wrong
+  finding rather than a wrong label. Either resolve the reference (`@actuate=onLoad` says
+  the MPD expects it to be) or carry "this period's start is not derivable" and refuse to
+  print a start that was never computed.
+  <!-- sc: prio=med size=M labels=parser -->
