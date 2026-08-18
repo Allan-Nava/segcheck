@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**101 items · 73 shipped · 28 open · 13 milestones.**
+**101 items · 74 shipped · 27 open · 13 milestones.**
 
 ## At a glance
 
@@ -16,7 +16,7 @@
 | **M2** — The checks | `v0.1.0` | shipped | `##########` 100% | 0 | 8 |
 | **M3** — Codec and timing depth | `v0.2.0` | shipped | `##########` 100% | 0 | 9 |
 | **M4** — Everything that is not the video track | `v0.3.0` | shipped | `##########` 100% | 0 | 14 |
-| **M5** — Live and delivery | `v0.4.0` | **now** | `#####.....` 50% | 3 | 3 |
+| **M5** — Live and delivery | `v0.4.0` | **now** | `#######...` 67% | 2 | 4 |
 | **M9** — Wallclock and DVR correctness | `v0.4.0` | next | `######....` 60% | 2 | 3 |
 | **M6** — Integration | `v0.5.0` | later | `..........` 0% | 6 | 0 |
 | **M10** — Authoring-spec conformance | `v0.5.0` | later | `######....` 60% | 2 | 3 |
@@ -30,7 +30,6 @@
 
 The open items with the highest priority in the milestones that are in flight.
 
-- **SC-24** — Multi-POP comparison · `med` · size `L` · delivery,cli (M5, target `v0.4.0`)
 - **SC-40** — Multi-period DASH · `med` · size `L` · check,parser (M5, target `v0.4.0`)
 - **SC-54** — Discontinuity integrity · `med` · size `M` · check (M9, target `v0.4.0`)
 - **SC-55** — Live-edge drift · `med` · size `M` · check,cli (M9, target `v0.4.0`)
@@ -38,6 +37,7 @@ The open items with the highest priority in the milestones that are in flight.
 - **SC-94** — Developer ID signing and notarisation · `med` · size `M` · release (M7, target `ongoing`)
 - **SC-99** — No low-latency reference stream in the smoke suite · `med` · size `M` · tests (M7, target `ongoing`)
 - **SC-100** — Two rungs at one resolution get one name · `med` · size `S` · output (M7, target `ongoing`)
+- **SC-101** — A failed DVR window reports the claim, not the truth · `med` · size `M` · check,delivery (M7, target `ongoing`)
 
 ## Milestones
 
@@ -108,16 +108,16 @@ Target `v0.3.0` · shipped · 0 open · 14 shipped · `##########` 100%
 
 ### M5 — Live and delivery
 
-Target `v0.4.0` · **now** · 3 open · 3 shipped · `#####.....` 50%
+Target `v0.4.0` · **now** · 2 open · 4 shipped · `#######...` 67%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
-| **SC-24** — Multi-POP comparison | med | L | delivery,cli | open |
 | **SC-40** — Multi-period DASH | med | L | check,parser | open |
 | **SC-26** — Byte-range support probe | low | S | delivery,check | open |
 | **SC-25** — Live-edge watch | high | L | cli,check | shipped `0.4.0` |
 | **SC-39** — LL-HLS parts | high | XL | check,parser | shipped `0.4.0` |
 | **SC-23** — Cache behaviour | med | M | delivery,check | shipped `0.4.0` |
+| **SC-24** — Multi-POP comparison | med | L | delivery,cli | shipped `0.4.0` |
 
 ### M9 — Wallclock and DVR correctness
 
@@ -239,10 +239,10 @@ Target `ongoing` · ongoing · 7 open · 13 shipped · `#######...` 65%
 |---|---|---|
 | `check` | 47 | 15 |
 | `parser` | 44 | 9 |
-| `cli` | 8 | 4 |
 | `integration` | 4 | 4 |
 | `output` | 5 | 4 |
-| `delivery` | 6 | 3 |
+| `cli` | 8 | 3 |
+| `delivery` | 6 | 2 |
 | `release` | 10 | 2 |
 | `tests` | 12 | 2 |
 | `docs` | 5 | 1 |
