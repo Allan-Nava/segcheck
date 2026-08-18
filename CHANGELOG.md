@@ -114,6 +114,27 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   noise — but *not* against a real encrypted stream, because no public AES-128 test
   stream was reachable. SC-96 tracks that, and it matters: every other reader in this
   project had a design error that only a real stream found.
+- **SAMPLE-AES and CENC no longer make the bitstream checks lie** (SC-95). Full-segment
+  AES-128 is the honest kind of blindness: nothing parses and every check says it could
+  not look. Partial encryption is the dangerous kind — the container parses, the timing
+  checks work perfectly and read as a clean bill of health, and the bitstream readers
+  *succeed and find nothing*.
+
+  Two false BADs came out of that, both against media that is entirely correct: a caption
+  scan over ciphertext reported "scanned, no captions" and turned a manifest correctly
+  declaring CC1 into an accessibility failure, and a keyframe walk reported "no random
+  access point" for the same reason. Both now report that nobody could look.
+
+  The CENC scheme is read from `sinf`/`schm` (`cenc`, `cbcs`, `cens`, `cbc1`) and
+  SAMPLE-AES from the manifest, and the `encryption` check says which half of the tool
+  ran. The distinction is drawn per container, not blanket: in fMP4 the resolution is in
+  the sample entry and the sync flag in the `trun`, both in the clear, so those checks
+  keep working — it is MPEG-TS where the elementary stream is the only source and a
+  verdict drawn from it is worthless once the samples are encrypted.
+
+  Verified against a real CENC stream (`media.axprod.net` v7-MultiDRM-SingleKey), which
+  produces exactly the findings its clear twin does apart from the encryption notes. It
+  joins the smoke suite as a sixth baseline — the first protected one.
 - **A wrapped subtitle rendition gets the same drift check a text one does** (SC-97).
   SC-93 counted the cues inside a `stpp` sample; now they are placed. A document that is
   internally perfect and pointing somewhere else fails the way a WebVTT one with a bad

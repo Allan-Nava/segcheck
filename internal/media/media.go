@@ -124,6 +124,17 @@ type Track struct {
 	// Its Scanned field is what separates "no captions here" from "nobody
 	// looked", which lead to opposite verdicts.
 	Captions CaptionPresence `json:"captions,omitempty"`
+	// Protection is the CENC scheme protecting this track's samples — cenc, cbcs,
+	// cens or cbc1 — read from the sinf/schm box. Empty when the track is not
+	// protected, or when it is and the packager stated no scheme.
+	Protection string `json:"protection,omitempty"`
+	// SamplesEncrypted marks a track whose *samples* are protected while its
+	// container is not. This is the opposite shape of trouble from full-segment
+	// AES-128: nothing fails, so the bitstream readers succeed and find nothing —
+	// and "scanned, no captions" against a manifest declaring CC1 is a BAD on media
+	// that is entirely correct. Every reader that looks inside a sample has to stay
+	// out when this is set.
+	SamplesEncrypted bool `json:"samples_encrypted,omitempty"`
 	// Encrypted marks a track whose samples are protected (encv/enca sample
 	// entry, or a TS payload flagged scrambled).
 	Encrypted bool `json:"encrypted,omitempty"`

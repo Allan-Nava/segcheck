@@ -97,6 +97,18 @@ var smokeStreams = []smokeStream{
 		},
 		expect: []string{"container", "resolution", "keyframe", "framerate", "continuity", "audio", "ladder"},
 	},
+	{
+		name: "dash-cenc",
+		url:  "https://media.axprod.net/TestVectors/v7-MultiDRM-SingleKey/Manifest_1080p.mpd",
+		// Partial encryption: the container parses and the samples do not, which is the
+		// shape that makes the bitstream readers succeed and find nothing. Its clear
+		// twin at v7-Clear produces the same findings minus the encryption notes, which
+		// is what says the protected stream is checked as well as an unprotected one.
+		allowed: map[string]string{
+			"bitrate": "the vectors under-declare one segment's peak and over-declare the audio average",
+		},
+		expect: []string{"container", "resolution", "keyframe", "framerate", "continuity", "encryption"},
+	},
 }
 
 type smokeResult struct {

@@ -348,14 +348,15 @@ stream that break in production and that no manifest-only checker can see.
   requires, which is the difference between reading a stream that omits the attribute
   and decrypting all of it to noise.
   <!-- sc: prio=med size=M labels=cli,parser ver=0.3.0 -->
-- [ ] **SC-95 — SAMPLE-AES and CENC**: `METHOD=SAMPLE-AES` encrypts parts of the
-  media rather than the whole segment, and MPEG-CENC (`cenc`/`cbcs`) does the same in
-  fMP4 through `senc`/`saiz`/`saio`. Both leave the container readable and the samples
-  not, so the timing checks already work and the bitstream ones do not — a different
-  shape of partial blindness from AES-128, and worth reporting as such.
-  <!-- sc: prio=med size=L labels=parser -->
-- [ ] **SC-96 — Verify against a real encrypted stream, and a real segmentation
-  descriptor**: SC-22 is asserted against a
+- [x] **SC-95 — SAMPLE-AES and CENC**: the CENC scheme is read from `sinf`/`schm` and
+  `METHOD=SAMPLE-AES` from the manifest, and both stop the bitstream readers reporting an
+  absence they could not have seen — a caption scan over ciphertext succeeded and found
+  nothing, which turned a manifest correctly declaring CC1 into a BAD. The `encryption`
+  check now says which half of the tool ran. Verified against a real CENC stream whose
+  clear twin produces the same findings minus the encryption notes.
+  <!-- sc: prio=med size=L labels=parser ver=0.3.0 -->
+- [ ] **SC-96 — Verify AES-128 and a segmentation descriptor against real streams**: the
+  CENC half of SC-95 is verified against `media.axprod.net`, but SC-22 is asserted against a
   synthetic origin whose plaintext is known by construction, which is the only way to
   tell a working decrypter from one producing plausible noise — but no public AES-128
   test stream was reachable to confirm it end to end, and every other reader in this

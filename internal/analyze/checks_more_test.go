@@ -71,12 +71,16 @@ func TestCheckEncryption_EverySegmentDeclaresAKey(t *testing.T) {
 		segs = append(segs, sd)
 	}
 	got := checkEncryption([]*renditionData{rend("720p", withSegs(segs...))})
-	f, ok := findIn(got, "encryption", finding.OK)
-	if !ok {
-		t.Fatalf("no OK finding for a fully protected rendition:\n%s", dumpFindings(got))
+	// SAMPLE-AES also draws the partial-encryption note, so there are two OK findings
+	// here and the declaration one has to be looked for rather than taken as the first.
+	found := false
+	for _, f := range got {
+		if f.Check == "encryption" && f.Status == finding.OK && strings.Contains(f.Message, "all 3") {
+			found = true
+		}
 	}
-	if !strings.Contains(f.Message, "all 3") {
-		t.Errorf("message = %q", f.Message)
+	if !found {
+		t.Errorf("no OK finding saying every segment declares a key:\n%s", dumpFindings(got))
 	}
 }
 

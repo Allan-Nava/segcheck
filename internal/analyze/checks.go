@@ -631,7 +631,10 @@ func checkKeyframe(rends []*renditionData) []finding.Finding {
 				continue
 			}
 			opens, known := t.StartsOnKeyframe()
-			if !known {
+			if !known || bitstreamOpaque(sd) {
+				// An encrypted elementary stream carries no readable random access
+				// point, so a walk over it finds none — and reporting that as "no
+				// keyframe" is a BAD on media nobody could look at.
 				continue
 			}
 			readable++
@@ -818,6 +821,70 @@ func medianFloat(xs []float64) float64 {
 
 // humanFPS drops the decimals a whole rate does not need, so 25 reads as "25fps"
 // and 29.97 keeps the part that distinguishes it from 30.
+// partialEncryption names the scheme protecting a segment's samples while leaving its
+// container readable — HLS SAMPLE-AES and SAMPLE-AES-CTR, and the CENC schemes a CMAF
+// sample entry states. It is empty for unprotected media and for full-segment AES-128,
+// which is a different problem: there nothing parses at all.
+func partialEncryption(sd segmentData) string {
+	// The media's own scheme first: a CMAF sample entry states cenc or cbcs outright,
+	// while the manifest's SAMPLE-AES-CTR is HLS's name for the same thing.
+	for _, t := range sd.info.Tracks {
+		if t.SamplesEncrypted && t.Protection != "" {
+			return t.Protection
+		}
+	}
+	switch strings.ToUpper(sd.seg.KeyMethod) {
+	case "SAMPLE-AES", "SAMPLE-AES-CTR", "SAMPLE-AES-CENC":
+		return strings.ToUpper(sd.seg.KeyMethod)
+	}
+	for _, t := range sd.info.Tracks {
+		if t.SamplesEncrypted {
+			return "sample encryption"
+		}
+	}
+	return ""
+}
+
+// partialEncryptionOf is the scheme protecting a rendition's samples, from the first
+// sampled segment that states one.
+func partialEncryptionOf(rd *renditionData) string {
+	for _, sd := range parsedSegs(rd) {
+		if s := partialEncryption(sd); s != "" {
+			return s
+		}
+	}
+	return ""
+}
+
+// bitstreamBlind reports whether any sampled segment's bitstream is unreadable, which is
+// what decides whether the resolution, keyframe and caption checks had anything to work
+// from.
+func bitstreamBlind(rd *renditionData) bool {
+	for _, sd := range parsedSegs(rd) {
+		if bitstreamOpaque(sd) {
+			return true
+		}
+	}
+	return false
+}
+
+// bitstreamOpaque reports whether a segment's *bitstream* cannot be read even though its
+// container can.
+//
+// This is the trap partial encryption sets. With full-segment AES-128 every reader fails
+// and says so. With SAMPLE-AES the container parses, the timing checks work perfectly, and
+// the bitstream readers succeed and find nothing — so a caption scan reports "scanned, no
+// captions" and a keyframe walk reports "no random access point", both against media that
+// is entirely correct.
+//
+// In fMP4 the answers that matter are outside the samples: the resolution is in the sample
+// entry and the sync flag is in the trun, both in the clear. It is MPEG-TS where the
+// elementary stream itself is the only source, and where a verdict drawn from it is
+// worthless once the samples are encrypted.
+func bitstreamOpaque(sd segmentData) bool {
+	return sd.info.Container == media.ContainerTS && partialEncryption(sd) != ""
+}
+
 // checkSubtitles compares a subtitle rendition's cues against the segment they
 // arrived in.
 //
@@ -1576,7 +1643,10 @@ func captionsSeen(rd *renditionData) (media.CaptionPresence, bool) {
 		if !ok {
 			continue
 		}
-		if !t.Captions.Scanned {
+		if !t.Captions.Scanned || bitstreamOpaque(sd) {
+			// A scan over encrypted samples succeeds and finds nothing. Treating that
+			// as an answer is how a manifest correctly declaring CC1 gets a BAD against
+			// media that is entirely correct.
 			continue
 		}
 		scanned = true
@@ -1884,6 +1954,22 @@ func checkEncryption(rends []*renditionData) []finding.Finding {
 		}
 		if decrypted > 0 {
 			continue
+		}
+
+		// Partial encryption is the shape that needs saying out loud: the container
+		// parses, so the timing checks work and read as a clean bill of health, while
+		// every bitstream reader is blind. An operator seeing only OK findings should
+		// know which half of the tool actually ran.
+		if scheme := partialEncryptionOf(rd); scheme != "" {
+			msg := fmt.Sprintf("%s protects the samples, not the container: timing and continuity are checked, the bitstream is not", scheme)
+			if bitstreamBlind(rd) {
+				msg += " — resolution, keyframes and captions cannot be verified without the key"
+			}
+			out = append(out, finding.Finding{
+				Check: "encryption", Target: label, Status: finding.OK, Message: msg,
+			})
+			// And then the ordinary declaration checks, which still apply: protection
+			// that changes mid-rendition is a defect whether or not it is partial.
 		}
 
 		switch {

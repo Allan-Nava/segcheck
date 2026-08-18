@@ -797,3 +797,35 @@ func HierarchicalSIDX(timescale uint32, leaves [][]SIDXEntry) []byte {
 	}
 	return out
 }
+
+// MP4InitCENC builds an fMP4 init for a CENC-protected track: the sample entry type is
+// rewritten to encv, sinf/frma preserves the format the encryption replaced, and schm
+// names the scheme. Passing an empty scheme omits the schm box, which real packagers do.
+//
+// The container stays entirely readable — the resolution is right there in the sample
+// entry — and only the samples are protected. That asymmetry is the whole point: the
+// timing checks work and the bitstream ones cannot.
+func MP4InitCENC(trackID, timescale uint32, width, height int, originalFormat, scheme string) []byte {
+	children := box("frma", []byte(originalFormat))
+	if scheme != "" {
+		children = append(children, box("schm", concat(
+			u32(0), // version and flags
+			[]byte(scheme),
+			u32(0x00010000), // scheme_version
+		))...)
+	}
+	entry := box("encv", concat(
+		make([]byte, 6),    // reserved
+		[]byte{0x00, 0x01}, // data_reference_index
+		make([]byte, 16),   // pre_defined and reserved
+		u16(uint16(width)),
+		u16(uint16(height)),
+		u32(0x00480000), u32(0x00480000), u32(0),
+		u16(1),
+		make([]byte, 32), // compressorname
+		u16(0x0018),
+		[]byte{0xFF, 0xFF},
+		box("sinf", children),
+	))
+	return mp4InitFrom(trackID, timescale, "vide", entry, nil, width, height)
+}

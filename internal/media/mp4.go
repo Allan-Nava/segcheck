@@ -31,6 +31,7 @@ type initTrack struct {
 	trexSize     uint32
 	sampleRate   int
 	channels     int
+	protection   string
 	// nalLengthSize is how many bytes prefix each NAL unit in the mdat, from the
 	// avcC or hvcC box. fMP4 uses a length prefix where an elementary stream uses
 	// start codes, so a walk that assumes Annex-B finds nothing at all.
@@ -162,6 +163,15 @@ func ParseMP4(data, init []byte) (SegmentInfo, error) {
 				t.MaxPTS -= t.FrameDur
 			}
 		}
+		if t.SamplesEncrypted {
+			// The samples are ciphertext. A caption scan over them succeeds and finds
+			// nothing, and reporting that as "scanned, no captions" is a BAD against a
+			// manifest that correctly declares a channel. Nobody looked, and the
+			// checks need to know that rather than the answer.
+			t.Captions = CaptionPresence{}
+			info.Tracks = append(info.Tracks, t)
+			continue
+		}
 		if t.Kind == Text {
 			// The cues are in the samples, not in the wrapper. Counting the samples
 			// could not tell a rendition that says nothing from one that says plenty.
@@ -281,6 +291,10 @@ func (it *initTrack) track() Track {
 		Encrypted:  it.encrypted,
 		SampleRate: it.sampleRate,
 		Channels:   it.channels,
+		Protection: it.protection,
+		// The samples of an encrypted track are protected even when the container
+		// around them is not, and every reader that looks inside one has to stay out.
+		SamplesEncrypted: it.encrypted,
 	}
 }
 
@@ -320,8 +334,9 @@ func parseMoov(moov []byte, out map[uint32]*initTrack) {
 		if minf, ok := findBox(mdia, "minf"); ok {
 			if stbl, ok := findBox(minf, "stbl"); ok {
 				if stsd, ok := findBox(stbl, "stsd"); ok {
-					codec, w, h, enc := parseStsd(stsd)
+					codec, w, h, enc, scheme := parseStsd(stsd)
 					t.codec = codec
+					t.protection = scheme
 					// The sample entries follow stsd's version, flags and entry
 					// count. A truncated stsd has none, and slicing past its end
 					// panics — which is how the fuzzer found this.
@@ -527,13 +542,13 @@ func parseDEC3(b []byte) (channels, sampleRate int, ok bool) {
 	return ac3ChannelCounts[acmod] + lfeon, sampleRate, true
 }
 
-func parseStsd(b []byte) (codec string, width, height int, encrypted bool) {
+func parseStsd(b []byte) (codec string, width, height int, encrypted bool, scheme string) {
 	if len(b) < 8 {
-		return "", 0, 0, false
+		return "", 0, 0, false, ""
 	}
 	entries := boxesIn(b[8:])
 	if len(entries) == 0 {
-		return "", 0, 0, false
+		return "", 0, 0, false, ""
 	}
 	e := entries[0]
 	typ := e.typ
@@ -557,6 +572,11 @@ func parseStsd(b []byte) (codec string, width, height int, encrypted bool) {
 				if frma, ok := findBox(sinf, "frma"); ok && len(frma) >= 4 {
 					typ = string(frma[:4])
 				}
+				// schm names the scheme protecting the samples. A packager may omit
+				// it, and the entry type alone still says they are protected.
+				if schm, ok := findBox(sinf, "schm"); ok && len(schm) >= 8 {
+					scheme = string(schm[4:8])
+				}
 			}
 		}
 	}
@@ -568,7 +588,7 @@ func parseStsd(b []byte) (codec string, width, height int, encrypted bool) {
 			width, height = w, h
 		}
 	}
-	return codec, width, height, encrypted
+	return codec, width, height, encrypted, scheme
 }
 
 // nalLengthSizeFrom reads how many bytes prefix each NAL unit in the samples,
