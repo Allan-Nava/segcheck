@@ -829,3 +829,86 @@ func MP4InitCENC(trackID, timescale uint32, width, height int, originalFormat, s
 	))
 	return mp4InitFrom(trackID, timescale, "vide", entry, nil, width, height)
 }
+
+// The DRM system UUIDs a pssh box is keyed by. They are the registered values,
+// not something a test may choose: a reader matching the wrong constant would
+// still report a plausible system name for the wrong content.
+const (
+	WidevineSystemID  = "edef8ba9-79d6-4ace-a3c8-27dcd51d21ed"
+	PlayReadySystemID = "9a04f079-9840-4286-ab92-e65be0885f95"
+	FairPlaySystemID  = "94ce86fb-07ff-4f43-adb8-93d2fa968ca2"
+)
+
+// MP4InitCENCWithPSSH is MP4InitCENC plus one pssh box per DRM system, which is
+// how a real CMAF init advertises which systems can unlock it.
+func MP4InitCENCWithPSSH(trackID, timescale uint32, width, height int, originalFormat, scheme string, systemIDs ...string) []byte {
+	base := MP4InitCENC(trackID, timescale, width, height, originalFormat, scheme)
+	var psshs []byte
+	for _, id := range systemIDs {
+		psshs = append(psshs, PSSH(id)...)
+	}
+	return insertIntoMoov(base, psshs)
+}
+
+// PSSH builds a version-0 ProtectionSystemSpecificHeader box for one system.
+func PSSH(systemID string) []byte {
+	return box("pssh", concat(
+		u32(0), // version 0, flags 0
+		uuidBytes(systemID),
+		u32(4),                         // DataSize
+		[]byte{0x08, 0x01, 0x12, 0x10}, // an opaque init-data blob
+	))
+}
+
+// uuidBytes turns "edef8ba9-79d6-4ace-a3c8-27dcd51d21ed" into its sixteen bytes.
+// A malformed id yields sixteen zeroes rather than a panic: a builder is not the
+// place to police its caller, and a test asserting on the result will say so.
+func uuidBytes(s string) []byte {
+	out := make([]byte, 0, 16)
+	hi := -1
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		var v int
+		switch {
+		case c >= '0' && c <= '9':
+			v = int(c - '0')
+		case c >= 'a' && c <= 'f':
+			v = int(c-'a') + 10
+		case c >= 'A' && c <= 'F':
+			v = int(c-'A') + 10
+		default:
+			continue
+		}
+		if hi < 0 {
+			hi = v
+			continue
+		}
+		out = append(out, byte(hi<<4|v))
+		hi = -1
+	}
+	for len(out) < 16 {
+		out = append(out, 0)
+	}
+	return out[:16]
+}
+
+// insertIntoMoov appends extra boxes inside the moov of an init segment, which
+// is where a pssh lives.
+func insertIntoMoov(init, extra []byte) []byte {
+	if len(extra) == 0 {
+		return init
+	}
+	for pos := 0; pos+8 <= len(init); {
+		size := int(uint32(init[pos])<<24 | uint32(init[pos+1])<<16 | uint32(init[pos+2])<<8 | uint32(init[pos+3]))
+		typ := string(init[pos+4 : pos+8])
+		if size < 8 || pos+size > len(init) {
+			return init
+		}
+		if typ == "moov" {
+			inner := concat(init[pos+8:pos+size], extra)
+			return concat(init[:pos], box("moov", inner), init[pos+size:])
+		}
+		pos += size
+	}
+	return init
+}

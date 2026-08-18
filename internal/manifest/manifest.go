@@ -10,6 +10,7 @@ package manifest
 import (
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -97,6 +98,22 @@ type Rendition struct {
 	// without this the protection had nowhere to come from — which produced
 	// "encrypted but the manifest declares no key" on manifests that declare it.
 	KeyMethod string `json:"key_method,omitempty"`
+	// KeyScheme is the common encryption scheme the manifest declares — cenc,
+	// cbcs, cens, cbc1 — from the DASH mp4protection ContentProtection's @value.
+	// Empty means the manifest states none, which is not the same as cenc: cbcs
+	// content served as cenc plays nowhere, and the two differ by a box field
+	// rather than by anything visible, so MPDs get copied between them.
+	KeyScheme string `json:"key_scheme,omitempty"`
+	// DRMSystems are the systems the manifest promises can unlock this
+	// rendition, as bare lower-case UUIDs so they compare directly with what a
+	// pssh box carries: DASH urn:uuid ContentProtection entries, HLS KEYFORMAT.
+	DRMSystems []string `json:"drm_systems,omitempty"`
+	// DRMInManifest are the systems whose key-acquisition data the manifest
+	// carries itself, in a DASH cenc:pssh element. DASH-IF's own guidance puts it
+	// there and every real multi-DRM vector does, so an initialisation segment
+	// legitimately carries no pssh at all — and a check that demanded one
+	// reported Axinom's reference stream as missing both its systems.
+	DRMInManifest []string `json:"drm_in_manifest,omitempty"`
 	// NextSegment is the segment immediately past a dynamic MPD's live edge: the
 	// one @availabilityStartTime arithmetic says does not exist yet. It is kept
 	// out of Segments deliberately — sampling it would report a 404 the MPD
@@ -348,6 +365,38 @@ func (p Playlist) VideoRenditions() []Rendition {
 		}
 	}
 	return out
+}
+
+// The registered DRM system UUIDs, and the HLS KEYFORMAT spellings that name
+// the same systems. Comparing what a manifest promises with what a pssh box
+// carries needs both on one vocabulary, and HLS and DASH spell it differently.
+const (
+	widevineUUID  = "edef8ba9-79d6-4ace-a3c8-27dcd51d21ed"
+	playReadyUUID = "9a04f079-9840-4286-ab92-e65be0885f95"
+	fairPlayUUID  = "94ce86fb-07ff-4f43-adb8-93d2fa968ca2"
+)
+
+var keyFormatSystems = map[string]string{
+	"com.apple.streamingkeydelivery": fairPlayUUID,
+	"com.microsoft.playready":        playReadyUUID,
+	"com.widevine.alpha":             widevineUUID,
+}
+
+// DRMSystemForKeyFormat is the system UUID an HLS KEYFORMAT names, or the empty
+// string for one that names no DRM system at all.
+//
+// An absent KEYFORMAT means "identity": the URI resolves to sixteen raw bytes
+// and there is no system to compare against. Returning a UUID for that would
+// invent a claim the manifest never made.
+func DRMSystemForKeyFormat(keyformat string) string {
+	f := strings.ToLower(strings.TrimSpace(keyformat))
+	if f == "" || f == "identity" {
+		return ""
+	}
+	if strings.HasPrefix(f, "urn:uuid:") {
+		return strings.TrimPrefix(f, "urn:uuid:")
+	}
+	return keyFormatSystems[f]
 }
 
 // Resolve turns a possibly relative manifest reference into an absolute URL.

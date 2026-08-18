@@ -91,6 +91,17 @@ func ParseMP4(data, init []byte) (SegmentInfo, error) {
 
 	info := SegmentInfo{Container: ContainerMP4, Bytes: int64(len(data)), Sequence: sequence}
 
+	// Which DRM systems the init advertises. The pssh boxes are read from
+	// wherever the moov was found, which is the only place that answers it.
+	for _, src := range [][]byte{init, data} {
+		if len(src) == 0 {
+			continue
+		}
+		if moov, ok := findBox(src, "moov"); ok {
+			info.DRMSystems = append(info.DRMSystems, psshSystems(moov)...)
+		}
+	}
+
 	// Emit one track per fragment track, enriched with the init metadata. When
 	// there are no fragments at all (an init segment on its own) fall back to
 	// describing the tracks the init declares.
@@ -309,6 +320,41 @@ func (it *initTrack) track() Track {
 		// around them is not, and every reader that looks inside one has to stay out.
 		SamplesEncrypted: it.encrypted,
 	}
+}
+
+// psshSystems enumerates the DRM systems a moov advertises, one per pssh box, in
+// the order the init lists them and without repeating a system that appears
+// twice — a packager may emit one pssh per track and mean one system.
+func psshSystems(moov []byte) []DRMSystem {
+	var out []DRMSystem
+	seen := map[string]bool{}
+	for _, p := range findBoxes(moov, "pssh") {
+		// version and flags, then the sixteen-byte SystemID.
+		if len(p) < 4+16 {
+			continue
+		}
+		id := formatUUID(p[4 : 4+16])
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, DRMSystemFor(id))
+	}
+	return out
+}
+
+// formatUUID renders sixteen bytes in the hyphenated, lower-case form every
+// specification and every error message writes a system id in.
+func formatUUID(b []byte) string {
+	const hex = "0123456789abcdef"
+	out := make([]byte, 0, 36)
+	for i, c := range b {
+		if i == 4 || i == 6 || i == 8 || i == 10 {
+			out = append(out, '-')
+		}
+		out = append(out, hex[c>>4], hex[c&0x0F])
+	}
+	return string(out)
 }
 
 // ---------- init segment (moov) ----------

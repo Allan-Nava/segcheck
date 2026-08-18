@@ -294,11 +294,53 @@ type SegmentInfo struct {
 	Sequence uint32 `json:"sequence,omitempty"`
 	// Channels is the channel configuration of packed audio, 0 when unknown.
 	Channels int `json:"channels,omitempty"`
+	// DRMSystems are the DRM systems the initialisation segment advertises, one
+	// per pssh box, in the order it lists them. It is a claim only the init can
+	// make: a ladder whose manifest advertises PlayReady and whose CMAF init
+	// carries only a Widevine pssh plays on Chrome and dies on Xbox and Edge,
+	// and the manifest reads perfectly on the way down.
+	DRMSystems []DRMSystem `json:"drm_systems,omitempty"`
 	// Splices are the SCTE-35 splice information sections the segment carries, in
 	// the order they appeared. They belong to the segment rather than to a track:
 	// the signalling rides on a PID or in an emsg of its own, and it describes the
 	// whole programme.
 	Splices []SplicePoint `json:"splices,omitempty"`
+}
+
+// DRMSystem is one protection system a pssh box names.
+type DRMSystem struct {
+	// SystemID is the registered UUID, lower-case and hyphenated.
+	SystemID string `json:"system_id"`
+	// Name is the common name where segcheck knows one, and empty where it does
+	// not. The list of DRM systems is not closed, and a guessed name is worse
+	// than none: an operator argues about "PlayReady", and about an unrecognised
+	// UUID they at least argue about the right sixteen bytes.
+	Name string `json:"name,omitempty"`
+}
+
+// Label is how a finding names the system: the common name where there is one,
+// the UUID where there is not.
+func (d DRMSystem) Label() string {
+	if d.Name != "" {
+		return d.Name
+	}
+	return d.SystemID
+}
+
+// drmSystemNames maps the registered system UUIDs to the names people use.
+var drmSystemNames = map[string]string{
+	"edef8ba9-79d6-4ace-a3c8-27dcd51d21ed": "widevine",
+	"9a04f079-9840-4286-ab92-e65be0885f95": "playready",
+	"94ce86fb-07ff-4f43-adb8-93d2fa968ca2": "fairplay",
+	"1077efec-c0b2-4d02-ace3-3c1e52e2fb4b": "cenc-common",
+	"e2719d58-a985-b3c9-781a-b030af78d30e": "clearkey",
+	"f239e769-efa3-4850-9c16-a903c6932efb": "adobe-primetime",
+	"5e629af5-38da-4063-8977-97ffbd9902d4": "marlin",
+}
+
+// DRMSystemFor names a system UUID, or leaves it unnamed.
+func DRMSystemFor(uuid string) DRMSystem {
+	return DRMSystem{SystemID: uuid, Name: drmSystemNames[uuid]}
 }
 
 // Track returns the first track of the given kind.

@@ -19,6 +19,21 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   a stall rather than jitter. Watching a VOD playlist is not a defect and is reported as
   an OK finding saying there is no live edge, not as a problem in the stream. Only
   manifests are re-fetched: the segments are downloaded once, at the start.
+- **DRM systems present against declared** (SC-66). Which systems can unlock a stream is
+  claimed twice — by the manifest, in DASH `ContentProtection` or HLS `KEYFORMAT`, and by
+  the initialisation segment, in its `pssh` boxes — and only the second is what a player is
+  handed. A ladder whose MPD advertises PlayReady and whose CMAF init carries only a
+  Widevine `pssh` plays perfectly on Chrome and dies on Xbox and Edge, with every segment
+  fetching and every timing check passing; the failure arrives weeks later from a platform
+  certification team. The new `drm` check enumerates the `pssh` system UUIDs, names the
+  ones it recognises and reports the rest by UUID rather than guessing, and compares them
+  with the manifest's promise in both directions.
+  Axinom's multi-DRM reference vector corrected it: DASH-IF's guidance puts the
+  key-acquisition data in the MPD, inside `cenc:pssh`, so a real init legitimately carries
+  no `pssh` at all — demanding one reported that stream as missing both its systems. A
+  declared system is only reported missing when the init is demonstrably the acquisition
+  path: it carries `pssh` boxes for other systems and neither the manifest nor a key URI
+  supplies this one.
 - **Trick-play rungs are checked** (SC-60). `EXT-X-I-FRAME-STREAM-INF` is parsed — its URI
   is an attribute, not the line that follows — into a rendition kind of its own, and the
   new `iframe` check fetches the ranges it declares and reads them. Each must resolve to a

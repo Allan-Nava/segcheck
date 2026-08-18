@@ -571,16 +571,17 @@ reading metadata, not decrypting. SC-22 (`--key`) is the separate, opt-in case
 of running the *content* checks on protected media; M11 never needs it, and any
 item here that would is out of scope.
 
-- [ ] **SC-66 — DRM systems present against declared**: enumerate the `pssh`
-  boxes in the initialisation segment by system UUID — Widevine
-  `edef8ba9-79d6-4ace-a3c8-27dcd51d21ed`, PlayReady
-  `9a04f079-9840-4286-ab92-e65be0885f95`, FairPlay
-  `94ce86fb-07ff-4f43-adb8-93d2fa968ca2` — and compare them against what the
-  manifest promises (`EXT-X-KEY` `KEYFORMAT`, DASH
-  `ContentProtection@schemeIdUri`). A ladder whose MPD advertises PlayReady but
-  whose CMAF init carries only a Widevine `pssh` plays on Chrome and dies on
-  Xbox and Edge, and the manifest reads perfectly on the way down.
-  <!-- sc: prio=high size=M labels=check,parser -->
+- [x] **SC-66 — DRM systems present against declared**: the `drm` check enumerates
+  the `pssh` boxes in the initialisation segment by system UUID, names the systems it
+  recognises and reports the rest by UUID rather than guessing one, and compares them
+  with what the manifest promises (`ContentProtection` urn:uuid entries, HLS
+  `KEYFORMAT`, both normalised onto bare UUIDs). Axinom's multi-DRM vector corrected
+  the design: DASH-IF puts the key-acquisition data in the MPD's own `cenc:pssh`, so a
+  real init carries none and demanding one reported that stream as missing both its
+  systems. A declared system is reported missing only when the init is demonstrably
+  the acquisition path — it carries `pssh` for other systems and nothing else supplies
+  this one.
+  <!-- sc: prio=high size=M labels=check,parser ver=0.6.0 -->
 - [ ] **SC-67 — Encryption scheme**: the scheme in `schm` and the defaults in
   `tenc` — `cenc`, `cbcs`, `cens`, `cbc1` — against the scheme the manifest
   declares. `cbcs` content served as `cenc` plays nowhere, and because the two

@@ -72,12 +72,21 @@ type mpdAdaptation struct {
 		SchemeIDURI string `xml:"schemeIdUri,attr"`
 		Value       string `xml:"value,attr"`
 	} `xml:"Accessibility"`
-	BaseURL           []string            `xml:"BaseURL"`
-	SegmentTemplate   *mpdSegTemplate     `xml:"SegmentTemplate"`
-	Representations   []mpdRepresentation `xml:"Representation"`
-	ContentProtection []struct {
-		SchemeIDURI string `xml:"schemeIdUri,attr"`
-	} `xml:"ContentProtection"`
+	BaseURL           []string               `xml:"BaseURL"`
+	SegmentTemplate   *mpdSegTemplate        `xml:"SegmentTemplate"`
+	Representations   []mpdRepresentation    `xml:"Representation"`
+	ContentProtection []mpdContentProtection `xml:"ContentProtection"`
+}
+
+// mpdContentProtection is one ContentProtection element: which system, and —
+// for the mp4protection entry — which common encryption scheme.
+type mpdContentProtection struct {
+	SchemeIDURI string `xml:"schemeIdUri,attr"`
+	Value       string `xml:"value,attr"`
+	// PSSH is the cenc:pssh element carrying this system's key-acquisition data
+	// in the manifest itself, which is where DASH-IF's guidance puts it. Its
+	// presence is what matters here, not its contents.
+	PSSH string `xml:"pssh"`
 }
 
 type mpdRepresentation struct {
@@ -177,6 +186,7 @@ func ParseDASH(body []byte, baseURL string, now time.Time) (Playlist, error) {
 			abase := applyBaseURLs(pbase, as.BaseURL)
 			kind := dashKind(as, ai)
 			protected := len(as.ContentProtection) > 0
+			scheme, systems, inManifest := dashProtection(as.ContentProtection)
 
 			for ri, rep := range as.Representations {
 				rbase := applyBaseURLs(abase, rep.BaseURL)
@@ -198,8 +208,11 @@ func ParseDASH(body []byte, baseURL string, now time.Time) (Playlist, error) {
 						dashChannels(rep.AudioChannelConfiguration),
 						dashChannels(as.AudioChannelConfiguration),
 					),
-					Captions:  dashCaptions(as.Accessibility),
-					KeyMethod: dashKeyMethod(protected),
+					Captions:      dashCaptions(as.Accessibility),
+					KeyMethod:     dashKeyMethod(protected),
+					KeyScheme:     scheme,
+					DRMSystems:    systems,
+					DRMInManifest: inManifest,
 				}
 
 				switch {
@@ -616,6 +629,33 @@ func parseByteRangeAttr(s string) (ByteRange, bool) {
 		return ByteRange{}, false
 	}
 	return ByteRange{Offset: start, Length: end - start + 1}, true
+}
+
+// dashProtection reads what an AdaptationSet's ContentProtection elements
+// promise: the common encryption scheme from mp4protection's @value, and the
+// DRM systems from the urn:uuid entries.
+//
+// mp4protection is not itself a DRM system. Counting it as one would have
+// segcheck look for a pssh box no init can ever carry, and report its absence.
+func dashProtection(elems []mpdContentProtection) (scheme string, systems, inManifest []string) {
+	for _, e := range elems {
+		id := strings.ToLower(strings.TrimSpace(e.SchemeIDURI))
+		switch {
+		case id == "urn:mpeg:dash:mp4protection:2011":
+			if v := strings.ToLower(strings.TrimSpace(e.Value)); v != "" {
+				scheme = v
+			}
+		case strings.HasPrefix(id, "urn:uuid:"):
+			uuid := strings.TrimPrefix(id, "urn:uuid:")
+			systems = append(systems, uuid)
+			// Where the manifest carries the system's own pssh there is nothing
+			// for the initialisation segment to be missing.
+			if strings.TrimSpace(e.PSSH) != "" {
+				inManifest = append(inManifest, uuid)
+			}
+		}
+	}
+	return scheme, systems, inManifest
 }
 
 func dashKeyMethod(protected bool) string {
