@@ -98,6 +98,12 @@ type Rendition struct {
 	// the direction a listed segment cannot answer. If the origin serves it, the
 	// packager is ahead of the clock the MPD is computed against.
 	NextSegment *Segment `json:"next_segment,omitempty"`
+	// OldestSegment is the oldest segment @timeShiftBufferDepth claims is still
+	// there. Like NextSegment it is kept out of Segments — the expansion keeps
+	// the tail, where the live edge is — and exists so the DVR promise can be
+	// collected on purpose rather than only by a viewer scrubbing back, which is
+	// to say in a complaint rather than in monitoring.
+	OldestSegment *Segment `json:"oldest_segment,omitempty"`
 	// Unsupported explains why a rendition could not be expanded into segments
 	// (DASH SegmentBase, for instance). Empty when it was.
 	Unsupported string `json:"unsupported,omitempty"`

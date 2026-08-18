@@ -210,7 +210,7 @@ func TestExpandTemplate_OpenEndedRepeat(t *testing.T) {
 	base, _ := url.Parse("https://cdn.example.com/d/m.mpd")
 
 	// A 10-second period of 1-second segments: ten of them.
-	_, segs, _, err := expandTemplate(tmpl, mpdRepresentation{ID: "v"}, base, time.Time{}, epoch, 0, 10, false, false)
+	_, segs, _, err := expandTemplate(tmpl, mpdRepresentation{ID: "v"}, base, time.Time{}, epoch, 0, 10, 0, false, false)
 	if err != nil {
 		t.Fatalf("expandTemplate: %v", err)
 	}
@@ -219,7 +219,7 @@ func TestExpandTemplate_OpenEndedRepeat(t *testing.T) {
 	}
 
 	// With no period duration the repeat cannot be resolved, so it counts as one.
-	_, segs, _, err = expandTemplate(tmpl, mpdRepresentation{ID: "v"}, base, time.Time{}, epoch, 0, 0, false, false)
+	_, segs, _, err = expandTemplate(tmpl, mpdRepresentation{ID: "v"}, base, time.Time{}, epoch, 0, 0, 0, false, false)
 	if err != nil {
 		t.Fatalf("expandTemplate: %v", err)
 	}
@@ -244,7 +244,7 @@ func TestExpandTemplate_OpenEndedRepeatShorterThanOneSegment(t *testing.T) {
 		}},
 	}
 	base, _ := url.Parse("https://cdn.example.com/d/m.mpd")
-	_, segs, _, err := expandTemplate(tmpl, mpdRepresentation{ID: "v"}, base, time.Time{}, epoch, 0, 2, false, false)
+	_, segs, _, err := expandTemplate(tmpl, mpdRepresentation{ID: "v"}, base, time.Time{}, epoch, 0, 2, 0, false, false)
 	if err != nil {
 		t.Fatalf("expandTemplate: %v", err)
 	}
@@ -271,7 +271,7 @@ func TestExpandTemplate_TimelineEntryWithoutADuration(t *testing.T) {
 		}},
 	}
 	base, _ := url.Parse("https://cdn.example.com/d/m.mpd")
-	_, segs, _, err := expandTemplate(tmpl, mpdRepresentation{ID: "v"}, base, time.Time{}, epoch, 0, 10, false, false)
+	_, segs, _, err := expandTemplate(tmpl, mpdRepresentation{ID: "v"}, base, time.Time{}, epoch, 0, 10, 0, false, false)
 	if err != nil {
 		t.Fatalf("expandTemplate: %v", err)
 	}
@@ -294,7 +294,7 @@ func TestExpandTemplate_TimelineWithoutAnExplicitStart(t *testing.T) {
 		}},
 	}
 	base, _ := url.Parse("https://cdn.example.com/d/m.mpd")
-	_, segs, _, err := expandTemplate(tmpl, mpdRepresentation{ID: "v"}, base, time.Time{}, epoch, 0, 10, false, false)
+	_, segs, _, err := expandTemplate(tmpl, mpdRepresentation{ID: "v"}, base, time.Time{}, epoch, 0, 10, 0, false, false)
 	if err != nil {
 		t.Fatalf("expandTemplate: %v", err)
 	}
@@ -329,7 +329,7 @@ func TestExpandTemplate_BoundsTheSegmentListFromATimeline(t *testing.T) {
 		}},
 	}
 	base, _ := url.Parse("https://cdn.example.com/d/m.mpd")
-	_, segs, _, err := expandTemplate(tmpl, mpdRepresentation{ID: "v"}, base, time.Time{}, epoch, 0, 0, false, false)
+	_, segs, _, err := expandTemplate(tmpl, mpdRepresentation{ID: "v"}, base, time.Time{}, epoch, 0, 0, 0, false, false)
 	if err != nil {
 		t.Fatalf("expandTemplate: %v", err)
 	}
@@ -342,7 +342,7 @@ func TestExpandTemplate_BoundsTheSegmentListFromADuration(t *testing.T) {
 	tmpl := &mpdSegTemplate{Media: "$Number$.m4s", Timescale: 1, Duration: 1}
 	base, _ := url.Parse("https://cdn.example.com/d/m.mpd")
 	// A period long enough to imply more one-second segments than the cap allows.
-	_, segs, _, err := expandTemplate(tmpl, mpdRepresentation{}, base, time.Time{}, epoch, 0, maxExpandedSegments+5000, false, false)
+	_, segs, _, err := expandTemplate(tmpl, mpdRepresentation{}, base, time.Time{}, epoch, 0, maxExpandedSegments+5000, 0, false, false)
 	if err != nil {
 		t.Fatalf("expandTemplate: %v", err)
 	}
@@ -358,7 +358,7 @@ func TestExpandTemplate_BoundsTheSegmentListFromADuration(t *testing.T) {
 func TestExpandTemplate_NeitherTimelineNorDuration(t *testing.T) {
 	tmpl := &mpdSegTemplate{Media: "$Number$.m4s", Timescale: 90000}
 	base, _ := url.Parse("https://cdn.example.com/d/m.mpd")
-	if _, _, _, err := expandTemplate(tmpl, mpdRepresentation{}, base, time.Time{}, epoch, 0, 10, false, false); err == nil {
+	if _, _, _, err := expandTemplate(tmpl, mpdRepresentation{}, base, time.Time{}, epoch, 0, 10, 0, false, false); err == nil {
 		t.Fatal("a template with no duration and no timeline expanded")
 	} else if !strings.Contains(err.Error(), "@duration") {
 		t.Errorf("err = %v, want it to name @duration", err)
@@ -370,7 +370,7 @@ func TestExpandTemplate_NeitherTimelineNorDuration(t *testing.T) {
 func TestExpandTemplate_StaticWithoutAPresentationDuration(t *testing.T) {
 	tmpl := &mpdSegTemplate{Media: "$Number$.m4s", Timescale: 90000, Duration: 90000}
 	base, _ := url.Parse("https://cdn.example.com/d/m.mpd")
-	if _, _, _, err := expandTemplate(tmpl, mpdRepresentation{}, base, time.Time{}, epoch, 0, 0, false, false); err == nil {
+	if _, _, _, err := expandTemplate(tmpl, mpdRepresentation{}, base, time.Time{}, epoch, 0, 0, 0, false, false); err == nil {
 		t.Fatal("a static template with no presentation duration expanded")
 	} else if !strings.Contains(err.Error(), "mediaPresentationDuration") {
 		t.Errorf("err = %v, want it to name mediaPresentationDuration", err)
@@ -385,7 +385,7 @@ func TestExpandTemplate_LiveBeforeAnythingIsAvailable(t *testing.T) {
 	base, _ := url.Parse("https://cdn.example.com/d/m.mpd")
 	ast := epoch.Add(30 * time.Second) // starts half a minute from now
 
-	_, _, _, err := expandTemplate(tmpl, mpdRepresentation{}, base, ast, epoch, 0, 0, true, false)
+	_, _, _, err := expandTemplate(tmpl, mpdRepresentation{}, base, ast, epoch, 0, 0, 0, true, false)
 	if err == nil {
 		t.Fatal("a live MPD starting in the future expanded to segments")
 	}
@@ -405,7 +405,7 @@ func TestExpandTemplate_LiveWindowShorterThanTheSampleWindow(t *testing.T) {
 	// Three seconds of one-second segments have elapsed.
 	ast := epoch.Add(-3 * time.Second)
 
-	_, segs, _, err := expandTemplate(tmpl, mpdRepresentation{}, base, ast, epoch, 0, 0, true, false)
+	_, segs, _, err := expandTemplate(tmpl, mpdRepresentation{}, base, ast, epoch, 0, 0, 0, true, false)
 	if err != nil {
 		t.Fatalf("expandTemplate: %v", err)
 	}
@@ -424,7 +424,7 @@ func TestExpandTemplate_LiveSamplesTheTail(t *testing.T) {
 	base, _ := url.Parse("https://cdn.example.com/d/m.mpd")
 	ast := epoch.Add(-100 * time.Second) // a hundred one-second segments
 
-	_, segs, _, err := expandTemplate(tmpl, mpdRepresentation{}, base, ast, epoch, 0, 0, true, false)
+	_, segs, _, err := expandTemplate(tmpl, mpdRepresentation{}, base, ast, epoch, 0, 0, 0, true, false)
 	if err != nil {
 		t.Fatalf("expandTemplate: %v", err)
 	}

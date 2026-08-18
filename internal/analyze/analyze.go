@@ -149,6 +149,12 @@ type renditionData struct {
 	parts      []partData
 	partTarget float64
 	hasParts   bool
+	// oldest is the oldest segment the DVR window still promises, and window how
+	// far back that window claims to reach in seconds: @timeShiftBufferDepth in
+	// DASH, the playlist's own span in HLS. Both are nil/zero for VOD, which
+	// promises no window at all.
+	oldest *manifest.Segment
+	window float64
 	// adBreaks are the ad-break signals declared for this rendition: from its own
 	// media playlist in HLS, from the Period's EventStreams in DASH.
 	adBreaks []manifest.AdBreak
@@ -221,7 +227,7 @@ func Run(ctx context.Context, c *fetch.Client, rawurl string, opts Options) find
 	probes := probeNextSegments(ctx, c, *pl, rends)
 
 	// Sample every selected rendition's segments concurrently.
-	sampleAll(ctx, c, rends, opts)
+	dvr := sampleAll(ctx, c, rends, *pl, opts)
 
 	for _, rd := range rends {
 		for _, sd := range rd.segs {
@@ -250,6 +256,7 @@ func Run(ctx context.Context, c *fetch.Client, rawurl string, opts Options) find
 	res.Findings = append(res.Findings, checkEncryption(rends)...)
 	res.Findings = append(res.Findings, checkAlignment(rends, opts)...)
 	res.Findings = append(res.Findings, checkAvailability(*pl, rends, clock, probes, opts)...)
+	res.Findings = append(res.Findings, checkDVR(dvr)...)
 	res.Findings = append(res.Findings, checkPDT(rends, opts)...)
 	res.Findings = append(res.Findings, checkParts(rends, opts)...)
 	res.Findings = append(res.Findings, checkLadder(*pl)...)
@@ -341,14 +348,16 @@ func selectRenditions(ctx context.Context, c *fetch.Client, pl manifest.Playlist
 
 	// A bare HLS media playlist is one implicit rendition.
 	if !pl.Master {
-		return []*renditionData{{
+		rd := &renditionData{
 			r:              manifest.Rendition{Name: "media", URI: pl.URL, Kind: manifest.Video},
 			segs:           toSegmentData(sampleSegments(pl.Segments, pl.Live, opts)),
 			live:           pl.Live,
 			targetDuration: pl.TargetDuration,
 			partTarget:     pl.PartTarget,
 			hasParts:       playlistHasParts(pl),
-		}}, findings
+		}
+		rd.oldest, rd.window = playlistWindow(pl)
+		return []*renditionData{rd}, findings
 	}
 
 	sel := chooseRenditions(pl, opts)
@@ -373,6 +382,7 @@ func selectRenditions(ctx context.Context, c *fetch.Client, pl manifest.Playlist
 		case len(r.Segments) > 0: // DASH: the MPD already listed the segments
 			rd.live = pl.Live
 			rd.adBreaks = pl.AdBreaks
+			rd.oldest, rd.window = r.OldestSegment, pl.TimeShiftBufferDepth
 			// DASH has no EXT-X-PART; low latency there is chunked transfer of a
 			// segment that is already listed, with nothing extra to compare.
 			rd.segs = toSegmentData(sampleSegments(r.Segments, pl.Live, opts))
@@ -392,6 +402,7 @@ func selectRenditions(ctx context.Context, c *fetch.Client, pl manifest.Playlist
 				rd.adBreaks = sub.AdBreaks
 				rd.partTarget = sub.PartTarget
 				rd.hasParts = playlistHasParts(sub)
+				rd.oldest, rd.window = playlistWindow(sub)
 				rd.segs = toSegmentData(sampleSegments(sub.Segments, sub.Live, opts))
 			}
 		default:
@@ -425,6 +436,22 @@ func chooseRenditions(pl manifest.Playlist, opts Options) chosenRenditions {
 // playlistHasParts reports whether the playlist publishes EXT-X-PART at all.
 // PART-TARGET alone is not enough: a playlist can declare the interval and have
 // aged every part out of the window.
+// playlistWindow is the DVR promise an HLS media playlist makes: it lists every
+// segment it still has, so the oldest one and the span they cover are the
+// promise itself. A VOD playlist promises nothing — every segment is permanent
+// — so it gets no window.
+func playlistWindow(pl manifest.Playlist) (*manifest.Segment, float64) {
+	if !pl.Live || len(pl.Segments) == 0 {
+		return nil, 0
+	}
+	var span float64
+	for _, s := range pl.Segments {
+		span += s.Duration
+	}
+	oldest := pl.Segments[0]
+	return &oldest, span
+}
+
 func playlistHasParts(pl manifest.Playlist) bool {
 	if len(pl.PendingParts) > 0 {
 		return true
@@ -546,7 +573,7 @@ func initFor(rd *renditionData, sd segmentData) initRef {
 
 // sampleAll downloads and parses every sampled segment, bounded by
 // opts.Concurrency across all renditions together.
-func sampleAll(ctx context.Context, c *fetch.Client, rends []*renditionData, opts Options) {
+func sampleAll(ctx context.Context, c *fetch.Client, rends []*renditionData, pl manifest.Playlist, opts Options) *dvrProbe {
 	conc := opts.Concurrency
 	if conc <= 0 {
 		conc = 1
@@ -616,6 +643,11 @@ func sampleAll(ctx context.Context, c *fetch.Client, rends []*renditionData, opt
 	// meaningful next to the segment it makes up, and that segment has to have
 	// been read before there is anything to compare it with.
 	samplePartsAll(ctx, c, rends, inits, conc)
+
+	// And the far end of the DVR window, which nothing else looks at: every
+	// other check reads the live edge, because that is what a joining viewer
+	// gets, and the back of the window is only ever reached by a scrub.
+	return probeDVR(ctx, c, pl, rends, inits)
 }
 
 type initResult struct {

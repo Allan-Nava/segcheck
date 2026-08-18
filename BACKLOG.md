@@ -445,11 +445,18 @@ wrong place, an ad splices two frames late, or a scrub back into the DVR window
   there. Verified against DASH-IF livesim2's `utc_head` and `http-xsdate` endpoints,
   which is where the negative run duration was found.
   <!-- sc: prio=high size=M labels=check,parser ver=0.4.0 -->
-- [ ] **SC-53 — The DVR window is real**: the oldest segment inside
-  `timeShiftBufferDepth` — or inside the media playlist's own span — must still
-  fetch and still parse. A DVR window that lies is a seek that fails, and it
-  only ever shows up when a viewer scrubs back, which is to say in a complaint
-  rather than in monitoring. <!-- sc: prio=high size=M labels=check,delivery -->
+- [x] **SC-53 — The DVR window is real**: the `dvr` check fetches *and parses* the
+  oldest segment `timeShiftBufferDepth` — or an HLS playlist's own span — still
+  promises. Parsing matters as much as fetching: a CDN serving an error page for
+  media it has aged out fails a scrub exactly as completely as a 404 does, and
+  alerts on nothing. One segment per run on the top rung, since retention is a
+  policy the whole ladder shares. `Rendition.OldestSegment` is computed rather than
+  listed, because the live expansion keeps the tail, and clamped to the first
+  segment so a window deeper than the stream is old never asks for media that never
+  existed. Verified against livesim2 (60s) and a Unified Streaming live ladder
+  (601s). Measuring how deep the window *really* is when it fails needs bisection
+  over segments the manifest does not list, and is SC-101.
+  <!-- sc: prio=high size=M labels=check,delivery ver=0.4.0 -->
 - [ ] **SC-54 — Discontinuity integrity**: `EXT-X-DISCONTINUITY-SEQUENCE` and
   DASH period boundaries against the timeline resets the media actually
   contains. A declared discontinuity with no reset in the media and a reset with
@@ -1033,6 +1040,16 @@ checks roadmap and blocks nothing.
   the next release anyway. Belongs in the tap; filed here because segcheck's release is
   what surfaced it.
   <!-- sc: prio=low size=S labels=release -->
+- [ ] **SC-101 — A failed DVR window reports the claim, not the truth**: when the oldest
+  segment `timeShiftBufferDepth` promises is missing (SC-53), the finding says the window
+  claims sixty seconds and cannot honour it — but not how much of it the origin really
+  holds, which is the number an operator needs to set retention. Finding it means
+  bisecting between the oldest claimed segment and the newest listed one, and in DASH
+  those intermediate segments are not in the manifest: the template has to be re-evaluated
+  at arbitrary indices, which nothing outside `internal/manifest` can do today. Four
+  probes bound the answer to an eighth of the window, and they are only spent on a stream
+  already known to be broken.
+  <!-- sc: prio=med size=M labels=check,delivery -->
 - [ ] **SC-100 — Two rungs at one resolution get one name**: `renditionName` derives an
   HLS variant's label from its `RESOLUTION`, so a ladder with two 720p rungs at different
   bitrates produces two `bitrate 720p` rows, two `pdt 720p` rows and two `container 720p`

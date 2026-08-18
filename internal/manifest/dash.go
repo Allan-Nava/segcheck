@@ -204,13 +204,13 @@ func ParseDASH(body []byte, baseURL string, now time.Time) (Playlist, error) {
 
 				switch {
 				case tmpl != nil:
-					init, segs, next, err := expandTemplate(tmpl, rep, rbase, ast, now, periodStart, periodDur, pl.Live, protected)
+					init, segs, edges, err := expandTemplate(tmpl, rep, rbase, ast, now, periodStart, periodDur, pl.TimeShiftBufferDepth, pl.Live, protected)
 					if err != nil {
 						r.Unsupported = err.Error()
 					}
 					r.InitURI = init
 					r.Segments = segs
-					r.NextSegment = next
+					r.NextSegment, r.OldestSegment = edges.next, edges.oldest
 				case rep.SegmentList != nil:
 					ts := rep.SegmentList.Timescale
 					if ts == 0 {
@@ -283,7 +283,18 @@ func ParseDASH(body []byte, baseURL string, now time.Time) (Playlist, error) {
 
 // expandTemplate turns a SegmentTemplate into concrete segment URLs — from its
 // SegmentTimeline when it has one, else from @duration plus the wall clock.
-func expandTemplate(t *mpdSegTemplate, rep mpdRepresentation, base *url.URL, ast, now time.Time, periodStart, periodDur float64, live, protected bool) (string, []Segment, *Segment, error) {
+// templateEdges are the two segments a live SegmentTemplate implies but does not
+// list: the one past the live edge, which @availabilityStartTime says does not
+// exist yet, and the oldest one @timeShiftBufferDepth says is still there. Both
+// are claims nothing else can settle, and both are deliberately kept out of the
+// sampled list — one would 404 by design, the other would drag the sample away
+// from the live edge.
+type templateEdges struct {
+	next   *Segment
+	oldest *Segment
+}
+
+func expandTemplate(t *mpdSegTemplate, rep mpdRepresentation, base *url.URL, ast, now time.Time, periodStart, periodDur, tsbd float64, live, protected bool) (string, []Segment, templateEdges, error) {
 	timescale := t.Timescale
 	if timescale == 0 {
 		timescale = 1
@@ -297,7 +308,7 @@ func expandTemplate(t *mpdSegTemplate, rep mpdRepresentation, base *url.URL, ast
 		initURI = Resolve(base, substituteTemplate(t.Initialization, rep, 0, 0))
 	}
 	if t.Media == "" {
-		return initURI, nil, nil, fmt.Errorf("SegmentTemplate without @media")
+		return initURI, nil, templateEdges{}, fmt.Errorf("SegmentTemplate without @media")
 	}
 
 	var segs []Segment
@@ -336,7 +347,7 @@ func expandTemplate(t *mpdSegTemplate, rep mpdRepresentation, base *url.URL, ast
 			}
 			for i := 0; i <= repeat; i++ {
 				if len(segs) >= maxExpandedSegments {
-					return initURI, segs, nil, nil
+					return initURI, segs, templateEdges{}, nil
 				}
 				segs = append(segs, Segment{
 					URI:      Resolve(base, substituteTemplate(t.Media, rep, number, current)),
@@ -356,11 +367,11 @@ func expandTemplate(t *mpdSegTemplate, rep mpdRepresentation, base *url.URL, ast
 				number++
 			}
 		}
-		return initURI, segs, nil, nil
+		return initURI, segs, templateEdges{}, nil
 	}
 
 	if t.Duration <= 0 {
-		return initURI, nil, nil, fmt.Errorf("SegmentTemplate has neither SegmentTimeline nor @duration")
+		return initURI, nil, templateEdges{}, fmt.Errorf("SegmentTemplate has neither SegmentTimeline nor @duration")
 	}
 	segDur := float64(t.Duration) / float64(timescale)
 
@@ -374,7 +385,7 @@ func expandTemplate(t *mpdSegTemplate, rep mpdRepresentation, base *url.URL, ast
 		elapsed := now.Sub(ast).Seconds() - periodStart
 		available := int(math.Floor(elapsed / segDur))
 		if available <= 0 {
-			return initURI, nil, nil, fmt.Errorf("no segment available yet: availabilityStartTime is %s in the future", ast.Sub(now).Truncate(time.Second))
+			return initURI, nil, templateEdges{}, fmt.Errorf("no segment available yet: availabilityStartTime is %s in the future", ast.Sub(now).Truncate(time.Second))
 		}
 		// Sample the tail: the live edge is what matters, and the head of a
 		// long-running live window may have fallen out of the CDN already.
@@ -387,24 +398,40 @@ func expandTemplate(t *mpdSegTemplate, rep mpdRepresentation, base *url.URL, ast
 	case periodDur > 0:
 		count = int(math.Ceil(periodDur / segDur))
 	default:
-		return initURI, nil, nil, fmt.Errorf("static MPD without mediaPresentationDuration: cannot tell how many segments exist")
+		return initURI, nil, templateEdges{}, fmt.Errorf("static MPD without mediaPresentationDuration: cannot tell how many segments exist")
 	}
 	if count > maxExpandedSegments {
 		count = maxExpandedSegments
 	}
 
-	var next *Segment
+	at := func(idx int) *Segment {
+		return &Segment{
+			URI:       Resolve(base, substituteTemplate(t.Media, rep, startNumber+idx, int64(float64(idx)*float64(t.Duration)))),
+			Duration:  segDur,
+			InitURI:   initURI,
+			Sequence:  startNumber + idx,
+			KeyMethod: key,
+		}
+	}
+
+	var edges templateEdges
 	if live && !ast.IsZero() {
 		// The segment past the edge: the MPD's arithmetic says it does not exist
 		// yet. It is returned rather than listed precisely so nothing samples it.
-		idx := firstIndex + count
-		number := startNumber + idx
-		next = &Segment{
-			URI:       Resolve(base, substituteTemplate(t.Media, rep, number, int64(float64(idx)*float64(t.Duration)))),
-			Duration:  segDur,
-			InitURI:   initURI,
-			Sequence:  number,
-			KeyMethod: key,
+		edges.next = at(firstIndex + count)
+		// And the oldest the DVR window still promises. A window deeper than the
+		// stream is old reaches back before the first segment, and the oldest is
+		// then simply the first: extrapolating past it would ask for a segment
+		// that never existed and report the 404 as a defect in the stream.
+		if tsbd > 0 {
+			oldest := int(math.Ceil((now.Sub(ast).Seconds() - periodStart - tsbd) / segDur))
+			if oldest < 0 {
+				oldest = 0
+			}
+			if last := firstIndex + count - 1; oldest > last {
+				oldest = last
+			}
+			edges.oldest = at(oldest)
 		}
 	}
 
@@ -424,7 +451,7 @@ func expandTemplate(t *mpdSegTemplate, rep mpdRepresentation, base *url.URL, ast
 			KeyMethod: key,
 		})
 	}
-	return initURI, segs, next, nil
+	return initURI, segs, edges, nil
 }
 
 // substituteTemplate resolves the $Identifier$ placeholders, honouring the

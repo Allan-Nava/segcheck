@@ -19,6 +19,21 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   a stall rather than jitter. Watching a VOD playlist is not a defect and is reported as
   an OK finding saying there is no live edge, not as a problem in the stream. Only
   manifests are re-fetched: the segments are downloaded once, at the start.
+- **The DVR window is collected rather than believed** (SC-53). A DVR window is a promise
+  about the past — `timeShiftBufferDepth` in DASH, the playlist's own span in HLS — and it
+  is the one promise nobody collects on purpose: a viewer only reaches the back of the
+  window by scrubbing there, so a window that lies surfaces in a complaint days after
+  someone changed the origin's retention. Every other check in this tool reads the live
+  edge, because that is what a joining viewer gets; the new `dvr` check reads the far end
+  for the same reason, and fetches *and parses* the oldest segment the window still
+  claims. Parsing matters as much as fetching: a CDN that serves an error page for media
+  it has aged out fails a scrub exactly as completely as a 404 and alerts on nothing. One
+  segment per run, on the top video rendition, since every rung is served by the same
+  retention policy.
+- `Rendition.OldestSegment` is the oldest segment `timeShiftBufferDepth` promises, computed
+  rather than listed — the expansion keeps the tail of a live MPD, where the live edge is
+  — and clamped to the first segment so a window deeper than the stream is old never asks
+  for media that never existed.
 - **A dynamic MPD is checked against its own clock** (SC-52). A DASH live edge is not
   listed, it is computed: `availabilityStartTime` plus arithmetic against "now", and which
   "now" is the whole question. A machine thirty seconds fast asks for segments the packager

@@ -130,3 +130,81 @@ func TestParseDASH_StaticMPDHasNoNextSegment(t *testing.T) {
 		t.Error("a static MPD produced a segment past its live edge")
 	}
 }
+
+// timeShiftBufferDepth is a promise a viewer only ever collects by scrubbing
+// back — which is to say, in a complaint rather than in monitoring. The oldest
+// segment the window claims is not in the sampled list (the expansion keeps the
+// tail, where the live edge is), so it has to be addressable on its own for
+// anything to check the promise at all.
+func TestParseDASH_OldestSegmentInTheDVRWindowIsAddressable(t *testing.T) {
+	mpd := `<?xml version="1.0"?>
+<MPD type="dynamic" availabilityStartTime="2026-08-10T12:00:00Z" timeShiftBufferDepth="PT40S">
+  <Period>
+    <AdaptationSet mimeType="video/mp4">
+      <SegmentTemplate timescale="1" duration="4" media="v/$Number$.m4s" startNumber="1"/>
+      <Representation id="v" bandwidth="800000" width="640" height="360"/>
+    </AdaptationSet>
+  </Period>
+</MPD>`
+	// 100s in: 25 whole segments exist, numbered 1..25. A 40-second window
+	// reaches back to t=60s, which is segment 16.
+	now := time.Date(2026, 8, 10, 12, 1, 40, 0, time.UTC)
+	pl, err := ParseDASH([]byte(mpd), "https://cdn.example/live/manifest.mpd", now)
+	if err != nil {
+		t.Fatalf("ParseDASH: %v", err)
+	}
+	oldest := pl.Renditions[0].OldestSegment
+	if oldest == nil {
+		t.Fatal("no OldestSegment: the DVR window's promise cannot be checked")
+	}
+	if want := "https://cdn.example/live/v/16.m4s"; oldest.URI != want {
+		t.Errorf("OldestSegment = %q, want %q — 40s back from a 100s-old presentation", oldest.URI, want)
+	}
+}
+
+// A window deeper than the stream is old reaches back before the first segment,
+// and the oldest segment is then simply the first one. Extrapolating past it
+// would ask for a segment that never existed and report the 404 as a defect.
+func TestParseDASH_DVRWindowDeeperThanTheStreamStopsAtTheFirstSegment(t *testing.T) {
+	mpd := `<?xml version="1.0"?>
+<MPD type="dynamic" availabilityStartTime="2026-08-10T12:00:00Z" timeShiftBufferDepth="PT1H">
+  <Period>
+    <AdaptationSet mimeType="video/mp4">
+      <SegmentTemplate timescale="1" duration="4" media="v/$Number$.m4s" startNumber="1"/>
+      <Representation id="v" bandwidth="800000" width="640" height="360"/>
+    </AdaptationSet>
+  </Period>
+</MPD>`
+	now := time.Date(2026, 8, 10, 12, 1, 40, 0, time.UTC)
+	pl, err := ParseDASH([]byte(mpd), "https://cdn.example/live/manifest.mpd", now)
+	if err != nil {
+		t.Fatalf("ParseDASH: %v", err)
+	}
+	oldest := pl.Renditions[0].OldestSegment
+	if oldest == nil {
+		t.Fatal("no OldestSegment")
+	}
+	if want := "https://cdn.example/live/v/1.m4s"; oldest.URI != want {
+		t.Errorf("OldestSegment = %q, want %q: the window cannot reach before the stream began", oldest.URI, want)
+	}
+}
+
+// An MPD that states no timeShiftBufferDepth makes no DVR promise, and
+// inventing a window to check would be checking a number segcheck made up.
+func TestParseDASH_NoDVRWindowMeansNoOldestSegment(t *testing.T) {
+	mpd := `<?xml version="1.0"?>
+<MPD type="dynamic" availabilityStartTime="2026-08-10T12:00:00Z">
+  <Period><AdaptationSet mimeType="video/mp4">
+    <SegmentTemplate timescale="1" duration="4" media="v/$Number$.m4s" startNumber="1"/>
+    <Representation id="v" bandwidth="800000" width="640" height="360"/>
+  </AdaptationSet></Period>
+</MPD>`
+	now := time.Date(2026, 8, 10, 12, 1, 40, 0, time.UTC)
+	pl, err := ParseDASH([]byte(mpd), "https://cdn.example/live/manifest.mpd", now)
+	if err != nil {
+		t.Fatalf("ParseDASH: %v", err)
+	}
+	if pl.Renditions[0].OldestSegment != nil {
+		t.Error("an MPD stating no window gained one")
+	}
+}

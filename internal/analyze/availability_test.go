@@ -37,8 +37,11 @@ const (
 // is exactly the two disagreeing.
 type availOrigin struct {
 	mu sync.Mutex
-	// availableUpTo is the highest segment number the origin actually has.
+	// availableUpTo is the highest segment number the origin actually has, and
+	// availableFrom the lowest: a DVR window that promises more than the origin
+	// kept is the defect SC-53 exists for.
 	availableUpTo int
+	availableFrom int
 	// utcTiming, when non-empty, is written into the MPD; serverNow is what that
 	// source answers.
 	utcTiming string
@@ -96,9 +99,12 @@ func newAvailOrigin(t *testing.T, o *availOrigin) string {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		n := segNumberIn(strings.Replace(strings.Replace(r.URL.Path, "/seg-", "/seg", 1), ".m4s", ".ts", 1))
 		o.mu.Lock()
-		upTo := o.availableUpTo
+		upTo, from := o.availableUpTo, o.availableFrom
 		o.mu.Unlock()
-		if n < 1 || n > upTo {
+		if from < 1 {
+			from = 1
+		}
+		if n < from || n > upTo {
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = w.Write([]byte("not yet"))
 			return
@@ -233,5 +239,61 @@ func TestRun_HLSHasNoAvailabilityFinding(t *testing.T) {
 
 	if hasCheck(res, "availability") {
 		t.Errorf("an HLS playlist produced an availability finding:\n%s", dump(res))
+	}
+}
+
+// timeShiftBufferDepth is a promise about the past, and the only person who
+// ever collects it is a viewer scrubbing back — which is to say it fails in a
+// complaint rather than in monitoring. The MPD here claims a minute of DVR and
+// the origin has kept thirty seconds of it.
+func TestRun_FindsADVRWindowTheOriginDoesNotHave(t *testing.T) {
+	// 100s in, 2s segments: the MPD's 60s window reaches back to segment 21.
+	o := &availOrigin{availableUpTo: 50, availableFrom: 31}
+	url := newAvailOrigin(t, o)
+
+	res := runAvail(t, url)
+
+	f, ok := findFinding(res, "dvr", finding.BAD)
+	if !ok {
+		t.Fatalf("a DVR window the origin cannot honour was not reported:\n%s", dump(res))
+	}
+	if !strings.Contains(f.Message, "60") {
+		t.Errorf("the dvr finding does not quote the window it disproved: %q", f.Message)
+	}
+}
+
+// A window the origin really holds is not a defect, and the check has to say so
+// rather than stay silent: the whole value is knowing the promise was collected.
+func TestRun_ADVRWindowTheOriginHonoursIsClean(t *testing.T) {
+	o := &availOrigin{availableUpTo: 50, availableFrom: 1}
+	url := newAvailOrigin(t, o)
+
+	res := runAvail(t, url)
+
+	f, ok := findFinding(res, "dvr", finding.OK)
+	if !ok {
+		t.Fatalf("no dvr finding at all: the promise went uncollected:\n%s", dump(res))
+	}
+	if !strings.Contains(f.Message, "fetch") && !strings.Contains(f.Message, "still") {
+		t.Errorf("the dvr finding does not say what it verified: %q", f.Message)
+	}
+	for _, f := range res.Findings {
+		if f.Check == "dvr" && f.Status != finding.OK {
+			t.Errorf("an honoured DVR window produced %s: %s", f.Status, f.Message)
+		}
+	}
+}
+
+// A VOD manifest promises no window, and inventing one to check would be
+// checking a number segcheck made up.
+func TestRun_VODHasNoDVRFinding(t *testing.T) {
+	srv := newHLSOrigin(t, []variantSpec{
+		{name: "720p", bandwidth: syntheticBandwidth, width: 1280, height: 720, segments: cleanSegments(4, 1280, 720)},
+	})
+
+	res := runOn(t, srv.URL+"/master.m3u8")
+
+	if hasCheck(res, "dvr") {
+		t.Errorf("a VOD playlist produced a dvr finding:\n%s", dump(res))
 	}
 }
