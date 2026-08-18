@@ -1,5 +1,10 @@
 package media
 
+import (
+	"encoding/hex"
+	"fmt"
+)
+
 // SCTE-35 splice information.
 //
 // An ad break is signalled by a splice_info_section: in MPEG-TS on a PID the PMT
@@ -48,6 +53,23 @@ type SplicePoint struct {
 	// Scheme is the emsg scheme_id_uri an fMP4 event arrived under, empty for
 	// MPEG-TS where the PMT stream type is what identifies it.
 	Scheme string `json:"scheme,omitempty"`
+	// SegmentationType names what kind of break this is, from the
+	// segmentation_descriptor: a provider advertisement, a distributor placement
+	// opportunity, a programme boundary. The command says *when*; this says *what*,
+	// and an operator chasing an ad-insertion problem needs both.
+	SegmentationType string `json:"segmentation_type,omitempty"`
+	// UPID identifies the break to an ad server. Kept as text when it is text and
+	// as hex otherwise, because half the types in the table are opaque bytes.
+	UPID string `json:"upid,omitempty"`
+	// Duration is the break's length in 90kHz ticks, when a descriptor states one.
+	Duration int64 `json:"duration,omitempty"`
+}
+
+// ParseSpliceSection reads a splice_info_section from bytes a caller obtained
+// elsewhere — the hexadecimal an HLS SCTE35-OUT attribute carries, which is the
+// manifest's own copy of what the media says.
+func ParseSpliceSection(sec []byte) (SplicePoint, bool) {
+	return parseSpliceSection(sec)
 }
 
 // parseSpliceSection reads one splice_info_section.
@@ -95,6 +117,16 @@ func parseSpliceSection(sec []byte) (SplicePoint, bool) {
 	cmd := r.take(cmdLen)
 	if cmd == nil {
 		return out, true // the command is not readable; the signal still is
+	}
+
+	// The descriptor loop follows the command: a 16-bit length and then the
+	// descriptors themselves. This is where the *kind* of break is stated, and
+	// stopping at the command left every finding saying "time_signal" where the
+	// stream said "Provider Placement Opportunity Start".
+	if loopLen := int(r.bits(16)); !r.err {
+		if loop := r.take(loopLen); loop != nil {
+			readSpliceDescriptors(loop, &out)
+		}
 	}
 
 	switch cmdType {
@@ -320,4 +352,143 @@ func emsgString(b []byte) (string, []byte, bool) {
 		}
 	}
 	return "", nil, false
+}
+
+// segmentationTypes names the segmentation_type_id values. The table is deliberately
+// partial: an id this tool does not know is left unnamed rather than guessed at, and
+// the number is more use to an operator than a wrong word.
+var segmentationTypes = map[int]string{
+	0x00: "Not Indicated",
+	0x01: "Content Identification",
+	0x10: "Program Start",
+	0x11: "Program End",
+	0x12: "Program Early Termination",
+	0x13: "Program Breakaway",
+	0x14: "Program Resumption",
+	0x15: "Program Runover Planned",
+	0x16: "Program Runover Unplanned",
+	0x17: "Program Overlap Start",
+	0x20: "Chapter Start",
+	0x21: "Chapter End",
+	0x22: "Break Start",
+	0x23: "Break End",
+	0x30: "Provider Advertisement Start",
+	0x31: "Provider Advertisement End",
+	0x32: "Distributor Advertisement Start",
+	0x33: "Distributor Advertisement End",
+	0x34: "Provider Placement Opportunity Start",
+	0x35: "Provider Placement Opportunity End",
+	0x36: "Distributor Placement Opportunity Start",
+	0x37: "Distributor Placement Opportunity End",
+	0x40: "Unscheduled Event Start",
+	0x41: "Unscheduled Event End",
+	0x50: "Network Start",
+	0x51: "Network End",
+}
+
+// cueiIdentifier is the four bytes every SCTE-35 descriptor this tool reads is
+// registered under. A descriptor loop is extensible, so one carrying another
+// registration is left alone rather than read as if it were this one.
+const cueiIdentifier = 0x43554549 // "CUEI"
+
+// readSpliceDescriptors walks the descriptor loop, taking what a segmentation
+// descriptor says about the break.
+func readSpliceDescriptors(loop []byte, out *SplicePoint) {
+	for off := 0; off+2 <= len(loop); {
+		tag := int(loop[off])
+		length := int(loop[off+1])
+		body := off + 2
+		if body+length > len(loop) {
+			return // a declared length that runs past the loop
+		}
+		if tag == 0x02 { // segmentation_descriptor
+			readSegmentationDescriptor(loop[body:body+length], out)
+		}
+		off = body + length
+	}
+}
+
+// readSegmentationDescriptor reads the fields this tool reports. Almost every one of
+// them is optional and shifts the ones after it, which is why the flags are read
+// rather than assumed: a reader that took the delivery restrictions to be absent
+// names whatever byte happens to sit where the type id goes.
+func readSegmentationDescriptor(b []byte, out *SplicePoint) {
+	r := &bitReader{data: b}
+	if r.bits(32) != cueiIdentifier {
+		return // another registration entirely
+	}
+	eventID := r.bits(32)
+	cancel := r.bits(1) == 1
+	r.skip(7)
+	if cancel || r.err {
+		return
+	}
+
+	programSegmentation := r.bits(1) == 1
+	durationFlag := r.bits(1) == 1
+	notRestricted := r.bits(1) == 1
+	if notRestricted {
+		r.skip(5) // reserved
+	} else {
+		// web_delivery_allowed, no_regional_blackout, archive_allowed and
+		// device_restrictions: five bits either way, but only one of the two
+		// spellings is present, and everything after moves with it.
+		r.skip(5)
+	}
+	if !programSegmentation {
+		// A per-component descriptor: each component states its own offset, and
+		// skipping the wrong number of them lands mid-field.
+		count := int(r.bits(8))
+		for i := 0; i < count; i++ {
+			r.skip(8)  // component_tag
+			r.skip(7)  // reserved
+			r.skip(33) // pts_offset
+		}
+	}
+	var duration int64
+	if durationFlag {
+		duration = int64(r.bits(8))<<32 | int64(r.bits(32))
+	}
+	upidType := int(r.bits(8))
+	upidLen := int(r.bits(8))
+	upid := r.take(upidLen)
+	typeID := int(r.bits(8))
+	if r.err {
+		return
+	}
+
+	name, known := segmentationTypes[typeID]
+	if !known {
+		name = fmt.Sprintf("segmentation type %#02x", typeID)
+	}
+	out.SegmentationType = name
+	out.EventID = eventID
+	if duration > 0 {
+		out.Duration = duration
+	}
+	if len(upid) > 0 {
+		out.UPID = formatUPID(upidType, upid)
+	}
+}
+
+// formatUPID renders a UPID. Half the types in the table are text an operator will
+// recognise and half are opaque bytes, so the text ones are kept as text and the rest
+// as hex: a byte string printed as if it were UTF-8 is unreadable either way.
+func formatUPID(upidType int, upid []byte) string {
+	switch upidType {
+	case 0x01, 0x03, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10:
+		if printableASCII(upid) {
+			return string(upid)
+		}
+	}
+	return hex.EncodeToString(upid)
+}
+
+func printableASCII(b []byte) bool {
+	for _, c := range b {
+		if c < 0x20 || c > 0x7E {
+			return false
+		}
+	}
+	return len(b) > 0
 }

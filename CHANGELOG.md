@@ -114,6 +114,24 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   noise — but *not* against a real encrypted stream, because no public AES-128 test
   stream was reachable. SC-96 tracks that, and it matters: every other reader in this
   project had a design error that only a real stream found.
+- **SCTE-35 says what kind of break it is, and the manifest's own copy is checked**
+  (SC-92). A `splice_info_section` says *when*; its `segmentation_descriptor` says
+  *what* — a provider advertisement, a distributor placement opportunity, a programme
+  boundary — and an operator chasing an ad-insertion problem needs the second as much
+  as the first. Almost every field in that descriptor is optional and shifts the ones
+  after it, so the flags are read rather than assumed: a reader taking the delivery
+  restrictions to be absent names whatever byte happens to sit where the type id goes.
+  A type id the table does not hold is reported as its number, which is more use than
+  a wrong word.
+
+  `SCTE35-OUT`/`IN`/`CMD` carry the same section as hexadecimal, so the manifest's
+  account of a break and the media's are now compared by event id rather than only
+  their timings — a packager that rewrote one and not the other is what that catches.
+  A value that is not a whole section decodes to nothing rather than to half a header.
+
+  Verified against livesim2's real section for the command path. Its descriptor loop is
+  empty, so the descriptor reader is asserted only against built sections; SC-96 now
+  covers that gap alongside the encrypted-stream one.
 - **A fragment's samples are located, so what is inside them can be read** (SC-91,
   SC-93). A track's samples are in no header: the `tfhd` names a base — in practice the
   enclosing `moof` — and each `trun` states an offset from it followed by the sizes of

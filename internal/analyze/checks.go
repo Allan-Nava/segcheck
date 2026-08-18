@@ -1093,6 +1093,34 @@ func checkAdBreak(rends []*renditionData, opts Options) []finding.Finding {
 				b.Tag, at, math.Abs(off)))
 		}
 
+		// The manifest's own copy of the section, against the media's. Matched by
+		// event id: the same break described twice should be described the same way,
+		// and a packager that rewrote one and not the other is what this catches.
+		for _, b := range declared {
+			if len(b.Section) == 0 {
+				continue
+			}
+			mine, ok := media.ParseSpliceSection(b.Section)
+			if !ok || !mine.HasPTS {
+				continue
+			}
+			theirs, found := spliceByEvent(splices, mine.EventID)
+			if !found || !theirs.HasPTS {
+				continue // an event outside the window sampled: nothing to compare
+			}
+			ts := float64(theirs.Timescale)
+			if ts <= 0 {
+				ts = float64(media.TSTimescale)
+			}
+			at, want := float64(theirs.PTS)/ts, float64(mine.PTS)/float64(media.TSTimescale)
+			if math.Abs(at-want) <= tolerance {
+				continue
+			}
+			offBoundary = append(offBoundary, fmt.Sprintf(
+				"the manifest's own section puts event %d at %.3fs but the media puts it at %.3fs",
+				mine.EventID, want, at))
+		}
+
 		if len(offBoundary) > 0 {
 			out = append(out, finding.Finding{
 				Check: "adbreak", Target: label, Status: finding.BAD,
@@ -1104,6 +1132,9 @@ func checkAdBreak(rends []*renditionData, opts Options) []finding.Finding {
 		}
 
 		msg := describeSignalling(splices, declared)
+		if kinds := spliceKinds(splices, declared); kinds != "" {
+			msg += " (" + kinds + ")"
+		}
 		if untimed > 0 {
 			msg += fmt.Sprintf(", %d of which states no time and cannot be placed", untimed)
 		} else {
@@ -1114,6 +1145,51 @@ func checkAdBreak(rends []*renditionData, opts Options) []finding.Finding {
 		})
 	}
 	return out
+}
+
+// spliceByEvent finds the inband splice carrying an event id.
+func spliceByEvent(splices []media.SplicePoint, id uint32) (media.SplicePoint, bool) {
+	for _, sp := range splices {
+		if sp.EventID == id {
+			return sp, true
+		}
+	}
+	return media.SplicePoint{}, false
+}
+
+// spliceKinds names what kinds of break were signalled, from the segmentation
+// descriptors. "Provider Placement Opportunity Start" is a very different line in a
+// report from "time_signal", and it is the line an operator chasing an ad-insertion
+// problem is looking for.
+func spliceKinds(splices []media.SplicePoint, declared []manifest.AdBreak) string {
+	var names []string
+	add := func(n string) {
+		if n == "" || containsString(names, n) {
+			return
+		}
+		names = append(names, n)
+	}
+	for _, sp := range splices {
+		add(sp.SegmentationType)
+	}
+	for _, b := range declared {
+		if len(b.Section) == 0 {
+			continue
+		}
+		if mine, ok := media.ParseSpliceSection(b.Section); ok {
+			add(mine.SegmentationType)
+		}
+	}
+	return strings.Join(names, ", ")
+}
+
+func containsString(xs []string, s string) bool {
+	for _, x := range xs {
+		if x == s {
+			return true
+		}
+	}
+	return false
 }
 
 // inbandSplices collects the SCTE-35 sections found across the sampled segments.

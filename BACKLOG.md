@@ -295,13 +295,14 @@ stream that break in production and that no manifest-only checker can see.
   a player can cut to it: a splice that does not land on a segment boundary is a
   break nobody can take.
   <!-- sc: prio=high size=L labels=check,parser ver=0.3.0 -->
-- [ ] **SC-92 — Splice descriptors and `EXT-X-DATERANGE` payloads**: the
-  `segmentation_descriptor` carries the UPID and the segmentation type that say what
-  kind of break this is (provider ad, chapter, distributor placement), and HLS puts
-  the same section in the `SCTE35-OUT` attribute as hex. Reading both would let the
-  manifest's own copy be compared against the inband one rather than only their
-  timings.
-  <!-- sc: prio=med size=M labels=parser -->
+- [x] **SC-92 — Splice descriptors and `EXT-X-DATERANGE` payloads**: the
+  `segmentation_descriptor` is read for the segmentation type and the UPID, so a finding
+  says "Provider Placement Opportunity Start" rather than "time_signal", and the
+  hexadecimal section in `SCTE35-OUT`/`IN`/`CMD` is decoded so the manifest's own copy is
+  compared against the inband one by event id. Verified against livesim2's real section
+  for the command path; its descriptor loop is empty, so the descriptor reader itself is
+  asserted only against built sections — see SC-96.
+  <!-- sc: prio=med size=M labels=parser ver=0.3.0 -->
 - [x] **SC-37 — CEA-608/708 captions**: captions declared in the manifest
   (`CLOSED-CAPTIONS`, DASH `Accessibility`) against caption data actually carried in
   the bitstream — the ATSC A/53 SEI in H.264 and HEVC, in MPEG-TS and in fMP4, and a
@@ -351,7 +352,8 @@ stream that break in production and that no manifest-only checker can see.
   not, so the timing checks already work and the bitstream ones do not — a different
   shape of partial blindness from AES-128, and worth reporting as such.
   <!-- sc: prio=med size=L labels=parser -->
-- [ ] **SC-96 — Verify against a real encrypted stream**: SC-22 is asserted against a
+- [ ] **SC-96 — Verify against a real encrypted stream, and a real segmentation
+  descriptor**: SC-22 is asserted against a
   synthetic origin whose plaintext is known by construction, which is the only way to
   tell a working decrypter from one producing plausible noise — but no public AES-128
   test stream was reachable to confirm it end to end, and every other reader in this

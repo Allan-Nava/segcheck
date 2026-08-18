@@ -387,3 +387,194 @@ func TestPlural(t *testing.T) {
 		t.Errorf("plural(2) = %q", got)
 	}
 }
+
+// SC-92: the manifest's own copy of the section, against the media's.
+//
+// SCTE35-OUT carries the splice_info_section as hexadecimal, so the two accounts of
+// the break can be compared rather than only their timings. A packager that rewrote
+// one and not the other is exactly what that catches — and until now the manifest's
+// copy was never even decoded.
+func TestCheckAdBreak_ManifestSectionDisagreesWithTheMedia(t *testing.T) {
+	seg := func(start int64) segmentData {
+		return segmentData{parsed: true, info: media.SegmentInfo{
+			Tracks: []media.Track{{
+				Kind: media.Video, Timescale: 90000, HasPTS: true,
+				MinPTS: start, MaxPTS: start + 176400, FrameDur: 3600, Samples: 50,
+			}},
+			Splices: []media.SplicePoint{{
+				Command: "time_signal", PTS: 180000, HasPTS: true,
+				EventID: 42, Timescale: 90000,
+			}},
+		}}
+	}
+	// The manifest's section names the same event at a different time.
+	section := mediatest.SpliceSection(mediatest.SpliceSpec{
+		Command: mediatest.SpliceTimeSig, PTS: 360000,
+		Descriptors: []mediatest.SegmentationDescriptor{{
+			EventID: 42, TypeID: mediatest.SegTypeProviderPlacementOpp,
+		}},
+	})
+	rd := &renditionData{
+		r:    manifest.Rendition{Name: "720p", Kind: manifest.Video},
+		segs: []segmentData{seg(0), seg(180000)},
+		adBreaks: []manifest.AdBreak{{
+			MediaTime: 2, HasMediaTime: true, Tag: "EXT-X-DATERANGE",
+			OutOfNetwork: true, Section: section,
+		}},
+	}
+	out := checkAdBreak([]*renditionData{rd}, Defaults())
+	f, ok := findingIn(out, finding.BAD)
+	if !ok {
+		t.Fatalf("the two accounts of the break were not compared: %+v", out)
+	}
+	if !strings.Contains(f.Message, "manifest") || !strings.Contains(f.Message, "4.000s") {
+		t.Errorf("the finding does not name both times: %q", f.Message)
+	}
+}
+
+// The two accounts agreeing is the healthy case, and the finding names what kind of
+// break it is: "Provider Placement Opportunity Start" is a very different line in a
+// report from "time_signal".
+func TestCheckAdBreak_ManifestSectionAgrees(t *testing.T) {
+	section := mediatest.SpliceSection(mediatest.SpliceSpec{
+		Command: mediatest.SpliceTimeSig, PTS: 180000,
+		Descriptors: []mediatest.SegmentationDescriptor{{
+			EventID: 42, TypeID: mediatest.SegTypeProviderAdStart,
+		}},
+	})
+	seg := func(start int64) segmentData {
+		return segmentData{parsed: true, info: media.SegmentInfo{
+			Tracks: []media.Track{{
+				Kind: media.Video, Timescale: 90000, HasPTS: true,
+				MinPTS: start, MaxPTS: start + 176400, FrameDur: 3600, Samples: 50,
+			}},
+			Splices: []media.SplicePoint{{
+				Command: "time_signal", PTS: 180000, HasPTS: true, EventID: 42,
+				Timescale: 90000, SegmentationType: "Provider Advertisement Start",
+			}},
+		}}
+	}
+	rd := &renditionData{
+		r:    manifest.Rendition{Name: "720p", Kind: manifest.Video},
+		segs: []segmentData{seg(0), seg(180000)},
+		adBreaks: []manifest.AdBreak{{
+			MediaTime: 2, HasMediaTime: true, Tag: "EXT-X-DATERANGE",
+			OutOfNetwork: true, Section: section,
+		}},
+	}
+	out := checkAdBreak([]*renditionData{rd}, Defaults())
+	f, ok := findingIn(out, finding.OK)
+	if !ok {
+		t.Fatalf("want an OK finding, got %+v", out)
+	}
+	if !strings.Contains(f.Message, "Provider Advertisement Start") {
+		t.Errorf("the finding does not say what kind of break it is: %q", f.Message)
+	}
+}
+
+// A section the manifest carries for an event the media never mentions cannot be
+// compared: the break may be outside the window sampled, and reporting a
+// disagreement would be inventing one.
+func TestCheckAdBreak_ManifestSectionWithNoMatchingEvent(t *testing.T) {
+	section := mediatest.SpliceSection(mediatest.SpliceSpec{
+		Command: mediatest.SpliceTimeSig, PTS: 360000,
+		Descriptors: []mediatest.SegmentationDescriptor{{EventID: 99, TypeID: 0x30}},
+	})
+	rd := &renditionData{
+		r: manifest.Rendition{Name: "720p", Kind: manifest.Video},
+		segs: []segmentData{{parsed: true, info: media.SegmentInfo{
+			Tracks: []media.Track{{
+				Kind: media.Video, Timescale: 90000, HasPTS: true,
+				MinPTS: 0, MaxPTS: 176400, FrameDur: 3600, Samples: 50,
+			}},
+			Splices: []media.SplicePoint{{
+				Command: "time_signal", PTS: 0, HasPTS: true, EventID: 42, Timescale: 90000,
+			}},
+		}}},
+		adBreaks: []manifest.AdBreak{{
+			MediaTime: 0, HasMediaTime: true, Tag: "EXT-X-DATERANGE", Section: section,
+		}},
+	}
+	for _, f := range checkAdBreak([]*renditionData{rd}, Defaults()) {
+		if f.Status != finding.OK {
+			t.Errorf("an unmatched section produced %s: %s", f.Status, f.Message)
+		}
+	}
+}
+
+// findingIn is findFinding over a slice a check returned directly.
+func findingIn(out []finding.Finding, status finding.Status) (finding.Finding, bool) {
+	for _, f := range out {
+		if f.Status == status {
+			return f, true
+		}
+	}
+	return finding.Finding{}, false
+}
+
+// A section the manifest carries that is not readable, or that states no time, has
+// nothing to compare: the break is still declared, and the tag said so.
+func TestCheckAdBreak_ManifestSectionUnreadable(t *testing.T) {
+	base := func(section []byte) *renditionData {
+		return &renditionData{
+			r: manifest.Rendition{Name: "720p", Kind: manifest.Video},
+			segs: []segmentData{{parsed: true, info: media.SegmentInfo{
+				Tracks: []media.Track{{
+					Kind: media.Video, Timescale: 90000, HasPTS: true,
+					MinPTS: 0, MaxPTS: 176400, FrameDur: 3600, Samples: 50,
+				}},
+				Splices: []media.SplicePoint{{
+					Command: "time_signal", PTS: 0, HasPTS: true, EventID: 42, Timescale: 90000,
+				}},
+			}}},
+			adBreaks: []manifest.AdBreak{{
+				MediaTime: 0, HasMediaTime: true, Tag: "EXT-X-DATERANGE", Section: section,
+			}},
+		}
+	}
+	for _, tc := range []struct {
+		name    string
+		section []byte
+	}{
+		{"not a section at all", []byte{0x01, 0x02, 0x03}},
+		// A splice_immediate states no time, so there is nothing to compare.
+		{"a section stating no time", mediatest.SpliceSection(mediatest.SpliceSpec{
+			Command: mediatest.SpliceInsert, NoPTS: true, EventID: 42,
+		})},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, f := range checkAdBreak([]*renditionData{base(tc.section)}, Defaults()) {
+				if f.Status != finding.OK {
+					t.Errorf("produced %s: %s", f.Status, f.Message)
+				}
+			}
+		})
+	}
+
+	// An inband splice with a matching event but no time of its own.
+	rd := base(mediatest.SpliceSection(mediatest.SpliceSpec{
+		Command: mediatest.SpliceTimeSig, PTS: 360000,
+		Descriptors: []mediatest.SegmentationDescriptor{{EventID: 42, TypeID: 0x30}},
+	}))
+	rd.segs[0].info.Splices = []media.SplicePoint{{Command: "splice_insert", EventID: 42}}
+	for _, f := range checkAdBreak([]*renditionData{rd}, Defaults()) {
+		if f.Status != finding.OK {
+			t.Errorf("an untimed inband event produced %s: %s", f.Status, f.Message)
+		}
+	}
+
+	// An inband splice whose timescale is unstated falls back to the 90kHz clock
+	// MPEG-TS counts on, which is where a section without one came from.
+	rd2 := base(mediatest.SpliceSection(mediatest.SpliceSpec{
+		Command: mediatest.SpliceTimeSig, PTS: 0,
+		Descriptors: []mediatest.SegmentationDescriptor{{EventID: 42, TypeID: 0x30}},
+	}))
+	rd2.segs[0].info.Splices = []media.SplicePoint{{
+		Command: "time_signal", PTS: 0, HasPTS: true, EventID: 42,
+	}}
+	for _, f := range checkAdBreak([]*renditionData{rd2}, Defaults()) {
+		if f.Status != finding.OK {
+			t.Errorf("an unstated timescale produced %s: %s", f.Status, f.Message)
+		}
+	}
+}

@@ -118,9 +118,9 @@ func ParseHLS(body []byte, baseURL string) (Playlist, error) {
 			// operator chose to mark, and treating it as a break would have the check
 			// hunting a splice point nobody signalled.
 			attrs := parseAttrs(strings.TrimPrefix(line, "#EXT-X-DATERANGE:"))
-			_, hasOut := attrs["SCTE35-OUT"]
-			_, hasIn := attrs["SCTE35-IN"]
-			_, hasCmd := attrs["SCTE35-CMD"]
+			out, hasOut := attrs["SCTE35-OUT"]
+			in, hasIn := attrs["SCTE35-IN"]
+			cmd, hasCmd := attrs["SCTE35-CMD"]
 			if hasOut || hasIn || hasCmd {
 				b := AdBreak{
 					ID:              attrs["ID"],
@@ -128,6 +128,7 @@ func ParseHLS(body []byte, baseURL string) (Playlist, error) {
 					Duration:        attrFloat(attrs, "DURATION"),
 					PlannedDuration: attrFloat(attrs, "PLANNED-DURATION"),
 					Tag:             "EXT-X-DATERANGE",
+					Section:         parseHexSection(firstNonEmpty(out, in, cmd)),
 				}
 				if ts, err := parsePDT(attrs["START-DATE"]); err == nil {
 					b.Start, b.HasStart = ts, true
@@ -467,4 +468,27 @@ func hexDigit(c byte) (byte, bool) {
 		return c - 'A' + 10, true
 	}
 	return 0, false
+}
+
+// parseHexSection decodes the hexadecimal-sequence an SCTE35 attribute carries. An
+// odd length, a stray character or an empty value is not a section: returning a
+// partial one would have the check compare the media against half a header.
+func parseHexSection(v string) []byte {
+	v = strings.TrimSpace(v)
+	if len(v) > 2 && (v[:2] == "0x" || v[:2] == "0X") {
+		v = v[2:]
+	}
+	if v == "" || len(v)%2 != 0 {
+		return nil
+	}
+	out := make([]byte, len(v)/2)
+	for i := range out {
+		hi, ok1 := hexDigit(v[i*2])
+		lo, ok2 := hexDigit(v[i*2+1])
+		if !ok1 || !ok2 {
+			return nil
+		}
+		out[i] = hi<<4 | lo
+	}
+	return out
 }

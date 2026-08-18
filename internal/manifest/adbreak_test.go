@@ -205,3 +205,62 @@ func TestParseHLS_CueOutDurationForms(t *testing.T) {
 		}
 	}
 }
+
+// SC-92: the manifest carries its own copy of the section.
+//
+// SCTE35-OUT is the splice_info_section as hexadecimal, which means the manifest's
+// account of the break and the media's can be compared rather than only their
+// timings. A packager that rewrote one and not the other is exactly what that catches.
+func TestParseHLS_DateRangeCarriesTheSection(t *testing.T) {
+	m := `#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-TARGETDURATION:4
+#EXT-X-DATERANGE:ID="b1",START-DATE="2026-08-17T10:00:00.000Z",SCTE35-OUT=0xFC302F000000000000
+#EXTINF:4.0,
+s0.ts
+#EXT-X-DATERANGE:ID="b2",START-DATE="2026-08-17T10:00:08.000Z",SCTE35-CMD=0XFC3020
+#EXTINF:4.0,
+s1.ts
+#EXT-X-DATERANGE:ID="b3",START-DATE="2026-08-17T10:00:16.000Z",SCTE35-IN=not-hex-at-all
+#EXTINF:4.0,
+s2.ts
+#EXT-X-ENDLIST
+`
+	pl, err := ParseHLS([]byte(m), "https://e.test/index.m3u8")
+	if err != nil {
+		t.Fatalf("ParseHLS: %v", err)
+	}
+	if len(pl.AdBreaks) != 3 {
+		t.Fatalf("ad breaks = %d, want 3", len(pl.AdBreaks))
+	}
+	if got := pl.AdBreaks[0].Section; len(got) != 9 || got[0] != 0xFC {
+		t.Errorf("section = %x, want the nine decoded bytes", got)
+	}
+	// The 0X spelling is as valid as 0x, and SCTE35-CMD carries a section too.
+	if got := pl.AdBreaks[1].Section; len(got) != 3 || got[0] != 0xFC {
+		t.Errorf("section = %x, want three decoded bytes", got)
+	}
+	// A value that is not hexadecimal is not a section. The break is still declared —
+	// the tag says so — but there is nothing to compare against the media.
+	if got := pl.AdBreaks[2].Section; got != nil {
+		t.Errorf("section = %x, want none from a value that is not hex", got)
+	}
+	// SCTE35-IN is a return, and the direction survives the failure to decode the
+	// section: the tag said which way the break goes whatever its payload held.
+	if pl.AdBreaks[2].OutOfNetwork {
+		t.Error("SCTE35-IN was read as the start of a break")
+	}
+}
+
+// The hexadecimal a section attribute carries, and what is not one. A partial decode
+// would have the check compare the media against half a header.
+func TestParseHexSection(t *testing.T) {
+	if got := parseHexSection("0xFC30"); len(got) != 2 || got[0] != 0xFC {
+		t.Errorf("parseHexSection = %x, want two bytes", got)
+	}
+	for _, in := range []string{"", "0x", "0xFC3", "0xZZ", "FC30ZZ"} {
+		if got := parseHexSection(in); got != nil {
+			t.Errorf("parseHexSection(%q) = %x, want nil", in, got)
+		}
+	}
+}

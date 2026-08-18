@@ -206,6 +206,12 @@ type AdBreak struct {
 	// Tag names which signal this came from, so a finding can quote what the
 	// operator actually wrote.
 	Tag string `json:"tag,omitempty"`
+	// Section is the splice_info_section the manifest carries as hexadecimal in
+	// SCTE35-OUT/IN/CMD, decoded. It is what makes the manifest's own account of the
+	// break comparable with the media's rather than only their timings — a packager
+	// that rewrote one and not the other is what that catches. Nil when the attribute
+	// held something that is not a section.
+	Section []byte `json:"section,omitempty"`
 }
 
 // VideoRenditions returns the renditions that carry video, in declared-bitrate

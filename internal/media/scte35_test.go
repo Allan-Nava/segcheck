@@ -435,3 +435,194 @@ func TestParseEmsg_Version0UnterminatedValue(t *testing.T) {
 		t.Errorf("accepted an emsg with an unterminated value as %+v", sp)
 	}
 }
+
+// SC-92: what kind of break this is.
+//
+// A splice_info_section says when. Its segmentation_descriptor says what: a provider
+// advertisement, a distributor placement opportunity, a programme boundary. An
+// operator chasing an ad-insertion problem needs the second as much as the first —
+// "time_signal at 12.000s" and "Provider Placement Opportunity Start at 12.000s" are
+// very different lines in a report.
+func TestParseSpliceSection_SegmentationDescriptor(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		desc mediatest.SegmentationDescriptor
+		want string
+		upid string
+	}{
+		{
+			name: "provider advertisement start",
+			desc: mediatest.SegmentationDescriptor{EventID: 7, TypeID: mediatest.SegTypeProviderAdStart},
+			want: "Provider Advertisement Start",
+		},
+		{
+			name: "placement opportunity with a UPID",
+			desc: mediatest.SegmentationDescriptor{
+				EventID: 9, TypeID: mediatest.SegTypeProviderPlacementOpp,
+				UPIDType: 0x0C, UPID: []byte("SIGNAL:abc"),
+			},
+			want: "Provider Placement Opportunity Start",
+			upid: "SIGNAL:abc",
+		},
+		{
+			name: "a duration shifts every field after it",
+			desc: mediatest.SegmentationDescriptor{
+				EventID: 11, TypeID: mediatest.SegTypeBreakStart, Duration: 30 * 90000,
+			},
+			want: "Break Start",
+		},
+		{
+			// The delivery restriction fields are five bits either way, but which
+			// five depends on the flag — and everything after them moves with it.
+			name: "delivery restrictions present",
+			desc: mediatest.SegmentationDescriptor{
+				EventID: 13, TypeID: mediatest.SegTypeProgramStart, Restricted: true,
+			},
+			want: "Program Start",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sec := mediatest.SpliceSection(mediatest.SpliceSpec{
+				Command: mediatest.SpliceTimeSig, PTS: 1080000,
+				Descriptors: []mediatest.SegmentationDescriptor{tc.desc},
+			})
+			sp, ok := parseSpliceSection(sec)
+			if !ok {
+				t.Fatal("the section was rejected")
+			}
+			if sp.SegmentationType != tc.want {
+				t.Errorf("segmentation type = %q, want %q", sp.SegmentationType, tc.want)
+			}
+			if sp.UPID != tc.upid {
+				t.Errorf("UPID = %q, want %q", sp.UPID, tc.upid)
+			}
+			if sp.EventID != tc.desc.EventID {
+				t.Errorf("event id = %d, want %d", sp.EventID, tc.desc.EventID)
+			}
+			if tc.desc.Duration > 0 && sp.Duration != tc.desc.Duration {
+				t.Errorf("duration = %d, want %d", sp.Duration, tc.desc.Duration)
+			}
+		})
+	}
+}
+
+// A descriptor that is not a segmentation one, and a segmentation one that is not
+// CUEI-identified, both leave the section's own timing intact and name no type: a
+// descriptor loop is extensible, and reading an unknown entry as a segmentation
+// descriptor would name whatever byte happened to sit where the type id goes.
+func TestParseSpliceSection_OtherDescriptors(t *testing.T) {
+	sec := mediatest.SpliceSection(mediatest.SpliceSpec{Command: mediatest.SpliceTimeSig, PTS: 450000})
+	// An avail_descriptor (tag 0x00) rather than a segmentation one.
+	withOther := replaceDescriptorLoop(sec, []byte{0x00, 0x08, 'C', 'U', 'E', 'I', 0, 0, 0, 1})
+	sp, ok := parseSpliceSection(withOther)
+	if !ok {
+		t.Fatal("the section was rejected")
+	}
+	if sp.SegmentationType != "" {
+		t.Errorf("segmentation type = %q, want none from an avail_descriptor", sp.SegmentationType)
+	}
+	if !sp.HasPTS || sp.PTS != 450000 {
+		t.Errorf("the command's own timing was lost: %+v", sp)
+	}
+
+	// A segmentation descriptor whose identifier is not CUEI.
+	bad := replaceDescriptorLoop(sec, []byte{0x02, 0x0A, 'X', 'X', 'X', 'X', 0, 0, 0, 1, 0x00, 0x00})
+	if sp, _ := parseSpliceSection(bad); sp.SegmentationType != "" {
+		t.Errorf("segmentation type = %q, want none from a foreign identifier", sp.SegmentationType)
+	}
+
+	// A descriptor whose declared length runs past the loop.
+	short := replaceDescriptorLoop(sec, []byte{0x02, 0x40, 'C', 'U', 'E', 'I'})
+	if sp, _ := parseSpliceSection(short); sp.SegmentationType != "" {
+		t.Errorf("segmentation type = %q, want none from a truncated descriptor", sp.SegmentationType)
+	}
+}
+
+// replaceDescriptorLoop rewrites a section's descriptor loop, so a test can plant a
+// descriptor the builder does not model.
+func replaceDescriptorLoop(sec, loop []byte) []byte {
+	// The loop sits after the command, whose length the header states, and is
+	// followed by the CRC.
+	cmdLen := int(sec[3+8]&0x0F)<<8 | int(sec[3+9])
+	head := sec[:3+11+cmdLen]
+	body := append(append([]byte{}, head[3:]...), byte(len(loop)>>8), byte(len(loop)))
+	body = append(body, loop...)
+	body = append(body, 0xDE, 0xAD, 0xBE, 0xEF)
+	out := []byte{0xFC, 0x30 | byte(len(body)>>8), byte(len(body) & 0xFF)}
+	return append(out, body...)
+}
+
+// The segmentation descriptor's own edges. Every one of these shifts a later field or
+// refuses a value, and a reader that got one wrong names whatever byte happened to
+// sit where the type id goes.
+func TestReadSegmentationDescriptor_Edges(t *testing.T) {
+	desc := func(body []byte) SplicePoint {
+		var out SplicePoint
+		readSegmentationDescriptor(body, &out)
+		return out
+	}
+	cuei := []byte{'C', 'U', 'E', 'I'}
+
+	// A cancelled event withdraws one announced earlier and states nothing else.
+	cancelled := append(append([]byte{}, cuei...), 0, 0, 0, 7, 0x80)
+	if got := desc(cancelled); got.SegmentationType != "" {
+		t.Errorf("a cancelled descriptor named %q", got.SegmentationType)
+	}
+
+	// Truncated before the type id.
+	if got := desc(append(append([]byte{}, cuei...), 0, 0, 0, 7)); got.SegmentationType != "" {
+		t.Errorf("a truncated descriptor named %q", got.SegmentationType)
+	}
+
+	// A type id the table does not hold is reported as its number: more use to an
+	// operator than a wrong word.
+	unknown := mediatest.SpliceSection(mediatest.SpliceSpec{
+		Command: mediatest.SpliceTimeSig, PTS: 90000,
+		Descriptors: []mediatest.SegmentationDescriptor{{EventID: 1, TypeID: 0x7E}},
+	})
+	sp, _ := parseSpliceSection(unknown)
+	if sp.SegmentationType != "segmentation type 0x7e" {
+		t.Errorf("segmentation type = %q, want the number", sp.SegmentationType)
+	}
+
+	// A component-level descriptor: program_segmentation_flag clear, so a component
+	// count and one 40-bit offset per component precede everything else. Written as
+	// bytes because the flags land on a byte boundary here.
+	component := append(append([]byte{}, cuei...),
+		0, 0, 0, 21, // segmentation_event_id
+		0x00, // not cancelled
+		// program_segmentation 0, duration_flag 0, delivery_not_restricted 1, reserved
+		0x3F,
+		0x01,                   // component_count
+		0x03,                   // component_tag
+		0x00, 0x00, 0x00, 0x00, // reserved(7) + pts_offset(33), five bytes in all
+		0x00,
+		0x00, // segmentation_upid_type
+		0x00, // segmentation_upid_length
+		0x22, // segmentation_type_id: Break Start
+		0x01, // segment_num
+		0x01, // segments_expected
+	)
+	if got := desc(component); got.SegmentationType != "Break Start" {
+		t.Errorf("a component-level descriptor named %q, want Break Start", got.SegmentationType)
+	}
+}
+
+// A UPID is text for half the types in the table and opaque bytes for the rest, and
+// one printed as if it were UTF-8 is unreadable either way.
+func TestFormatUPID(t *testing.T) {
+	if got := formatUPID(0x0C, []byte("SIGNAL:x")); got != "SIGNAL:x" {
+		t.Errorf("a text UPID = %q, want it as text", got)
+	}
+	// A type that is text, carrying bytes that are not.
+	if got := formatUPID(0x0C, []byte{0x00, 0xFF}); got != "00ff" {
+		t.Errorf("unprintable bytes under a text type = %q, want hex", got)
+	}
+	// A type that is opaque bytes whatever they look like.
+	if got := formatUPID(0x06, []byte("abcd")); got != "61626364" {
+		t.Errorf("an opaque UPID = %q, want hex", got)
+	}
+	if printableASCII(nil) {
+		t.Error("an empty UPID was called printable")
+	}
+}

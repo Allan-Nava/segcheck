@@ -37,6 +37,8 @@ type SpliceSpec struct {
 	OutOfNetwork bool
 	// EventID is splice_event_id, which pairs an out with its in.
 	EventID uint32
+	// Descriptors are written into the section's descriptor loop.
+	Descriptors []SegmentationDescriptor
 }
 
 // SpliceSection builds one splice_info_section, without the transport framing.
@@ -78,7 +80,12 @@ func SpliceSection(spec SpliceSpec) []byte {
 	w.u(12, uint32(len(command))) // splice_command_length
 	w.u(8, uint32(spec.Command&0xFF))
 	body := append(w.bytes(), command...)
-	body = append(body, 0x00, 0x00)             // descriptor_loop_length
+	var descriptors []byte
+	for _, d := range spec.Descriptors {
+		descriptors = append(descriptors, SegmentationDescriptorBytes(d)...)
+	}
+	body = append(body, byte(len(descriptors)>>8), byte(len(descriptors)))
+	body = append(body, descriptors...)
 	body = append(body, 0xDE, 0xAD, 0xBE, 0xEF) // CRC32
 
 	// table_id, then section_syntax_indicator 0, private_indicator 0, two reserved
@@ -177,4 +184,66 @@ func MP4SegmentWithEmsg(trackID, sequence uint32, baseDecodeTime int64, sampleDu
 		head = append(head, e...)
 	}
 	return append(head, MP4Segment(trackID, sequence, baseDecodeTime, sampleDuration, samples, payloadBytes)...)
+}
+
+// Segmentation type ids, the ones that name a break rather than a programme edge.
+const (
+	SegTypeProviderAdStart      = 0x30
+	SegTypeProviderAdEnd        = 0x31
+	SegTypeProviderPlacementOpp = 0x34
+	SegTypeBreakStart           = 0x22
+	SegTypeProgramStart         = 0x10
+)
+
+// SegmentationDescriptor describes the descriptor to build.
+type SegmentationDescriptor struct {
+	EventID  uint32
+	TypeID   int
+	UPIDType int
+	UPID     []byte
+	// Duration in 90kHz ticks; zero writes no segmentation_duration at all.
+	Duration int64
+	// Restricted writes the delivery restriction fields, which shift every field
+	// after them — a reader that assumed they were absent misreads the type id.
+	Restricted bool
+}
+
+// SegmentationDescriptorBytes builds one segmentation_descriptor.
+func SegmentationDescriptorBytes(d SegmentationDescriptor) []byte {
+	var w bitWriter
+	w.u(32, 0x43554549) // identifier: "CUEI"
+	w.u(32, d.EventID)
+	w.u(1, 0) // segmentation_event_cancel_indicator
+	w.u(7, 0) // reserved
+	w.u(1, 1) // program_segmentation_flag
+	if d.Duration > 0 {
+		w.u(1, 1) // segmentation_duration_flag
+	} else {
+		w.u(1, 0)
+	}
+	if d.Restricted {
+		w.u(1, 0) // delivery_not_restricted_flag clear: the restriction fields follow
+		w.u(1, 1) // web_delivery_allowed_flag
+		w.u(1, 1) // no_regional_blackout_flag
+		w.u(1, 1) // archive_allowed_flag
+		w.u(2, 3) // device_restrictions
+	} else {
+		w.u(1, 1) // delivery_not_restricted_flag
+		w.u(5, 0x1F)
+	}
+	if d.Duration > 0 {
+		w.u(8, uint32(d.Duration>>32)&0xFF)
+		w.u(32, uint32(d.Duration))
+	}
+	w.u(8, uint32(d.UPIDType))
+	w.u(8, uint32(len(d.UPID)))
+	body := append(w.bytes(), d.UPID...)
+
+	var tail bitWriter
+	tail.u(8, uint32(d.TypeID))
+	tail.u(8, 1) // segment_num
+	tail.u(8, 1) // segments_expected
+	body = append(body, tail.bytes()...)
+
+	return append([]byte{0x02, byte(len(body))}, body...)
 }
