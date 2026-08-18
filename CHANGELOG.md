@@ -301,6 +301,22 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **The coverage ratchet is honoured again.** Eleven milestones' worth of new parsers and
+  checks dropped statement coverage from 99.64% to 93.89%, which `scripts/coverage.sh` is
+  there to catch and which caught it. It is back at 99.65% — covered rather than
+  ratcheted down, because that floor only goes up. Writing those tests found five real
+  things:
+  - `descriptorPayload` accepted an MPEG-4 descriptor length whose continuation bit was
+    still set after four bytes, and measured a payload from the wrong place.
+  - `samplePartsAll` did not clamp its concurrency, so `--concurrency 0` deadlocked the
+    parts fan-out. `sampleAll` had always clamped; now both do.
+  - `mediatest`'s writers emit an RBSP, not an escaped NAL payload, so running
+    `unescapeRBSP` over one corrupts it wherever it contains `00 00 03` — which one HEVC
+    parameter set does. The convention is pinned down in the tests now.
+  - Four guards were provably unreachable and are gone rather than left uncoverable: a
+    three-bit sub-layer count cannot exceed seven (twice), a four-bit channel
+    configuration cannot exceed sixty-four, and a fourteen-byte check already covers a
+    104-bit read.
 - **A live HLS ladder was reported as VOD.** `EXT-X-ENDLIST` is a media-playlist tag, so
   a master playlist carries no liveness signal at all and every live HLS stream parsed as
   VOD until its variants were loaded. The report said "HLS VOD" about a live stream, and

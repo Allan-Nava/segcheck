@@ -34,6 +34,14 @@ type HEVCSPSParams struct {
 	// VUI, when set, writes video usability information carrying the colour
 	// description.
 	VUI *VUIParams
+	// The remaining optional blocks between the resolution and the VUI. Each one
+	// moves the VUI by a different amount, and a reader that skips rather than
+	// parses lands the colour description in the middle of something else — so
+	// each is writable, and read back.
+	NoSubLayerOrdering bool
+	ScalingListData    bool
+	PCM                bool
+	LongTermRefPics    int
 }
 
 // HEVCSPSFor builds a 4:2:0 parameter set that displays exactly width x height.
@@ -95,29 +103,63 @@ func HEVCSPS(p HEVCSPSParams) []byte {
 		return w.bytes()
 	}
 
-	w.bit(1) // sps_sub_layer_ordering_info_present_flag
-	for i := uint32(0); i <= p.MaxSubLayersMinus1; i++ {
-		w.ue(1) // sps_max_dec_pic_buffering_minus1
-		w.ue(0) // sps_max_num_reorder_pics
-		w.ue(0) // sps_max_latency_increase_plus1
+	if p.NoSubLayerOrdering {
+		// One set of figures for the highest sub-layer only.
+		w.bit(0)
+		w.ue(1)
+		w.ue(0)
+		w.ue(0)
+	} else {
+		w.bit(1) // sps_sub_layer_ordering_info_present_flag
+		for i := uint32(0); i <= p.MaxSubLayersMinus1; i++ {
+			w.ue(1) // sps_max_dec_pic_buffering_minus1
+			w.ue(0) // sps_max_num_reorder_pics
+			w.ue(0) // sps_max_latency_increase_plus1
+		}
 	}
-	w.ue(0)  // log2_min_luma_coding_block_size_minus3
-	w.ue(3)  // log2_diff_max_min_luma_coding_block_size
-	w.ue(0)  // log2_min_luma_transform_block_size_minus2
-	w.ue(3)  // log2_diff_max_min_luma_transform_block_size
-	w.ue(0)  // max_transform_hierarchy_depth_inter
-	w.ue(0)  // max_transform_hierarchy_depth_intra
-	w.bit(0) // scaling_list_enabled_flag
+	w.ue(0) // log2_min_luma_coding_block_size_minus3
+	w.ue(3) // log2_diff_max_min_luma_coding_block_size
+	w.ue(0) // log2_min_luma_transform_block_size_minus2
+	w.ue(3) // log2_diff_max_min_luma_transform_block_size
+	w.ue(0) // max_transform_hierarchy_depth_inter
+	w.ue(0) // max_transform_hierarchy_depth_intra
+	if p.ScalingListData {
+		w.bit(1) // scaling_list_enabled_flag
+		w.bit(1) // sps_scaling_list_data_present_flag
+		writeHEVCScalingListData(w)
+	} else {
+		w.bit(0)
+	}
 	w.bit(1) // amp_enabled_flag
 	w.bit(1) // sample_adaptive_offset_enabled_flag
-	w.bit(0) // pcm_enabled_flag
+	if p.PCM {
+		w.bit(1)
+		w.u(4, 7) // pcm_sample_bit_depth_luma_minus1
+		w.u(4, 7) // pcm_sample_bit_depth_chroma_minus1
+		w.ue(0)   // log2_min_pcm_luma_coding_block_size_minus3
+		w.ue(2)   // log2_diff_max_min_pcm_luma_coding_block_size
+		w.bit(1)  // pcm_loop_filter_disabled_flag
+	} else {
+		w.bit(0)
+	}
 
 	w.ue(p.ShortTermRefPicSets)
 	numDeltaPocs := make([]uint32, p.ShortTermRefPicSets)
 	for i := uint32(0); i < p.ShortTermRefPicSets; i++ {
 		writeShortTermRefPicSet(w, i, p.InterRefPicSetPrediction, numDeltaPocs)
 	}
-	w.bit(0) // long_term_ref_pics_present_flag
+	if p.LongTermRefPics > 0 {
+		w.bit(1)
+		w.ue(uint32(p.LongTermRefPics))
+		for i := 0; i < p.LongTermRefPics; i++ {
+			// lt_ref_pic_poc_lsb_sps is log2_max_pic_order_cnt_lsb bits wide, and
+			// the writer states that as 4+4 above.
+			w.u(8, 0)
+			w.bit(0) // used_by_curr_pic_lt_sps_flag
+		}
+	} else {
+		w.bit(0) // long_term_ref_pics_present_flag
+	}
 	w.bit(1) // sps_temporal_mvp_enabled_flag
 	w.bit(1) // strong_intra_smoothing_enabled_flag
 
@@ -164,6 +206,22 @@ func writeShortTermRefPicSet(w *bitWriter, idx uint32, interPrediction bool, num
 		w.bit(1) // used_by_curr_pic_s1_flag
 	}
 	numDeltaPocs[idx] = negative + positive
+}
+
+// writeHEVCScalingListData writes scaling_list_data with every entry coded as a
+// reference to an earlier list, which is the shorter of the two branches and the
+// one whose length a reader most easily miscounts.
+func writeHEVCScalingListData(w *bitWriter) {
+	for sizeID := 0; sizeID < 4; sizeID++ {
+		step := 1
+		if sizeID == 3 {
+			step = 3
+		}
+		for matrixID := 0; matrixID < 6; matrixID += step {
+			w.bit(0) // scaling_list_pred_mode_flag: a reference follows
+			w.ue(0)  // scaling_list_pred_matrix_id_delta
+		}
+	}
 }
 
 // hevcProfileTierLevel writes profile_tier_level with profilePresentFlag set.

@@ -65,3 +65,20 @@ func TestParseHLS_IFramePlaylistByteRanges(t *testing.T) {
 		t.Errorf("second range = %+v, want 8000@10000 continuing from the first", br)
 	}
 }
+
+// An EXT-X-I-FRAME-STREAM-INF with no URI names nothing a player can fetch, and
+// adding a rendition for it would put a rung in the report with nowhere to go.
+func TestParseHLS_IFrameStreamInfWithNoURI(t *testing.T) {
+	pl, err := ParseHLS([]byte("#EXTM3U\n#EXT-X-VERSION:7\n"+
+		"#EXT-X-STREAM-INF:BANDWIDTH=1,RESOLUTION=1x1,CODECS=\"avc1.640028\"\nv/index.m3u8\n"+
+		"#EXT-X-I-FRAME-STREAM-INF:BANDWIDTH=94000,RESOLUTION=1280x720\n"),
+		"https://cdn.example/master.m3u8")
+	if err != nil {
+		t.Fatalf("ParseHLS: %v", err)
+	}
+	for _, r := range pl.Renditions {
+		if r.Kind == IFrame {
+			t.Errorf("an EXT-X-I-FRAME-STREAM-INF with no URI produced a rendition: %+v", r)
+		}
+	}
+}

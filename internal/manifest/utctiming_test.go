@@ -208,3 +208,54 @@ func TestParseDASH_NoDVRWindowMeansNoOldestSegment(t *testing.T) {
 		t.Error("an MPD stating no window gained one")
 	}
 }
+
+// A DVR window that reaches back exactly as far as the expansion's own tail, and
+// one deeper than the presentation: the clamp has to hold at both ends.
+func TestParseDASH_DVRWindowClampedToTheSampledTail(t *testing.T) {
+	mpd := `<?xml version="1.0"?>
+<MPD type="dynamic" availabilityStartTime="2026-08-10T12:00:00Z" timeShiftBufferDepth="PT4S">
+  <Period>
+    <AdaptationSet mimeType="video/mp4">
+      <SegmentTemplate timescale="1" duration="4" media="v/$Number$.m4s" startNumber="1"/>
+      <Representation id="v" bandwidth="800000" width="640" height="360"/>
+    </AdaptationSet>
+  </Period>
+</MPD>`
+	// A window of four seconds against four-second segments reaches back one
+	// segment, which is inside the expansion's tail rather than before it.
+	now := time.Date(2026, 8, 10, 12, 1, 40, 0, time.UTC)
+	pl, err := ParseDASH([]byte(mpd), "https://cdn.example/live/manifest.mpd", now)
+	if err != nil {
+		t.Fatalf("ParseDASH: %v", err)
+	}
+	oldest := pl.Renditions[0].OldestSegment
+	if oldest == nil {
+		t.Fatal("no OldestSegment for a four-second window")
+	}
+	newest := pl.Renditions[0].Segments[len(pl.Renditions[0].Segments)-1]
+	if oldest.Sequence > newest.Sequence {
+		t.Errorf("the oldest segment (%d) is newer than the newest listed (%d)", oldest.Sequence, newest.Sequence)
+	}
+}
+
+// A UTCTiming element with no schemeIdUri names no source, and a checker that
+// kept it would try to resolve a scheme it was never given.
+func TestParseDASH_UTCTimingWithNoScheme(t *testing.T) {
+	mpd := `<?xml version="1.0"?>
+<MPD type="dynamic" availabilityStartTime="2026-08-10T12:00:00Z">
+  <UTCTiming value="https://time.example/"/>
+  <UTCTiming schemeIdUri="urn:mpeg:dash:utc:http-head:2014" value="https://time.example/"/>
+  <Period><AdaptationSet mimeType="video/mp4">
+    <SegmentTemplate timescale="1" duration="4" media="v/$Number$.m4s" startNumber="1"/>
+    <Representation id="v" bandwidth="800000" width="640" height="360"/>
+  </AdaptationSet></Period>
+</MPD>`
+	now := time.Date(2026, 8, 10, 12, 1, 40, 0, time.UTC)
+	pl, err := ParseDASH([]byte(mpd), "https://cdn.example/live/manifest.mpd", now)
+	if err != nil {
+		t.Fatalf("ParseDASH: %v", err)
+	}
+	if len(pl.UTCTiming) != 1 {
+		t.Errorf("parsed %d sources, want only the one that names a scheme: %v", len(pl.UTCTiming), pl.UTCTiming)
+	}
+}

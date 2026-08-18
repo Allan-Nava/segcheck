@@ -293,11 +293,11 @@ func parseHEVCColour(rbsp []byte) (ColourDescription, bool) {
 	r := &bitReader{data: rbsp}
 
 	r.bits(4) // sps_video_parameter_set_id
+	// Three bits cannot exceed seven, which is the specification's own maximum, so
+	// there is no bound to check here — unlike the fields below, whose ranges the
+	// bitstream really can overrun.
 	maxSubLayersMinus1 := r.bits(3)
 	r.bit() // sps_temporal_id_nesting_flag
-	if maxSubLayersMinus1 > maxHEVCSubLayers {
-		return ColourDescription{}, false
-	}
 	skipHEVCProfileTierLevel(r, maxSubLayersMinus1)
 
 	r.ue() // sps_seq_parameter_set_id

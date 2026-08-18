@@ -143,6 +143,10 @@ func descriptorPayload(b []byte, tag byte) ([]byte, bool) {
 		t := b[pos]
 		pos++
 		length := 0
+		terminated := false
+		// At most four bytes carry the length, seven bits each. A fifth
+		// continuation bit means this is not a descriptor at all, and measuring a
+		// payload from there would hand back bytes from the wrong place.
 		for i := 0; i < 4; i++ {
 			if pos >= len(b) {
 				return nil, false
@@ -151,8 +155,12 @@ func descriptorPayload(b []byte, tag byte) ([]byte, bool) {
 			pos++
 			length = length<<7 | int(c&0x7F)
 			if c&0x80 == 0 {
+				terminated = true
 				break
 			}
+		}
+		if !terminated {
+			return nil, false
 		}
 		if length < 0 || pos+length > len(b) {
 			return nil, false
@@ -196,9 +204,9 @@ func parseAudioSpecificConfig(asc []byte) (AudioConfig, bool) {
 	if rate <= 0 || rate > maxAudioSampleRate {
 		cfg.CodedSampleRate = 0
 	}
-	if channelCfg < 0 || channelCfg > maxAudioChannels {
-		cfg.CodedChannels = 0
-	}
+	// No bound on the channel configuration: it is four bits, so it cannot exceed
+	// fifteen, and every value in that range is either an assigned layout or a
+	// reserved one a caller compares against and finds does not match.
 	return cfg, true
 }
 

@@ -81,6 +81,11 @@ func selectParts(rd *renditionData, opts Options) []partData {
 // samplePartsAll downloads and parses every selected part, bounded by the same
 // concurrency as the segments.
 func samplePartsAll(ctx context.Context, c *fetch.Client, rends []*renditionData, inits map[initRef]initResult, conc int) {
+	// Bounded but never zero, the same as the segment fan-out: a zero-capacity
+	// semaphore means the first send blocks forever and nothing is ever sampled.
+	if conc <= 0 {
+		conc = 1
+	}
 	sem := make(chan struct{}, conc)
 	var wg sync.WaitGroup
 	for _, rd := range rends {

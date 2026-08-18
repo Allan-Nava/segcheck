@@ -199,3 +199,17 @@ func TestParseHLS_ProgramDateTimeReanchorsAfterADiscontinuity(t *testing.T) {
 		t.Errorf("segment 2 PDT = %s, want 2026-08-10T13:00:02Z derived from the new anchor", got)
 	}
 }
+
+// An EXT-X-PART with no URI names nothing a player can fetch, and adding it to
+// the segment would give a check an entry it can never resolve.
+func TestParseHLS_PartWithNoURI(t *testing.T) {
+	pl, err := ParseHLS([]byte("#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-PART-INF:PART-TARGET=1.0\n"+
+		"#EXT-X-PART:DURATION=1.0\n#EXTINF:1.0,\ns.mp4\n"),
+		"https://cdn.example/v.m3u8")
+	if err != nil {
+		t.Fatalf("ParseHLS: %v", err)
+	}
+	if len(pl.Segments[0].Parts) != 0 {
+		t.Errorf("a part with no URI was kept: %v", pl.Segments[0].Parts)
+	}
+}

@@ -117,3 +117,34 @@ func TestHLSKeyFormatNamesADRMSystem(t *testing.T) {
 		}
 	}
 }
+
+// A ContentProtection element with no schemeIdUri names nothing, and a CICP value
+// that is not a code point is not a claim: both have to be skipped rather than
+// counted as one.
+func TestParseDASH_MalformedProtectionAndColour(t *testing.T) {
+	mpd := `<?xml version="1.0"?>
+<MPD type="static" mediaPresentationDuration="PT10S">
+  <Period><AdaptationSet mimeType="video/mp4">
+    <ContentProtection value="cenc"/>
+    <EssentialProperty schemeIdUri="urn:mpeg:mpegB:cicp:TransferCharacteristics" value="not-a-number"/>
+    <SupplementalProperty schemeIdUri="urn:mpeg:mpegB:cicp:ColourPrimaries" value="999"/>
+    <SupplementalProperty schemeIdUri="urn:mpeg:mpegB:cicp:MatrixCoefficients" value="0"/>
+    <SegmentTemplate timescale="1" duration="4" media="v/$Number$.m4s" startNumber="1"/>
+    <Representation id="v" bandwidth="800000" width="640" height="360"/>
+  </AdaptationSet></Period>
+</MPD>`
+	pl, err := ParseDASH([]byte(mpd), "https://cdn.example/m.mpd", time.Now())
+	if err != nil {
+		t.Fatalf("ParseDASH: %v", err)
+	}
+	r := pl.Renditions[0]
+	if len(r.DRMSystems) != 0 {
+		t.Errorf("a ContentProtection with no schemeIdUri was counted: %v", r.DRMSystems)
+	}
+	if r.Transfer != 0 || r.Primaries != 0 || r.Matrix != 0 {
+		t.Errorf("values that are not code points were read: %d/%d/%d", r.Primaries, r.Transfer, r.Matrix)
+	}
+	if r.VideoRange != "" {
+		t.Errorf("VideoRange = %q, want empty when no transfer was stated", r.VideoRange)
+	}
+}

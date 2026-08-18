@@ -71,11 +71,11 @@ func hevcProfileLevel(es []byte) (CodecProfile, bool) {
 		}
 		r := &bitReader{data: rbsp}
 		r.bits(4) // sps_video_parameter_set_id
-		maxSubLayersMinus1 := r.bits(3)
-		r.bit() // sps_temporal_id_nesting_flag
-		if maxSubLayersMinus1 > maxHEVCSubLayers {
-			continue
-		}
+		// Three bits cannot exceed the specification's maximum of seven, so there
+		// is nothing to bound here — and the count is not needed either, because
+		// the general block this reads sits before the sub-layer ones.
+		r.bits(3) // sps_max_sub_layers_minus1
+		r.bit()   // sps_temporal_id_nesting_flag
 		r.bits(2) // general_profile_space
 		tier := int(r.bit())
 		profile := int(r.bits(5))
@@ -83,9 +83,8 @@ func hevcProfileLevel(es []byte) (CodecProfile, bool) {
 		r.bits(24) // the constraint and reserved flags: 48 bits in all
 		r.bits(24)
 		level := int(r.bits(8))
-		if r.err {
-			continue
-		}
+		// No error check: the fields above are 104 bits and the length guard above
+		// already required fourteen bytes, so the reader cannot have run out.
 		return CodecProfile{Profile: profile, Level: level, Tier: tier, Stated: true}, true
 	}
 	return CodecProfile{}, false

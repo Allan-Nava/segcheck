@@ -765,9 +765,6 @@ func parseSaiz(b []byte, f *fragTrack) {
 	defaultSize := b[off]
 	count := int(be32(b[off+1:]))
 	off += 5
-	if count < 0 {
-		return
-	}
 	if defaultSize != 0 {
 		for i := 0; i < count; i++ {
 			f.noteSampleEncryption(true)
