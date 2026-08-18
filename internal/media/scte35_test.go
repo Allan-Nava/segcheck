@@ -626,3 +626,91 @@ func TestFormatUPID(t *testing.T) {
 		t.Error("an empty UPID was called printable")
 	}
 }
+
+// SC-96: the segmentation descriptor, decoded by hand from the specification.
+//
+// Every other assertion about this reader goes through mediatest's builder, and a builder
+// and a reader written from the same misreading of the layout would agree with each other.
+// No public stream carries a segmentation descriptor to check against — livesim2's
+// sections have an empty descriptor loop — so these bytes are laid out field by field with
+// the bit boundaries written down, and the reader has to agree with the specification
+// rather than with its twin.
+func TestReadSegmentationDescriptor_HandDecoded(t *testing.T) {
+	// splice_descriptor_tag 0x02, then descriptor_length, then:
+	//
+	//   identifier                          32  "CUEI"
+	//   segmentation_event_id               32  0x0000002A = 42
+	//   segmentation_event_cancel_indicator  1  0
+	//   reserved                             7  0
+	//   program_segmentation_flag            1  1
+	//   segmentation_duration_flag           1  1
+	//   delivery_not_restricted_flag         1  1
+	//   reserved                             5  all ones
+	//   segmentation_duration               40  0x00002932E0 = 2700000 ticks = 30s
+	//   segmentation_upid_type               8  0x0C  (MPU, text in practice)
+	//   segmentation_upid_length             8  0x0A
+	//   segmentation_upid                   80  "SIGNAL:abc"
+	//   segmentation_type_id                 8  0x34  Provider Placement Opportunity Start
+	//   segment_num                          8  0x01
+	//   segments_expected                    8  0x01
+	//
+	// The three flags and the five reserved bits share one byte: 1,1,1 then 11111 is
+	// 0xFF. Getting that byte wrong is what moves the type id, which is the whole
+	// reason it is spelled out here.
+	body := []byte{
+		'C', 'U', 'E', 'I',
+		0x00, 0x00, 0x00, 0x2A,
+		0x00,                         // not cancelled, reserved
+		0xFF,                         // program_segmentation, duration_flag, not_restricted, reserved
+		0x00, 0x00, 0x29, 0x32, 0xE0, // segmentation_duration, 40 bits
+		0x0C, // upid type
+		0x0A, // upid length
+		'S', 'I', 'G', 'N', 'A', 'L', ':', 'a', 'b', 'c',
+		0x34, // segmentation_type_id
+		0x01, // segment_num
+		0x01, // segments_expected
+	}
+	var got SplicePoint
+	readSegmentationDescriptor(body, &got)
+
+	if got.SegmentationType != "Provider Placement Opportunity Start" {
+		t.Errorf("segmentation type = %q", got.SegmentationType)
+	}
+	if got.EventID != 42 {
+		t.Errorf("event id = %d, want 42", got.EventID)
+	}
+	if got.UPID != "SIGNAL:abc" {
+		t.Errorf("UPID = %q, want SIGNAL:abc", got.UPID)
+	}
+	if got.Duration != 2700000 {
+		t.Errorf("duration = %d ticks, want 2700000 (30s at 90kHz)", got.Duration)
+	}
+
+	// The same bytes with the delivery restriction flag cleared: the five bits after it
+	// are the restriction fields rather than reserved, so nothing moves — but a reader
+	// that skipped a different number of them would land on the wrong type id, and this
+	// is the pair that catches it.
+	restricted := append([]byte{}, body...)
+	restricted[9] = 0xC7 // program_segmentation 1, duration 1, not_restricted 0, then 00111
+	var got2 SplicePoint
+	readSegmentationDescriptor(restricted, &got2)
+	if got2.SegmentationType != "Provider Placement Opportunity Start" {
+		t.Errorf("with restrictions present: segmentation type = %q", got2.SegmentationType)
+	}
+
+	// And the whole thing through the section reader, so the descriptor loop's own
+	// framing is in the same test.
+	descriptor := append([]byte{0x02, byte(len(body))}, body...)
+	sec := mediatest.SpliceSection(mediatest.SpliceSpec{Command: mediatest.SpliceTimeSig, PTS: 1080000})
+	full := replaceDescriptorLoop(sec, descriptor)
+	sp, ok := parseSpliceSection(full)
+	if !ok {
+		t.Fatal("the section carrying a hand-decoded descriptor was rejected")
+	}
+	if sp.SegmentationType != "Provider Placement Opportunity Start" || sp.UPID != "SIGNAL:abc" {
+		t.Errorf("through the section reader: %+v", sp)
+	}
+	if !sp.HasPTS || sp.PTS != 1080000 {
+		t.Errorf("the command's own timing was lost: %+v", sp)
+	}
+}

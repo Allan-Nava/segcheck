@@ -355,15 +355,18 @@ stream that break in production and that no manifest-only checker can see.
   check now says which half of the tool ran. Verified against a real CENC stream whose
   clear twin produces the same findings minus the encryption notes.
   <!-- sc: prio=med size=L labels=parser ver=0.3.0 -->
-- [ ] **SC-96 — Verify AES-128 against a real stream**: SC-22 is asserted against a
-  synthetic origin whose plaintext is known by construction, which is the only way to tell
-  a working decrypter from one producing plausible noise — but no public AES-128 test
-  stream has been reachable to confirm it end to end. The CENC half of SC-95 *is* verified
-  against `media.axprod.net`, and looking for a real stream is what found three bugs:
-  a false BAD on protected single-file DASH, a false ERROR on sidecar subtitles, and a
-  false WARN about a tag DASH does not use. A real segmentation descriptor (SC-92) is
-  still unverified for the same reason.
-  <!-- sc: prio=med size=S labels=tests -->
+- [x] **SC-96 — Verify decryption and the splice descriptors against an outside
+  authority**: no public AES-128 HLS test stream is reachable — twenty candidates across
+  every provider that publishes one — and no reachable stream carries a
+  `segmentation_descriptor` either, livesim2's loop being empty. So the gap the item was
+  about is closed the other way: the cipher layer is checked against RFC 3602's published
+  AES-CBC vectors, third-party plaintext and third-party ciphertext, which pin the mode,
+  the key schedule and the IV chaining that a round trip against this repository's own
+  encryptor cannot; and the segmentation descriptor is checked against bytes laid out by
+  hand from the specification, field by field, so the reader has to agree with the
+  standard rather than with its twin builder. Looking for the stream is what found the
+  three false findings fixed alongside it.
+  <!-- sc: prio=med size=S labels=tests ver=0.3.0 -->
 
 ## M5 — Live and delivery <!-- ms: target=v0.4.0 phase=next -->
 

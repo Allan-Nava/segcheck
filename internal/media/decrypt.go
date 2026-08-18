@@ -34,9 +34,6 @@ var ErrWrongKey = errors.New("decrypted bytes are not a recognised container")
 // The key must be 16 bytes. The IV must be 16 bytes; SequenceIV builds the one HLS
 // specifies when EXT-X-KEY states none.
 func DecryptAES128(data, key, iv []byte) ([]byte, error) {
-	if len(key) != 16 {
-		return nil, fmt.Errorf("AES-128 needs a 16-byte key, got %d", len(key))
-	}
 	if len(iv) != AESBlockSize {
 		return nil, fmt.Errorf("AES-128 needs a %d-byte IV, got %d", AESBlockSize, len(iv))
 	}
@@ -47,14 +44,33 @@ func DecryptAES128(data, key, iv []byte) ([]byte, error) {
 		return nil, fmt.Errorf("encrypted segment is %d bytes, not a multiple of %d", len(data), AESBlockSize)
 	}
 
+	out, err := cbcDecrypt(data, key, iv)
+	if err != nil {
+		return nil, err
+	}
+	return stripPKCS7(out)
+}
+
+// cbcDecrypt is the cipher layer on its own: AES-128 in CBC mode, no padding removed.
+//
+// It is separate so it can be checked against published test vectors. A round trip
+// against this package's own encryptor cannot catch a shared misunderstanding of the
+// mode or the IV chaining — it would agree with itself — and no public AES-128 HLS
+// stream has been reachable to check against instead. RFC 3602's vectors are the
+// external authority available, and decrypt_vectors_test.go holds them.
+func cbcDecrypt(data, key, iv []byte) ([]byte, error) {
+	// The one place the key length is checked, so the error has one spelling and this
+	// branch is reachable from both callers rather than shadowed by a duplicate above.
+	if len(key) != 16 {
+		return nil, fmt.Errorf("AES-128 needs a 16-byte key, got %d", len(key))
+	}
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
 	}
 	out := make([]byte, len(data))
 	cipher.NewCBCDecrypter(block, iv).CryptBlocks(out, data)
-
-	return stripPKCS7(out)
+	return out, nil
 }
 
 // stripPKCS7 removes the padding CBC needs. A padding byte outside 1..16, or one

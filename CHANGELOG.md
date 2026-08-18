@@ -114,6 +114,20 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   noise — but *not* against a real encrypted stream, because no public AES-128 test
   stream was reachable. SC-96 tracks that, and it matters: every other reader in this
   project had a design error that only a real stream found.
+- **Decryption and the splice descriptors are checked against an authority outside this
+  repository** (SC-96). Every other assertion about them round-trips through this
+  project's own builders, and a builder and a reader written from the same misreading
+  agree with each other perfectly. The usual answer is a real stream; none is available —
+  no public AES-128 HLS test stream is reachable across every provider that publishes one,
+  and no reachable stream carries a `segmentation_descriptor` either.
+
+  So the cipher layer is now checked against RFC 3602's published AES-CBC vectors — third
+  -party plaintext and third-party ciphertext, pinning the mode, the key schedule and the
+  IV chaining across block boundaries. The key-length check moved into that layer so it
+  has one spelling and is reachable from both callers. And the segmentation descriptor is
+  checked against bytes laid out by hand from the specification with the bit boundaries
+  written down, including the byte where three flags and five reserved bits share space —
+  getting that one wrong is what moves the type id.
 - **Three false findings on real protected and DASH streams**, all found by going looking
   for one (SC-96):
   - **Protected single-file DASH reported "encrypted but the manifest declares no key"**

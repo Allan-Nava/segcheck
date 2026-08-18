@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**97 items · 54 shipped · 43 open · 13 milestones.**
+**97 items · 55 shipped · 42 open · 13 milestones.**
 
 ## At a glance
 
@@ -15,7 +15,7 @@
 | **M1** — Core: read the segments | `v0.1.0` | shipped | `##########` 100% | 0 | 6 |
 | **M2** — The checks | `v0.1.0` | shipped | `##########` 100% | 0 | 8 |
 | **M3** — Codec and timing depth | `v0.2.0` | shipped | `##########` 100% | 0 | 9 |
-| **M4** — Everything that is not the video track | `v0.3.0` | **now** | `#########.` 93% | 1 | 13 |
+| **M4** — Everything that is not the video track | `v0.3.0` | **now** | `##########` 100% | 0 | 14 |
 | **M5** — Live and delivery | `v0.4.0` | next | `..........` 0% | 6 | 0 |
 | **M9** — Wallclock and DVR correctness | `v0.4.0` | next | `..........` 0% | 5 | 0 |
 | **M6** — Integration | `v0.5.0` | later | `..........` 0% | 6 | 0 |
@@ -87,11 +87,10 @@ Target `v0.2.0` · shipped · 0 open · 9 shipped · `##########` 100%
 
 ### M4 — Everything that is not the video track
 
-Target `v0.3.0` · **now** · 1 open · 13 shipped · `#########.` 93%
+Target `v0.3.0` · **now** · 0 open · 14 shipped · `##########` 100%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
-| **SC-96** — Verify AES-128 against a real stream | med | S | tests | open |
 | **SC-18** — Audio sanity | high | M | check | shipped `0.3.0` |
 | **SC-20** — SCTE-35 / `EXT-X-DATERANGE` | high | L | check,parser | shipped `0.3.0` |
 | **SC-37** — CEA-608/708 captions | high | L | check,parser | shipped `0.3.0` |
@@ -103,6 +102,7 @@ Target `v0.3.0` · **now** · 1 open · 13 shipped · `#########.` 93%
 | **SC-92** — Splice descriptors and `EXT-X-DATERANGE` payloads | med | M | parser | shipped `0.3.0` |
 | **SC-93** — Cues inside an fMP4 subtitle track | med | M | parser | shipped `0.3.0` |
 | **SC-95** — SAMPLE-AES and CENC | med | L | parser | shipped `0.3.0` |
+| **SC-96** — Verify decryption and the splice descriptors against an outside   authority | med | S | tests | shipped `0.3.0` |
 | **SC-97** — Place a wrapped subtitle cue on the timeline | med | M | check | shipped `0.3.0` |
 | **SC-21** — MP3 packed audio | low | S | parser | shipped `0.3.0` |
 
@@ -239,7 +239,7 @@ Target `ongoing` · ongoing · 3 open · 13 shipped · `########..` 81%
 | `delivery` | 5 | 4 |
 | `integration` | 4 | 4 |
 | `output` | 4 | 3 |
-| `tests` | 11 | 2 |
 | `docs` | 5 | 1 |
 | `project` | 5 | 1 |
 | `release` | 9 | 1 |
+| `tests` | 11 | 1 |
