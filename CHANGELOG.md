@@ -19,6 +19,24 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   a stall rather than jitter. Watching a VOD playlist is not a defect and is reported as
   an OK finding saying there is no live edge, not as a problem in the stream. Only
   manifests are re-fetched: the segments are downloaded once, at the start.
+- **Colour description readers** (SC-72), with nothing consuming them yet: the VUI of an
+  H.264 or HEVC sequence parameter set — `colour_primaries`,
+  `transfer_characteristics`, `matrix_coefficients`, `video_full_range_flag` — and the
+  `colr` box with an `nclx` profile in fMP4, which is the same split resolution already
+  has: where the container states it, no bitstream reader is needed.
+  Reaching the VUI means parsing rather than seeking. In H.264 it sits behind an aspect
+  ratio block that may or may not carry an extended SAR (thirty-two bits that move
+  everything after them) and an overscan flag; in HEVC it sits behind the short-term
+  reference picture sets, whose sizes depend on one another because a set may be coded as
+  a prediction from the one before it — so set N cannot be skipped without having counted
+  set N-1. Both are round-tripped against `mediatest` writers, including the
+  inter-prediction branch.
+  A mismeasured walk does not fail, it reads three bytes out of the middle of another
+  field and returns a colour that looks like a colour, so every value is checked against
+  the assigned ranges before it is believed and a rejected read reports "unstated". An
+  unstated colour is never read as BT.709: code point 0 is reserved, and defaulting it
+  would be a claim segcheck invented. A `colr` box carrying an ICC profile rather than
+  nclx states no code points at all and is declined rather than guessed at.
 - **Whether protected media is actually encrypted** (SC-69). This is the most expensive
   defect segcheck reports and the quietest: content that ships unprotected plays
   everywhere, every player accepts it, every other check passes, the manifest declares

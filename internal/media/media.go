@@ -150,6 +150,11 @@ type Track struct {
 	// ClearSamples and EncryptedSamples are how many of this fragment's samples
 	// carry no encryption information and how many do, from `saiz`.
 	// LeadingClearSamples counts the run at the very start, which is what a clear
+	// ColourDesc is how the samples' code values map to light: the VUI of an
+	// H.264 or HEVC parameter set, or the `colr` box of an fMP4 sample entry.
+	// Check its Stated field, never its zeros — code point 0 is reserved, and
+	// reading it as BT.709 would be a claim segcheck invented.
+	ColourDesc ColourDescription `json:"colour,omitempty"`
 	// lead is. SampleStateKnown is false when the fragment stated none of it, and
 	// a caller must check it: "nobody looked" and "nothing is encrypted" are the
 	// same zero, and only one of them is a defect worth reporting.
@@ -260,6 +265,17 @@ func (t Track) StartsOnKeyframe() (bool, bool) {
 		return false, false
 	}
 	return t.OpensOnKeyframe, t.KeyframeKnown
+}
+
+// Colour is the track's colour description and whether anything stated the
+// three code points. A caller must check the bool: an unstated colour is not a
+// BT.709 one, and every check that compares against a manifest has to stay
+// quiet rather than compare against a zero.
+func (t Track) Colour() (ColourDescription, bool) {
+	if !t.ColourDesc.Stated {
+		return ColourDescription{}, false
+	}
+	return t.ColourDesc, true
 }
 
 // SampleEncryption is how many of the track's samples are in the clear and how

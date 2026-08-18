@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**101 items · 66 shipped · 35 open · 13 milestones.**
+**101 items · 67 shipped · 34 open · 13 milestones.**
 
 ## At a glance
 
@@ -21,7 +21,7 @@
 | **M6** — Integration | `v0.5.0` | later | `..........` 0% | 6 | 0 |
 | **M10** — Authoring-spec conformance | `v0.5.0` | later | `######....` 60% | 2 | 3 |
 | **M11** — Content protection, in depth | `v0.6.0` | later | `######....` 60% | 2 | 3 |
-| **M12** — Colour, HDR and the codec string | `v0.7.0` | later | `..........` 0% | 6 | 0 |
+| **M12** — Colour, HDR and the codec string | `v0.7.0` | later | `##........` 17% | 5 | 1 |
 | **M13** — Audio, past the sanity check | `v0.8.0` | later | `..........` 0% | 6 | 0 |
 | **M8** — Container image and supply chain | `v0.1.1` | shipped | `##########` 100% | 0 | 5 |
 | **M7** — Project and release | `ongoing` | ongoing | `#######...` 65% | 7 | 13 |
@@ -170,16 +170,16 @@ Target `v0.6.0` · later · 2 open · 3 shipped · `######....` 60%
 
 ### M12 — Colour, HDR and the codec string
 
-Target `v0.7.0` · later · 6 open · 0 shipped · `..........` 0%
+Target `v0.7.0` · later · 5 open · 1 shipped · `##........` 17%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
-| **SC-72** — Colour description readers | high | L | parser | open |
 | **SC-73** — `VIDEO-RANGE` against the transfer function | high | M | check,parser | open |
 | **SC-74** — Codec string profile and level | high | L | check,parser | open |
 | **SC-75** — HDR10 static metadata | med | M | check,parser | open |
 | **SC-76** — Dolby Vision | med | L | check,parser | open |
 | **SC-77** — Colour consistency across the ladder | med | M | check | open |
+| **SC-72** — Colour description readers | high | L | parser | shipped `0.7.0` |
 
 ### M13 — Audio, past the sanity check
 
@@ -238,7 +238,7 @@ Target `ongoing` · ongoing · 7 open · 13 shipped · `#######...` 65%
 | Label | Items | Open |
 |---|---|---|
 | `check` | 47 | 20 |
-| `parser` | 44 | 14 |
+| `parser` | 44 | 13 |
 | `cli` | 8 | 4 |
 | `delivery` | 6 | 4 |
 | `integration` | 4 | 4 |

@@ -27,6 +27,32 @@ type SPSParams struct {
 	// OffsetForRefFrame is written only for PicOrderCntType 1, one signed
 	// Exp-Golomb code per entry.
 	OffsetForRefFrame []int32
+	// VUI, when set, writes video usability information after the cropping
+	// offsets. The colour description lives there, behind two optional blocks
+	// whose lengths vary — an aspect ratio that may or may not carry an extended
+	// SAR, and an overscan flag — which is the whole reason reaching it means
+	// parsing rather than seeking.
+	VUI *VUIParams
+}
+
+// VUIParams are the video usability fields segcheck reads: how the code values
+// in the samples map to light.
+type VUIParams struct {
+	// AspectRatioIDC, when non-zero, writes the aspect ratio block. 255 is
+	// Extended_SAR and adds two sixteen-bit fields, which is the length change a
+	// reader has to follow rather than assume.
+	AspectRatioIDC uint32
+	SARWidth       uint32
+	SARHeight      uint32
+	Overscan       bool
+	// VideoSignalType writes video_format, video_full_range_flag and, when
+	// ColourDescription is set, the three colour bytes.
+	VideoSignalType   bool
+	FullRange         bool
+	ColourDescription bool
+	Primaries         uint32
+	Transfer          uint32
+	Matrix            uint32
 }
 
 // SPSFor builds a High-profile progressive 4:2:0 SPS that codes exactly
@@ -122,9 +148,52 @@ func SPS(p SPSParams) []byte {
 	} else {
 		w.bit(0)
 	}
-	w.bit(0) // vui_parameters_present_flag
+	if p.VUI == nil {
+		w.bit(0) // vui_parameters_present_flag
+		w.bit(1) // rbsp_stop_one_bit
+		return w.bytes()
+	}
+	w.bit(1)
+	writeVUI(w, *p.VUI)
 	w.bit(1) // rbsp_stop_one_bit
 	return w.bytes()
+}
+
+// writeVUI encodes the leading fields of video usability information, as far as
+// the colour description. H.264 and HEVC spell these identically, which is why
+// one writer serves both.
+func writeVUI(w *bitWriter, v VUIParams) {
+	if v.AspectRatioIDC != 0 {
+		w.bit(1)
+		w.u(8, v.AspectRatioIDC)
+		if v.AspectRatioIDC == 255 { // Extended_SAR
+			w.u(16, v.SARWidth)
+			w.u(16, v.SARHeight)
+		}
+	} else {
+		w.bit(0)
+	}
+	if v.Overscan {
+		w.bit(1)
+		w.bit(1) // overscan_appropriate_flag
+	} else {
+		w.bit(0)
+	}
+	if !v.VideoSignalType {
+		w.bit(0)
+		return
+	}
+	w.bit(1)
+	w.u(3, 5) // video_format: unspecified
+	w.bit(boolBit(v.FullRange))
+	if !v.ColourDescription {
+		w.bit(0)
+		return
+	}
+	w.bit(1)
+	w.u(8, v.Primaries)
+	w.u(8, v.Transfer)
+	w.u(8, v.Matrix)
 }
 
 // bitWriter accumulates single bits and the Exp-Golomb codes H.264 uses.

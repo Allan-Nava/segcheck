@@ -1026,3 +1026,56 @@ func MP4SegmentSAIZ(trackID, sequence uint32, baseDecodeTime int64, sampleDurati
 	mdat := box("mdat", make([]byte, payloadBytes))
 	return concat(moof, mdat)
 }
+
+// MP4InitColr is an init whose visual sample entry carries a `colr` box with an
+// `nclx` profile: the container stating the colour description outright, which
+// is how every CMAF HDR presentation does it.
+func MP4InitColr(trackID, timescale uint32, width, height int, sampleEntry string, primaries, transfer, matrix int, fullRange bool) []byte {
+	rangeByte := byte(0)
+	if fullRange {
+		rangeByte = 0x80 // full_range_flag is the top bit of the trailing byte
+	}
+	colr := box("colr", concat(
+		[]byte("nclx"),
+		u16(uint16(primaries)),
+		u16(uint16(transfer)),
+		u16(uint16(matrix)),
+		[]byte{rangeByte},
+	))
+	entry := box(sampleEntry, concat(
+		make([]byte, 6),
+		[]byte{0x00, 0x01},
+		make([]byte, 16),
+		u16(uint16(width)),
+		u16(uint16(height)),
+		u32(0x00480000), u32(0x00480000), u32(0),
+		u16(1),
+		make([]byte, 32),
+		u16(0x0018),
+		[]byte{0xFF, 0xFF},
+		colr,
+	))
+	return mp4InitFrom(trackID, timescale, "vide", entry, nil, width, height)
+}
+
+// MP4InitColrICC carries a `colr` box holding an ICC profile instead of nclx
+// code points. It states a colour and states it in a form that has no primaries
+// or transfer field at all, which is the case a reader must decline rather than
+// guess at.
+func MP4InitColrICC(trackID, timescale uint32, width, height int, sampleEntry string) []byte {
+	colr := box("colr", concat([]byte("prof"), make([]byte, 24)))
+	entry := box(sampleEntry, concat(
+		make([]byte, 6),
+		[]byte{0x00, 0x01},
+		make([]byte, 16),
+		u16(uint16(width)),
+		u16(uint16(height)),
+		u32(0x00480000), u32(0x00480000), u32(0),
+		u16(1),
+		make([]byte, 32),
+		u16(0x0018),
+		[]byte{0xFF, 0xFF},
+		colr,
+	))
+	return mp4InitFrom(trackID, timescale, "vide", entry, nil, width, height)
+}

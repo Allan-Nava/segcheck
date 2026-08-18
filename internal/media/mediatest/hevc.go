@@ -22,6 +22,18 @@ type HEVCSPSParams struct {
 	ConfWinRight        uint32
 	ConfWinTop          uint32
 	ConfWinBottom       uint32
+	// ShortTermRefPicSets is how many st_ref_pic_set structures to write. They
+	// are the bulk of the variable-length material between the resolution and
+	// the VUI, and a reader that mismeasures them lands the colour description
+	// in the middle of something else.
+	ShortTermRefPicSets uint32
+	// InterRefPicSetPrediction writes the second and later sets as predictions
+	// from the previous one, which is what real encoders emit and the branch
+	// where a reader has to derive NumDeltaPocs rather than read it.
+	InterRefPicSetPrediction bool
+	// VUI, when set, writes video usability information carrying the colour
+	// description.
+	VUI *VUIParams
 }
 
 // HEVCSPSFor builds a 4:2:0 parameter set that displays exactly width x height.
@@ -72,13 +84,86 @@ func HEVCSPS(p HEVCSPSParams) []byte {
 	} else {
 		w.bit(0)
 	}
-	// The reader stops here, but a real set continues; writing a little more
-	// keeps the fixture honest about what follows the fields under test.
-	w.ue(0)  // bit_depth_luma_minus8
-	w.ue(0)  // bit_depth_chroma_minus8
-	w.ue(4)  // log2_max_pic_order_cnt_lsb_minus4
+	w.ue(0) // bit_depth_luma_minus8
+	w.ue(0) // bit_depth_chroma_minus8
+	w.ue(4) // log2_max_pic_order_cnt_lsb_minus4
+
+	if p.VUI == nil && p.ShortTermRefPicSets == 0 {
+		// The resolution readers stop above; writing a stop bit here keeps the
+		// older fixtures byte-identical to what they were.
+		w.bit(1) // rbsp_stop_one_bit
+		return w.bytes()
+	}
+
+	w.bit(1) // sps_sub_layer_ordering_info_present_flag
+	for i := uint32(0); i <= p.MaxSubLayersMinus1; i++ {
+		w.ue(1) // sps_max_dec_pic_buffering_minus1
+		w.ue(0) // sps_max_num_reorder_pics
+		w.ue(0) // sps_max_latency_increase_plus1
+	}
+	w.ue(0)  // log2_min_luma_coding_block_size_minus3
+	w.ue(3)  // log2_diff_max_min_luma_coding_block_size
+	w.ue(0)  // log2_min_luma_transform_block_size_minus2
+	w.ue(3)  // log2_diff_max_min_luma_transform_block_size
+	w.ue(0)  // max_transform_hierarchy_depth_inter
+	w.ue(0)  // max_transform_hierarchy_depth_intra
+	w.bit(0) // scaling_list_enabled_flag
+	w.bit(1) // amp_enabled_flag
+	w.bit(1) // sample_adaptive_offset_enabled_flag
+	w.bit(0) // pcm_enabled_flag
+
+	w.ue(p.ShortTermRefPicSets)
+	numDeltaPocs := make([]uint32, p.ShortTermRefPicSets)
+	for i := uint32(0); i < p.ShortTermRefPicSets; i++ {
+		writeShortTermRefPicSet(w, i, p.InterRefPicSetPrediction, numDeltaPocs)
+	}
+	w.bit(0) // long_term_ref_pics_present_flag
+	w.bit(1) // sps_temporal_mvp_enabled_flag
+	w.bit(1) // strong_intra_smoothing_enabled_flag
+
+	if p.VUI == nil {
+		w.bit(0) // vui_parameters_present_flag
+		w.bit(1) // rbsp_stop_one_bit
+		return w.bytes()
+	}
+	w.bit(1)
+	writeVUI(w, *p.VUI)
 	w.bit(1) // rbsp_stop_one_bit
 	return w.bytes()
+}
+
+// writeShortTermRefPicSet writes one st_ref_pic_set and records how many delta
+// POCs it ends up carrying, which is what the *next* set's prediction loop is
+// sized by. That dependency between sets is the whole difficulty: a reader
+// cannot skip one without having counted the one before it.
+func writeShortTermRefPicSet(w *bitWriter, idx uint32, interPrediction bool, numDeltaPocs []uint32) {
+	if idx > 0 {
+		if interPrediction {
+			w.bit(1) // inter_ref_pic_set_prediction_flag
+			w.bit(0) // delta_rps_sign
+			w.ue(0)  // abs_delta_rps_minus1
+			carried := uint32(0)
+			for j := uint32(0); j <= numDeltaPocs[idx-1]; j++ {
+				w.bit(1) // used_by_curr_pic_flag[j]
+				carried++
+			}
+			numDeltaPocs[idx] = carried
+			return
+		}
+		w.bit(0) // inter_ref_pic_set_prediction_flag
+	}
+	const negative, positive = 2, 1
+	w.ue(negative) // num_negative_pics
+	w.ue(positive) // num_positive_pics
+	for i := 0; i < negative; i++ {
+		w.ue(0)  // delta_poc_s0_minus1
+		w.bit(1) // used_by_curr_pic_s0_flag
+	}
+	for i := 0; i < positive; i++ {
+		w.ue(0)  // delta_poc_s1_minus1
+		w.bit(1) // used_by_curr_pic_s1_flag
+	}
+	numDeltaPocs[idx] = negative + positive
 }
 
 // hevcProfileTierLevel writes profile_tier_level with profilePresentFlag set.

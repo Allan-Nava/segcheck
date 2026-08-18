@@ -641,16 +641,17 @@ media's own statement about itself, which is the comparison this tool exists to
 make. Judging whether the colour volume is *right* for the content is grading,
 not checking, and stays out.
 
-- [ ] **SC-72 — Colour description readers**: the VUI in H.264 and HEVC
-  (`colour_primaries`, `transfer_characteristics`, `matrix_coefficients`,
-  `video_full_range_flag`), and the `colr` box with `nclx` in fMP4, where the
-  container states it and no bitstream reader is needed — the same split that
-  already applies to resolution. The parser prerequisite for everything below;
-  it lands with the `mediatest` writers and the round trip that catches
-  bit-level mistakes, and with nothing consuming it yet. Note the trap: the VUI
-  sits behind the optional parameter sets the current SPS readers skip past, so
-  reaching it means parsing them rather than seeking.
-  <!-- sc: prio=high size=L labels=parser -->
+- [x] **SC-72 — Colour description readers**: the VUI in H.264 and HEVC and the
+  `colr` box with `nclx` in fMP4, round-tripped against `mediatest` writers with
+  nothing consuming them yet. The trap the item named is real twice over: in H.264 the
+  VUI hides behind an aspect ratio block that may carry an extended SAR, and in HEVC
+  behind the short-term reference picture sets, whose sizes depend on one another — set
+  N cannot be skipped without having counted set N-1, so the inter-prediction branch
+  had to be implemented and is tested. A mismeasured walk returns a plausible wrong
+  colour rather than failing, so every value is checked against the assigned ranges and
+  a rejected read reports "unstated"; an unstated colour is never read as BT.709, since
+  code point 0 is reserved. An ICC `colr` profile states no code points and is declined.
+  <!-- sc: prio=high size=L labels=parser ver=0.7.0 -->
 - [ ] **SC-73 — `VIDEO-RANGE` against the transfer function**: HLS
   `EXT-X-STREAM-INF` `VIDEO-RANGE=SDR|HLG|PQ` and the DASH
   `SupplementalProperty` / `EssentialProperty` transfer-characteristic

@@ -39,6 +39,8 @@ type initTrack struct {
 	cryptBlock int
 	skipBlock  int
 	hasPattern bool
+	// colour is the colour description the sample entry's `colr` box states.
+	colour ColourDescription
 	// nalLengthSize is how many bytes prefix each NAL unit in the mdat, from the
 	// avcC or hvcC box. fMP4 uses a length prefix where an elementary stream uses
 	// start codes, so a walk that assumes Annex-B finds nothing at all.
@@ -353,6 +355,7 @@ func (it *initTrack) track() Track {
 		// The samples of an encrypted track are protected even when the container
 		// around them is not, and every reader that looks inside one has to stay out.
 		SamplesEncrypted: it.encrypted,
+		ColourDesc:       it.colour,
 		KeyID:            it.keyID,
 		CryptByteBlock:   it.cryptBlock,
 		SkipByteBlock:    it.skipBlock,
@@ -435,6 +438,7 @@ func parseMoov(moov []byte, out map[uint32]*initTrack) {
 					t.codec = codec
 					t.protection = scheme
 					t.keyID, t.cryptBlock, t.skipBlock, t.hasPattern = tenc.keyID, tenc.crypt, tenc.skip, tenc.hasPattern
+					t.colour = colourFromStsd(stsd)
 					// The sample entries follow stsd's version, flags and entry
 					// count. A truncated stsd has none, and slicing past its end
 					// panics — which is how the fuzzer found this.
@@ -769,6 +773,49 @@ func parseSaiz(b []byte, f *fragTrack) {
 	}
 	for i := 0; i < count; i++ {
 		f.noteSampleEncryption(b[off+i] != 0)
+	}
+}
+
+// colourFromStsd reads the `colr` box out of the first sample entry.
+//
+// Only the nclx profile states code points. An ICC profile — colour_type
+// "prof" or "rICC" — states a colour too, and states it in a form with no
+// primaries or transfer field at all, so reading its bytes as though they were
+// one would produce a confident wrong answer.
+func colourFromStsd(stsd []byte) ColourDescription {
+	if len(stsd) <= 8 {
+		return ColourDescription{}
+	}
+	entries := boxesIn(stsd[8:])
+	if len(entries) == 0 {
+		return ColourDescription{}
+	}
+	e := entries[0]
+	if !isVisualSampleEntry(e.typ) && e.typ != "encv" {
+		return ColourDescription{}
+	}
+	if len(e.payload) <= visualSampleEntrySize {
+		return ColourDescription{}
+	}
+	// A protected entry keeps the original sample entry's boxes beside sinf, so
+	// the search is the same in both cases.
+	colr, ok := findBox(e.payload[visualSampleEntrySize:], "colr")
+	if !ok || len(colr) < 4 {
+		return ColourDescription{}
+	}
+	if string(colr[:4]) != "nclx" || len(colr) < 11 {
+		return ColourDescription{}
+	}
+	primaries := int(be16(colr[4:]))
+	transfer := int(be16(colr[6:]))
+	matrix := int(be16(colr[8:]))
+	if !plausibleColour(primaries, transfer, matrix) {
+		return ColourDescription{}
+	}
+	return ColourDescription{
+		Primaries: primaries, Transfer: transfer, Matrix: matrix,
+		FullRange: colr[10]&0x80 != 0,
+		Stated:    true, RangeStated: true,
 	}
 }
 
