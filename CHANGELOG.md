@@ -12,8 +12,9 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - The Homebrew cask's `postflight` used `exit_status == 0`, which fails `brew style`'s
   `Style/NumericPredicate` and so fails the tap's own audit. It is `.exit_status.zero?`
   now. The cask is generated from `.goreleaser.yaml`, so correcting it in the tap by hand
-  lasts only until the next release overwrites it. Six further offences in the generated
-  cask come from goreleaser's own template and are SC-98.
+  lasts only until the next release overwrites it. Ten further offences in the tap's audit
+  are goreleaser's own stanza ordering, on `segcheck.rb` and `checkfleet.rb` alike, and are
+  SC-98 — fixable only in the tap.
 
 ## [0.3.0] - 2026-08-18
 

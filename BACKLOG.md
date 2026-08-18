@@ -997,14 +997,19 @@ checks roadmap and blocks nothing.
   postflight. It needs a paid Apple Developer account and two more release
   secrets, which is why it is not part of SC-65.
   <!-- sc: prio=med size=M labels=release -->
-- [ ] **SC-98 — The generated cask fails `brew style`**: goreleaser's cask template emits
-  six RuboCop offences — four `Cask/StanzaOrder` on the `on_intel`/`on_arm` blocks, one
-  `Cask/StanzaGrouping` and one `Layout/EmptyLinesAroundBlockBody` — so
-  `Allan-Nava/homebrew-tap` fails its own audit after every release and someone
-  autocorrects it by hand. None of those six is ours to fix from `.goreleaser.yaml`; the
-  seventh, `Style/NumericPredicate`, was, and is fixed. Either a goreleaser version that
-  emits a compliant cask or a `brew style --fix` step in the tap. Adding a `zap` stanza
-  would silence one of them and would be a lie: segcheck is a static binary with no
-  configuration, cache or preferences to remove, which is exactly why the template writes
-  "No zap stanza required".
+- [ ] **SC-98 — The generated cask fails the tap's style audit**: goreleaser's template
+  emits `on_intel` before `on_arm` and a blank line between the `on_macos` and `on_linux`
+  groups — four `Cask/StanzaOrder` and one `Cask/StanzaGrouping` per cask. It hits
+  `segcheck.rb` and `checkfleet.rb` identically, both being goreleaser-written, so
+  `Allan-Nava/homebrew-tap`'s `cask-ci.yml` style step fails after every release of either,
+  and nothing in `.goreleaser.yaml` reaches it. The tap already has the convention —
+  `--except-cops Cask/Desc,Layout/EmptyLinesAroundBlockBody`, commented as generated-file
+  offences that get rewritten every release — so adding
+  `Cask/StanzaOrder,Cask/StanzaGrouping` to that list is the same argument and one line.
+  The cop that caught a real defect, `Style/NumericPredicate` on our own postflight, stays
+  out of the list and keeps running: exclude what polices a machine's formatting, keep what
+  polices behaviour. The alternative, `brew style --fix` committed back by a tap workflow,
+  buys a canonical file at the cost of a workflow writing to its own repo and is undone by
+  the next release anyway. Belongs in the tap; filed here because segcheck's release is
+  what surfaced it.
   <!-- sc: prio=low size=S labels=release -->

@@ -215,7 +215,7 @@ Target `ongoing` · ongoing · 4 open · 13 shipped · `########..` 76%
 | **SC-64** — `scripts/backlog.sh` has no tests | med | S | tests,project | open |
 | **SC-94** — Developer ID signing and notarisation | med | M | release | open |
 | **SC-49** — Per-check reference pages | low | M | docs | open |
-| **SC-98** — The generated cask fails `brew style` | low | S | release | open |
+| **SC-98** — The generated cask fails the tap's style audit | low | S | release | open |
 | **SC-36** — Real-stream smoke suite | high | S | tests,release | shipped `0.2.0` |
 | **SC-57** — `internal/fetch` tests | high | M | tests | shipped `0.1.1` |
 | **SC-58** — `cmd/segcheck` tests | high | M | tests,cli | shipped `0.1.1` |
