@@ -312,6 +312,7 @@ func ParseHLS(body []byte, baseURL string) (Playlist, error) {
 					Height:       h,
 					Codecs:       pendingStream["CODECS"],
 					FrameRate:    attrFloat(pendingStream, "FRAME-RATE"),
+					VideoRange:   strings.ToUpper(strings.TrimSpace(pendingStream["VIDEO-RANGE"])),
 					AudioGroup:   pendingStream["AUDIO"],
 					// NONE is a positive claim that there are no captions; an
 					// absent attribute claims nothing either way.

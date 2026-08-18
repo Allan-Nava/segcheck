@@ -1079,3 +1079,42 @@ func MP4InitColrICC(trackID, timescale uint32, width, height int, sampleEntry st
 	))
 	return mp4InitFrom(trackID, timescale, "vide", entry, nil, width, height)
 }
+
+// MP4InitWithSPS is an init whose sample entry carries the real parameter set
+// inside its decoder configuration record — `avcC` for H.264, `hvcC` for HEVC —
+// and no `colr` box.
+//
+// That is the shape most real fMP4 carries: Apple's own H.264 rungs state their
+// colour only in the SPS's VUI, so a reader that looked for a colr box and gave
+// up found nothing on the majority of the world's content.
+func MP4InitWithSPS(trackID, timescale uint32, width, height int, sampleEntry string, sps []byte) []byte {
+	var cfg []byte
+	switch sampleEntry {
+	case "hvc1", "hev1":
+		rec := make([]byte, 23)
+		rec[0] = 0x01
+		rec[21] = 0xFF // lengthSizeMinusOne 3
+		rec[22] = 0x01 // numOfArrays
+		// One array: array_completeness set, NAL_unit_type 33 (SPS), one NALU.
+		nal := concat([]byte{0x22 | 0x80}, u16(1), u16(uint16(len(sps)+2)),
+			[]byte{0x42, 0x01}, sps) // the two-byte HEVC NAL header, type 33
+		cfg = box("hvcC", concat(rec, nal))
+	default:
+		rec := []byte{0x01, 0x64, 0x00, 0x28, 0xFF, 0xE1}
+		cfg = box("avcC", concat(rec, u16(uint16(len(sps)+1)), []byte{0x67}, sps))
+	}
+	entry := box(sampleEntry, concat(
+		make([]byte, 6),
+		[]byte{0x00, 0x01},
+		make([]byte, 16),
+		u16(uint16(width)),
+		u16(uint16(height)),
+		u32(0x00480000), u32(0x00480000), u32(0),
+		u16(1),
+		make([]byte, 32),
+		u16(0x0018),
+		[]byte{0xFF, 0xFF},
+		cfg,
+	))
+	return mp4InitFrom(trackID, timescale, "vide", entry, nil, width, height)
+}

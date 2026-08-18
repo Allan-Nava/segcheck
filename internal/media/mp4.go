@@ -799,12 +799,14 @@ func colourFromStsd(stsd []byte) ColourDescription {
 	}
 	// A protected entry keeps the original sample entry's boxes beside sinf, so
 	// the search is the same in both cases.
-	colr, ok := findBox(e.payload[visualSampleEntrySize:], "colr")
-	if !ok || len(colr) < 4 {
-		return ColourDescription{}
-	}
-	if string(colr[:4]) != "nclx" || len(colr) < 11 {
-		return ColourDescription{}
+	children := e.payload[visualSampleEntrySize:]
+	colr, ok := findBox(children, "colr")
+	if !ok || len(colr) < 4 || string(colr[:4]) != "nclx" || len(colr) < 11 {
+		// Most real fMP4 carries no colr box: the colour is in the VUI of the
+		// parameter set inside the decoder configuration record. Apple's own
+		// H.264 rungs are that shape, so stopping here found nothing on the
+		// majority of the world's content.
+		return colourFromCodecConfig(children)
 	}
 	primaries := int(be16(colr[4:]))
 	transfer := int(be16(colr[6:]))
@@ -817,6 +819,93 @@ func colourFromStsd(stsd []byte) ColourDescription {
 		FullRange: colr[10]&0x80 != 0,
 		Stated:    true, RangeStated: true,
 	}
+}
+
+// colourFromCodecConfig reads the colour description out of the parameter set a
+// decoder configuration record carries: avcC for H.264, hvcC for HEVC.
+//
+// Both store whole NAL units including their headers, and both put them behind a
+// fixed prefix whose length differs — which is the same trap nalLengthSizeFrom
+// documents, and the same one this has to get right to reach a VUI at all.
+func colourFromCodecConfig(children []byte) ColourDescription {
+	if avcC, ok := findBox(children, "avcC"); ok {
+		for _, nal := range avcCParameterSets(avcC) {
+			// nal_unit_type 7 is the sequence parameter set.
+			if len(nal) > 1 && nal[0]&0x1F == 7 {
+				if c, ok := parseH264Colour(unescapeRBSP(nal[1:])); ok && c.Stated {
+					return c
+				}
+			}
+		}
+	}
+	if hvcC, ok := findBox(children, "hvcC"); ok {
+		for _, nal := range hvcCParameterSets(hvcC) {
+			if len(nal) > 2 && (nal[0]>>1)&0x3F == nalTypeHEVCSPS {
+				if c, ok := parseHEVCColour(unescapeRBSP(nal[2:])); ok && c.Stated {
+					return c
+				}
+			}
+		}
+	}
+	return ColourDescription{}
+}
+
+// avcCParameterSets is the sequence parameter sets an AVCDecoderConfigurationRecord
+// carries. The record's fixed part is five bytes, then a count in the low five
+// bits of the sixth, then each set behind a two-byte length.
+func avcCParameterSets(rec []byte) [][]byte {
+	if len(rec) < 6 {
+		return nil
+	}
+	count := int(rec[5] & 0x1F)
+	var out [][]byte
+	pos := 6
+	for i := 0; i < count; i++ {
+		if pos+2 > len(rec) {
+			return out
+		}
+		n := int(be16(rec[pos:]))
+		pos += 2
+		if n <= 0 || pos+n > len(rec) {
+			return out
+		}
+		out = append(out, rec[pos:pos+n])
+		pos += n
+	}
+	return out
+}
+
+// hvcCParameterSets is the same for HEVCDecoderConfigurationRecord, whose sets
+// are grouped into arrays by NAL unit type behind a twenty-three-byte prefix.
+func hvcCParameterSets(rec []byte) [][]byte {
+	const prefix = 23
+	if len(rec) < prefix {
+		return nil
+	}
+	arrays := int(rec[prefix-1])
+	var out [][]byte
+	pos := prefix
+	for a := 0; a < arrays; a++ {
+		if pos+3 > len(rec) {
+			return out
+		}
+		pos++ // array_completeness, reserved and NAL_unit_type
+		n := int(be16(rec[pos:]))
+		pos += 2
+		for i := 0; i < n; i++ {
+			if pos+2 > len(rec) {
+				return out
+			}
+			l := int(be16(rec[pos:]))
+			pos += 2
+			if l <= 0 || pos+l > len(rec) {
+				return out
+			}
+			out = append(out, rec[pos:pos+l])
+			pos += l
+		}
+	}
+	return out
 }
 
 // nalLengthSizeFrom reads how many bytes prefix each NAL unit in the samples,

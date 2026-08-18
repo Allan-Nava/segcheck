@@ -278,6 +278,7 @@ func Run(ctx context.Context, c *fetch.Client, rawurl string, opts Options) find
 	res.Findings = append(res.Findings, checkDRM(rends)...)
 	res.Findings = append(res.Findings, checkScheme(rends)...)
 	res.Findings = append(res.Findings, checkClear(rends, opts)...)
+	res.Findings = append(res.Findings, checkVideoRange(rends)...)
 	res.Findings = append(res.Findings, checkAlignment(rends, opts)...)
 	res.Findings = append(res.Findings, checkAvailability(*pl, rends, clock, probes, opts)...)
 	res.Findings = append(res.Findings, checkDVR(dvr)...)

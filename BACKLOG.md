@@ -652,16 +652,14 @@ not checking, and stays out.
   a rejected read reports "unstated"; an unstated colour is never read as BT.709, since
   code point 0 is reserved. An ICC `colr` profile states no code points and is declined.
   <!-- sc: prio=high size=L labels=parser ver=0.7.0 -->
-- [ ] **SC-73 — `VIDEO-RANGE` against the transfer function**: HLS
-  `EXT-X-STREAM-INF` `VIDEO-RANGE=SDR|HLG|PQ` and the DASH
-  `SupplementalProperty` / `EssentialProperty` transfer-characteristic
-  descriptors, checked against what SC-72 reads: `PQ` is transfer 16, `HLG` is
-  18, `SDR` is 1 or 6. `VIDEO-RANGE` is not parsed by the HLS reader at all
-  today, so the attribute lands with the check. A PQ rung whose samples are
-  BT.709 is tone-mapped twice by every device that believes the manifest and
-  once by every device that believes the bitstream, and the two halves of the
-  audience see different pictures of the same stream.
-  <!-- sc: prio=high size=M labels=check,parser -->
+- [x] **SC-73 — `VIDEO-RANGE` against the transfer function**: the `videorange` check
+  compares HLS `VIDEO-RANGE` — parsed for the first time — and DASH's CICP transfer
+  descriptor against what SC-72 reads, in both directions. An absent `VIDEO-RANGE` is
+  not an SDR one: a player defaults, a checker can only be wrong about what was stated.
+  Apple's Dolby Vision example corrected the reader: most real fMP4 carries no `colr`
+  box and states its colour only in the VUI of the parameter set inside `avcC`/`hvcC`,
+  so looking for a `colr` and giving up found nothing on the majority of content.
+  <!-- sc: prio=high size=M labels=check,parser ver=0.7.0 -->
 - [ ] **SC-74 — Codec string profile and level** (includes the `av1C`/`vpcC`
   configuration boxes, moved here from SC-42: they carry profile and level, not a
   resolution, so they belong with the codec string rather than with the frame

@@ -72,6 +72,17 @@ type mpdAdaptation struct {
 		SchemeIDURI string `xml:"schemeIdUri,attr"`
 		Value       string `xml:"value,attr"`
 	} `xml:"Accessibility"`
+	// The CICP colour descriptors. Either element may carry them: Essential when
+	// a player must understand them to render correctly, Supplemental when it is
+	// only advisory, and the code point means the same thing in both.
+	EssentialProperty []struct {
+		SchemeIDURI string `xml:"schemeIdUri,attr"`
+		Value       string `xml:"value,attr"`
+	} `xml:"EssentialProperty"`
+	SupplementalProperty []struct {
+		SchemeIDURI string `xml:"schemeIdUri,attr"`
+		Value       string `xml:"value,attr"`
+	} `xml:"SupplementalProperty"`
 	BaseURL           []string               `xml:"BaseURL"`
 	SegmentTemplate   *mpdSegTemplate        `xml:"SegmentTemplate"`
 	Representations   []mpdRepresentation    `xml:"Representation"`
@@ -187,6 +198,7 @@ func ParseDASH(body []byte, baseURL string, now time.Time) (Playlist, error) {
 			kind := dashKind(as, ai)
 			protected := len(as.ContentProtection) > 0
 			scheme, systems, inManifest := dashProtection(as.ContentProtection)
+			primaries, transfer, matrix := dashColour(as)
 
 			for ri, rep := range as.Representations {
 				rbase := applyBaseURLs(abase, rep.BaseURL)
@@ -213,6 +225,10 @@ func ParseDASH(body []byte, baseURL string, now time.Time) (Playlist, error) {
 					KeyScheme:     scheme,
 					DRMSystems:    systems,
 					DRMInManifest: inManifest,
+					Primaries:     primaries,
+					Transfer:      transfer,
+					Matrix:        matrix,
+					VideoRange:    VideoRangeForTransfer(transfer),
 				}
 
 				switch {
@@ -656,6 +672,36 @@ func dashProtection(elems []mpdContentProtection) (scheme string, systems, inMan
 		}
 	}
 	return scheme, systems, inManifest
+}
+
+// dashColour reads the CICP colour code points an AdaptationSet states, from
+// either the Essential or the Supplemental properties.
+//
+// They are the same numbers the bitstream carries, which is the useful part: no
+// translation stands between the claim and the media, so a mismatch is a
+// mismatch rather than a mapping argument.
+func dashColour(as mpdAdaptation) (primaries, transfer, matrix int) {
+	read := func(scheme, value string) {
+		v, err := strconv.Atoi(strings.TrimSpace(value))
+		if err != nil || v <= 0 || v > 255 {
+			return
+		}
+		switch strings.ToLower(strings.TrimSpace(scheme)) {
+		case "urn:mpeg:mpegb:cicp:colourprimaries":
+			primaries = v
+		case "urn:mpeg:mpegb:cicp:transfercharacteristics":
+			transfer = v
+		case "urn:mpeg:mpegb:cicp:matrixcoefficients":
+			matrix = v
+		}
+	}
+	for _, p := range as.EssentialProperty {
+		read(p.SchemeIDURI, p.Value)
+	}
+	for _, p := range as.SupplementalProperty {
+		read(p.SchemeIDURI, p.Value)
+	}
+	return primaries, transfer, matrix
 }
 
 func dashKeyMethod(protected bool) string {

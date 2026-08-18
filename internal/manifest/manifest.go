@@ -52,6 +52,18 @@ type Rendition struct {
 	Height       int     `json:"height,omitempty"`
 	Codecs       string  `json:"codecs,omitempty"`
 	FrameRate    float64 `json:"frame_rate,omitempty"`
+	// VideoRange is the dynamic range the manifest claims: HLS VIDEO-RANGE, or
+	// the name DASH's CICP transfer code implies. Empty means the manifest said
+	// nothing, which is a different claim from SDR — a player defaults to SDR,
+	// but a checker can only be wrong about what was actually stated.
+	VideoRange string `json:"video_range,omitempty"`
+	// Primaries, Transfer and Matrix are the CICP code points a DASH
+	// AdaptationSet states in a Supplemental or Essential property. They are the
+	// same numbers the bitstream carries, so no translation is needed to compare
+	// them. Zero means unstated: 0 is reserved in all three registries.
+	Primaries int `json:"primaries,omitempty"`
+	Transfer  int `json:"transfer,omitempty"`
+	Matrix    int `json:"matrix,omitempty"`
 	// SampleRate and Channels are what the manifest claims about an audio
 	// rendition: DASH @audioSamplingRate and AudioChannelConfiguration@value,
 	// HLS EXT-X-MEDIA CHANNELS (which states no rate at all). Zero means the
@@ -397,6 +409,32 @@ func DRMSystemForKeyFormat(keyformat string) string {
 		return strings.TrimPrefix(f, "urn:uuid:")
 	}
 	return keyFormatSystems[f]
+}
+
+// Dynamic-range names, as HLS VIDEO-RANGE spells them.
+const (
+	RangeSDR = "SDR"
+	RangeHLG = "HLG"
+	RangePQ  = "PQ"
+)
+
+// VideoRangeForTransfer is the name a CICP transfer characteristic implies: 16
+// is PQ, 18 is HLG, and everything else assigned is one flavour of SDR.
+//
+// The asymmetry is deliberate. PQ and HLG are two specific code points, so
+// naming them is exact; "SDR" covers BT.709, BT.601, both BT.2020 curves, sRGB
+// and the gamma variants, and pinning it to one of them would invent a
+// distinction the manifest never draws.
+func VideoRangeForTransfer(transfer int) string {
+	switch transfer {
+	case 0, 2, 3:
+		return "" // reserved or unspecified: no claim
+	case 16:
+		return RangePQ
+	case 18:
+		return RangeHLG
+	}
+	return RangeSDR
 }
 
 // Resolve turns a possibly relative manifest reference into an absolute URL.

@@ -19,6 +19,26 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   a stall rather than jitter. Watching a VOD playlist is not a defect and is reported as
   an OK finding saying there is no live edge, not as a problem in the stream. Only
   manifests are re-fetched: the segments are downloaded once, at the start.
+- **`VIDEO-RANGE` against the transfer function** (SC-73). A player reads it — or DASH's
+  CICP transfer descriptor — to decide whether to ask the display for HDR, before it has
+  decoded a single frame, so it is acted on earlier than any other claim segcheck checks
+  and acted on differently by different devices. A PQ rung whose samples are really BT.709
+  is tone-mapped twice by every device that believes the manifest and once by every device
+  that believes the bitstream: the two halves of the audience see different pictures of the
+  same stream and neither sees an error. The other direction is worse for the viewer —
+  media that really is PQ, declared SDR, is never given an HDR display and comes out washed
+  out everywhere.
+  `VIDEO-RANGE` is parsed for the first time, and DASH's `ColourPrimaries`,
+  `TransferCharacteristics` and `MatrixCoefficients` properties from either the Essential
+  or the Supplemental element — those are CICP code points, the same registry the bitstream
+  uses, so no mapping stands between the claim and the media. An absent `VIDEO-RANGE` is
+  not an SDR one: a player defaults, a checker can only be wrong about what was stated.
+- **The colour description is read from `avcC` and `hvcC` too.** Most real fMP4 carries no
+  `colr` box at all — Apple's own H.264 rungs state their colour only in the VUI of the
+  parameter set inside the decoder configuration record — so looking for a `colr` and
+  giving up found nothing on the majority of the world's content. Found by pointing the
+  new check at Apple's Dolby Vision example, which now verifies as PQ over BT.2020 from
+  the media.
 - **Colour description readers** (SC-72), with nothing consuming them yet: the VUI of an
   H.264 or HEVC sequence parameter set — `colour_primaries`,
   `transfer_characteristics`, `matrix_coefficients`, `video_full_range_flag` — and the

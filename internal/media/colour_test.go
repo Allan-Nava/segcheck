@@ -174,3 +174,62 @@ func TestParse_ColrWithAnICCProfileStatesNoCodePoints(t *testing.T) {
 		t.Error("an ICC colour profile was read as nclx code points")
 	}
 }
+
+// Most real fMP4 carries no `colr` box at all: the colour lives in the VUI of
+// the parameter set inside `avcC` or `hvcC`. Apple's own H.264 rungs are exactly
+// that shape, so a reader that looked only for a colr box found nothing on the
+// majority of the world's content — which is where this was found.
+func TestParse_ColourFromTheParameterSetInTheSampleEntry(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		sampleEntry string
+		sps         []byte
+		wantTrans   int
+	}{
+		{
+			name:        "H.264 SPS in avcC",
+			sampleEntry: "avc1",
+			sps: mediatest.SPS(mediatest.SPSParams{
+				ProfileIDC: 100, ChromaFormatIDC: 1,
+				WidthInMBsMinus1: 79, HeightInMapUnits: 44, FrameMBsOnly: 1,
+				VUI: &mediatest.VUIParams{
+					VideoSignalType: true, ColourDescription: true,
+					Primaries: 1, Transfer: 1, Matrix: 1,
+				},
+			}),
+			wantTrans: TransferBT709,
+		},
+		{
+			name:        "HEVC SPS in hvcC",
+			sampleEntry: "hvc1",
+			sps: mediatest.HEVCSPS(mediatest.HEVCSPSParams{
+				WidthInLumaSamples: 3840, HeightInLumaSamples: 2160, ChromaFormatIDC: 1,
+				ShortTermRefPicSets: 1,
+				VUI: &mediatest.VUIParams{
+					VideoSignalType: true, ColourDescription: true,
+					Primaries: 9, Transfer: 16, Matrix: 9,
+				},
+			}),
+			wantTrans: TransferPQ,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			init := mediatest.MP4InitWithSPS(1, 90000, 1920, 1080, tc.sampleEntry, tc.sps)
+			info, err := Parse(mediatest.MP4Segment(1, 0, 0, 3600, 10, 500), init)
+			if err != nil {
+				t.Fatalf("Parse: %v", err)
+			}
+			track, ok := info.Track(Video)
+			if !ok {
+				t.Fatal("no video track")
+			}
+			c, ok := track.Colour()
+			if !ok {
+				t.Fatal("the parameter set states a colour description and none was read")
+			}
+			if c.Transfer != tc.wantTrans {
+				t.Errorf("transfer = %d, want %d", c.Transfer, tc.wantTrans)
+			}
+		})
+	}
+}
