@@ -170,11 +170,15 @@ type Playlist struct {
 	Master bool `json:"master"`
 	// Live is true for a sliding-window HLS playlist (no EXT-X-ENDLIST) or a
 	// dynamic MPD.
-	Live           bool        `json:"live"`
-	TargetDuration float64     `json:"target_duration,omitempty"`
-	MediaSequence  int         `json:"media_sequence,omitempty"`
-	Renditions     []Rendition `json:"renditions,omitempty"`
-	Segments       []Segment   `json:"segments,omitempty"`
+	Live           bool    `json:"live"`
+	TargetDuration float64 `json:"target_duration,omitempty"`
+	// UpdatePeriod is how often the manifest itself says it will change: DASH
+	// @minimumUpdatePeriod. HLS states no such interval — a player re-reads a
+	// live media playlist at TARGETDURATION — so it stays zero there.
+	UpdatePeriod  float64     `json:"update_period,omitempty"`
+	MediaSequence int         `json:"media_sequence,omitempty"`
+	Renditions    []Rendition `json:"renditions,omitempty"`
+	Segments      []Segment   `json:"segments,omitempty"`
 	// AdBreaks are the SCTE-35 ad-break signals the manifest declares: HLS
 	// EXT-X-DATERANGE and EXT-X-CUE-OUT/CUE-IN in a media playlist, DASH
 	// EventStream events at Period level.
