@@ -518,13 +518,17 @@ manifest-only reader would call fine.
   requirement is quoted in the message instead. `dash-if` is accepted and says
   plainly that nothing ran (SC-62) rather than reporting a pass it never made.
   <!-- sc: prio=high size=S labels=cli ver=0.5.0 -->
-- [ ] **SC-59 — Apple HLS Authoring Spec, the measurable subset**: peak segment
-  bitrate within 200% of average, segment durations consistent across the
-  ladder, an IDR at every segment start (SC-16), video bitrate within the tier
-  its resolution implies, frame rate stable and shared across rungs (SC-17).
-  Each rule reports the measured value beside the limit, because "fails rule
-  3.4" without a number is unactionable.
-  <!-- sc: prio=high size=L labels=check -->
+- [x] **SC-59 — Apple HLS Authoring Spec, the measurable subset**: five rules under
+  `--profile apple`, each quoting the requirement in words and putting the measured
+  value beside the limit. Where the specification states a number — 200% peak to
+  average — the rule uses it; where it does not, the band is segcheck's own and the
+  finding says so rather than passing it off as Apple's. The bit-rate table is H.264
+  SDR, so a rung in any other codec is measured against nothing rather than the
+  wrong number. Apple's own reference stream corrected the IDR rule: "does not open
+  on a keyframe" is an assertion in fMP4 and an inference in MPEG-TS, and escalating
+  the inference reported bipbop as non-conformant — `media.Track.KeyframeStated`
+  separates them now.
+  <!-- sc: prio=high size=L labels=check ver=0.5.0 -->
 - [ ] **SC-60 — I-frame playlists**: `EXT-X-I-FRAME-STREAM-INF` declares byte
   ranges that must resolve to keyframes and to nothing else, and the I-frame
   rung must span the same timeline as the video it belongs to. A trick-play

@@ -159,7 +159,7 @@ environment.
 | `alignment` | Segment boundaries across renditions, so ABR switching does not glitch | BAD |
 | `encryption` | Declared protection against what the segments carry, whether a supplied key actually decrypts them, and — for SAMPLE-AES and CENC, which protect the samples and not the container — which half of the tool could run at all | BAD |
 | `ladder` | Duplicate rungs, inverted rungs, dangling `AUDIO` groups, missing `CODECS` | BAD |
-| `profile` | With `--profile`, the conformance rules a platform actually enforces, over the measurements already taken. Every finding names its rule and puts the measured value beside the limit | BAD |
+| `profile` | With `--profile apple`, the measurable subset of Apple's HLS Authoring Specification: peak-to-average bit rate, consistent segment durations, an IDR at every segment start, average bit rate against the tier the resolution implies, and a frame rate constant within a rung and shared across the ladder. Every finding names its rule and puts the measured value beside the limit | WARN |
 | `dvr` | The oldest segment the DVR window still promises — DASH `timeShiftBufferDepth`, or an HLS playlist's own span — is fetched and parsed. It is the only promise nobody collects on purpose | BAD |
 | `availability` | A dynamic MPD's live edge is computed, not listed: the `UTCTiming` source it names is honoured, the skew against this machine's clock is reported, and the computed edge is probed against what the origin actually has in both directions | BAD |
 | `pdt` | `EXT-X-PROGRAM-DATE-TIME` against the media: that it never goes backwards, that it advances at the media's rate, and that every rung of the ladder maps the same media to the same wall clock | BAD |

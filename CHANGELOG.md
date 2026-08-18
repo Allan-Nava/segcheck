@@ -19,6 +19,24 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   a stall rather than jitter. Watching a VOD playlist is not a defect and is reported as
   an OK finding saying there is no live edge, not as a problem in the stream. Only
   manifests are re-fetched: the segments are downloaded once, at the start.
+- **`--profile apple` runs the measurable subset of Apple's HLS Authoring Specification**
+  (SC-59): peak segment bit rate within 200% of the average, segment durations consistent
+  within a rendition and across the ladder, an IDR at every segment start, average bit rate
+  against the tier the resolution implies, and a frame rate constant within a rung and
+  shared across the ladder. Every rule quotes the requirement in words and puts the
+  measured value beside the limit, because "fails rule 3.4" without a number is
+  unactionable. Where the specification states a number — 200% — the rule uses it; where it
+  does not, the band is segcheck's own and the finding says so rather than passing it off
+  as Apple's. The bit-rate table is H.264 SDR, so a rung in any other codec is measured
+  against nothing rather than against the wrong number.
+- **`media.Track.KeyframeStated`** separates a container's assertion from a bitstream
+  inference. An fMP4 `trun`'s first-sample flags state outright whether the fragment opens
+  on a sync sample; an MPEG-TS answer comes from walking the stream in decode order, where
+  with B-frames the first coded picture need not be the first presented one and the reader
+  may simply not have reached the IDR. Reading the two as one number turned Apple's own
+  reference stream into a conformance failure, which is how this was found. The IDR rule
+  now fails only on a stated non-sync first sample or a completed walk that found no random
+  access point at all, and reports the middle case as unsettled.
 - **`--profile apple|dash-if|none` selects a conformance rule set** (SC-63), `none` by
   default. Profiles are opt-in and that is the point: a conformance rule with no way to
   turn it off turns a run that was clean yesterday into a wall of findings today, on a

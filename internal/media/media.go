@@ -165,6 +165,15 @@ type Track struct {
 	// its first sample only, so they settle OpensOnKeyframe without settling
 	// HasKeyframe.
 	KeyframeScanned bool `json:"keyframe_scanned,omitempty"`
+	// KeyframeStated records that the *container* said whether the first sample
+	// is a random access point, rather than a bitstream walk having inferred it.
+	// The two are not the same evidence. An fMP4 trun's first-sample flags are an
+	// assertion with no room to argue; an MPEG-TS answer comes from walking the
+	// stream in decode order, where with B-frames the first coded picture need
+	// not be the first presented one and the reader may simply not have reached
+	// the IDR. Reading them as one number turns Apple's own reference stream into
+	// a conformance failure.
+	KeyframeStated bool `json:"keyframe_stated,omitempty"`
 }
 
 // FrameRateFPS is the rate the pictures are actually shown at, in frames per
@@ -228,6 +237,18 @@ func (t Track) StartsOnKeyframe() (bool, bool) {
 		return false, false
 	}
 	return t.OpensOnKeyframe, t.KeyframeKnown
+}
+
+// OpensOnStatedKeyframe reports whether the container itself says the segment
+// opens on a random access point, and whether it says anything at all.
+//
+// It is deliberately narrower than StartsOnKeyframe: a caller that will report
+// a defect on the answer wants only the assertion, never the inference.
+func (t Track) OpensOnStatedKeyframe() (opens, stated bool) {
+	if t.Kind != Video || !t.KeyframeStated || !t.KeyframeKnown {
+		return false, false
+	}
+	return t.OpensOnKeyframe, true
 }
 
 // StartSec is the start of the track's presentation interval, in seconds.

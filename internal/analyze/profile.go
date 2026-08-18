@@ -39,9 +39,8 @@ type profileRule struct {
 	// between revisions, and a finding citing "3.4" against the wrong revision
 	// is worse than one citing nothing: the requirement itself is quoted in the
 	// message instead, which is the part worth arguing with.
-	id   string
-	run  func(ctx profileContext) []finding.Finding
-	desc string
+	id  string
+	run func(ctx profileContext) []finding.Finding
 }
 
 // profileContext is everything a rule may look at.
@@ -111,6 +110,6 @@ func ValidProfile(s string) bool {
 	return false
 }
 
-// appleRules is the measurable subset of Apple's HLS Authoring Specification.
-// It is filled in by SC-59.
+// appleRules is the measurable subset of Apple's HLS Authoring Specification,
+// populated in profile_apple.go.
 var appleRules []profileRule

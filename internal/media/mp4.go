@@ -143,6 +143,9 @@ func ParseMP4(data, init []byte) (SegmentInfo, error) {
 			// is one. KeyframeScanned stays false for exactly that reason.
 			sync := !sampleIsNonSync(f.firstFlags)
 			t.OpensOnKeyframe, t.HasKeyframe, t.KeyframeKnown = sync, sync, true
+			// The container said so, rather than a bitstream walk having worked it
+			// out, and a conformance rule may act on the difference.
+			t.KeyframeStated = true
 		}
 		if f.samples > 0 && f.sumDuration > 0 {
 			t.FrameDur = f.sumDuration / int64(f.samples)
