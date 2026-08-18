@@ -134,6 +134,19 @@ type Track struct {
 	// cens or cbc1 — read from the sinf/schm box. Empty when the track is not
 	// protected, or when it is and the packager stated no scheme.
 	Protection string `json:"protection,omitempty"`
+	// KeyID is the default_KID a `tenc` box states: the key every sample of this
+	// track is encrypted under, as a hyphenated lower-case UUID. Empty when the
+	// track states none.
+	KeyID string `json:"key_id,omitempty"`
+	// CryptByteBlock and SkipByteBlock are the pattern a `tenc` version-1 box
+	// states: how many encrypted 16-byte blocks alternate with how many clear
+	// ones. A pattern belongs to cbcs and cens and must not appear under cenc or
+	// cbc1, which is what lets the two halves of a container be checked against
+	// each other even when the manifest says nothing.
+	CryptByteBlock int `json:"crypt_byte_block,omitempty"`
+	SkipByteBlock  int `json:"skip_byte_block,omitempty"`
+	// HasCryptPattern distinguishes a stated 0:0 from a box that stated nothing.
+	HasCryptPattern bool `json:"has_crypt_pattern,omitempty"`
 	// SamplesEncrypted marks a track whose *samples* are protected while its
 	// container is not. This is the opposite shape of trouble from full-segment
 	// AES-128: nothing fails, so the bitstream readers succeed and find nothing —
@@ -237,6 +250,16 @@ func (t Track) StartsOnKeyframe() (bool, bool) {
 		return false, false
 	}
 	return t.OpensOnKeyframe, t.KeyframeKnown
+}
+
+// CryptPattern is the encryption pattern the track states, and whether it
+// states one at all. A caller must check the bool: an absent pattern and a 0:0
+// pattern mean different things, and only the second is a claim.
+func (t Track) CryptPattern() (crypt, skip int, stated bool) {
+	if !t.HasCryptPattern {
+		return 0, 0, false
+	}
+	return t.CryptByteBlock, t.SkipByteBlock, true
 }
 
 // OpensOnStatedKeyframe reports whether the container itself says the segment

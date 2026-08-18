@@ -582,12 +582,14 @@ item here that would is out of scope.
   the acquisition path — it carries `pssh` for other systems and nothing else supplies
   this one.
   <!-- sc: prio=high size=M labels=check,parser ver=0.6.0 -->
-- [ ] **SC-67 — Encryption scheme**: the scheme in `schm` and the defaults in
-  `tenc` — `cenc`, `cbcs`, `cens`, `cbc1` — against the scheme the manifest
-  declares. `cbcs` content served as `cenc` plays nowhere, and because the two
-  differ by a box field rather than by anything visible, MPDs get copied between
-  them. Reported per rendition, since a ladder that mixes schemes is its own
-  failure. <!-- sc: prio=high size=M labels=check,parser -->
+- [x] **SC-67 — Encryption scheme**: the `scheme` check compares the `schm` scheme
+  with the one the manifest declares, reports a ladder that mixes schemes, and quotes
+  the `tenc` `default_KID` so a rung can be matched against a key server. It also
+  checks the container against itself, which needs no manifest: a crypt-to-clear
+  pattern belongs to cbcs and cens and cannot appear under cenc or cbc1. Axinom's cbcs
+  vector corrected that rule — common encryption gives video a pattern and audio
+  full-sample encryption, so cbcs audio states none and is right not to.
+  <!-- sc: prio=high size=M labels=check,parser ver=0.6.0 -->
 - [ ] **SC-69 — Clear lead, and media that is not protected at all**: read the
   per-sample encryption state from `senc`/`saiz`/`saio` and report a rendition
   whose samples are in the clear while the manifest declares it protected, plus

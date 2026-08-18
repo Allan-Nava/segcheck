@@ -19,6 +19,22 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   a stall rather than jitter. Watching a VOD playlist is not a defect and is reported as
   an OK finding saying there is no live edge, not as a problem in the stream. Only
   manifests are re-fetched: the segments are downloaded once, at the start.
+- **The encryption scheme, checked against the manifest and against itself** (SC-67). cbcs
+  and cenc encrypt the same media with the same key and differ by a four-character code in
+  a box: the segments are the same size, the timing is identical, the manifest reads
+  perfectly, and nothing about the stream looks different — so MPDs get copied between
+  presentations and cbcs content served as cenc plays nowhere. The new `scheme` check
+  compares what `schm` states with what the manifest declares (`mp4protection@value`, or
+  HLS `METHOD`), reports a ladder that mixes schemes, and quotes the `tenc` `default_KID`
+  so a rung can be matched against a key server without another tool.
+  It also checks the container against *itself*, which needs no manifest at all: a
+  crypt-to-clear pattern belongs to cbcs and cens and cannot appear under cenc or cbc1.
+  Axinom's cbcs vector corrected that rule — common encryption gives video a pattern and
+  audio full-sample encryption, so a cbcs audio track states no pattern and is right not
+  to, and requiring one reported that stream as broken on its audio rung.
+- `tenc` is parsed: `default_KID`, and the version-1 crypt/skip pattern. The version byte
+  decides the layout, and reading the pattern unconditionally would report one on every
+  cenc track — precisely the contradiction the check exists to catch.
 - **DRM systems present against declared** (SC-66). Which systems can unlock a stream is
   claimed twice — by the manifest, in DASH `ContentProtection` or HLS `KEYFORMAT`, and by
   the initialisation segment, in its `pssh` boxes — and only the second is what a player is

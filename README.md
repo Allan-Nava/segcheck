@@ -159,6 +159,7 @@ environment.
 | `alignment` | Segment boundaries across renditions, so ABR switching does not glitch | BAD |
 | `encryption` | Declared protection against what the segments carry, whether a supplied key actually decrypts them, and — for SAMPLE-AES and CENC, which protect the samples and not the container — which half of the tool could run at all | BAD |
 | `ladder` | Duplicate rungs, inverted rungs, dangling `AUDIO` groups, missing `CODECS` | BAD |
+| `scheme` | The common encryption scheme the media really uses — `schm`, cross-checked against the `tenc` crypt pattern — against the one the manifest declares, and a ladder that mixes schemes | BAD |
 | `drm` | The DRM systems the initialisation segment's `pssh` boxes advertise against the ones the manifest promises (`ContentProtection`, `KEYFORMAT`) — the difference between a stream that plays on Chrome and one that also plays on Xbox | BAD |
 | `iframe` | `EXT-X-I-FRAME-STREAM-INF` trick-play ranges fetched and read: each must resolve to a keyframe and to nothing else, and the rung must sit on the same timeline as the video it belongs to | BAD |
 | `profile` | With `--profile apple`, the measurable subset of Apple's HLS Authoring Specification: peak-to-average bit rate, consistent segment durations, an IDR at every segment start, average bit rate against the tier the resolution implies, and a frame rate constant within a rung and shared across the ladder. Every finding names its rule and puts the measured value beside the limit | WARN |

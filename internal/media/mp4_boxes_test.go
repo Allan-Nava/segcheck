@@ -301,7 +301,7 @@ func encaEntry(originalFormat string) []byte {
 // 28 for audio — so a search that starts at byte 0 reads the leading reserved
 // zeros as a box of size 0 that swallows the whole entry and finds nothing.
 func TestParseStsd_EncryptedEntryRecoversTheOriginalCodecAndResolution(t *testing.T) {
-	codec, w, h, enc, _ := parseStsd(stsdBox(encvEntry("avc1", 1920, 1080)))
+	codec, w, h, enc, _, _ := parseStsd(stsdBox(encvEntry("avc1", 1920, 1080)))
 	if !enc {
 		t.Error("an encv sample entry was not reported as encrypted")
 	}
@@ -314,7 +314,7 @@ func TestParseStsd_EncryptedEntryRecoversTheOriginalCodecAndResolution(t *testin
 }
 
 func TestParseStsd_EncryptedAudioRecoversItsCodec(t *testing.T) {
-	codec, _, _, enc, _ := parseStsd(stsdBox(encaEntry("mp4a")))
+	codec, _, _, enc, _, _ := parseStsd(stsdBox(encaEntry("mp4a")))
 	if !enc {
 		t.Error("an enca sample entry was not reported as encrypted")
 	}
@@ -328,7 +328,7 @@ func TestParseStsd_EncryptedAudioRecoversItsCodec(t *testing.T) {
 // for it, which is the honest outcome.
 func TestParseStsd_EncryptedWithoutSinf(t *testing.T) {
 	for _, tc := range []struct{ typ string }{{"encv"}, {"enca"}} {
-		codec, _, _, enc, _ := parseStsd(stsdBox(mkbox(tc.typ, make([]byte, 90))))
+		codec, _, _, enc, _, _ := parseStsd(stsdBox(mkbox(tc.typ, make([]byte, 90))))
 		if !enc {
 			t.Errorf("%s was not reported as encrypted", tc.typ)
 		}
@@ -339,19 +339,19 @@ func TestParseStsd_EncryptedWithoutSinf(t *testing.T) {
 	// A sinf whose frma is truncated is equally unreadable.
 	payload := make([]byte, 78)
 	payload = append(payload, mkbox("sinf", mkbox("frma", []byte("av")))...)
-	if codec, _, _, _, _ := parseStsd(stsdBox(mkbox("encv", payload))); codec != "encv" {
+	if codec, _, _, _, _, _ := parseStsd(stsdBox(mkbox("encv", payload))); codec != "encv" {
 		t.Errorf("a truncated frma yielded codec %q, want encv", codec)
 	}
 }
 
 func TestParseStsd_UnreadableEntries(t *testing.T) {
 	for n := 0; n < 8; n++ {
-		if codec, w, h, enc, _ := parseStsd(make([]byte, n)); codec != "" || w != 0 || h != 0 || enc {
+		if codec, w, h, enc, _, _ := parseStsd(make([]byte, n)); codec != "" || w != 0 || h != 0 || enc {
 			t.Errorf("%d-byte stsd = %q %dx%d enc=%v, want nothing", n, codec, w, h, enc)
 		}
 	}
 	// A well-formed stsd that declares entries but carries none.
-	if codec, _, _, _, _ := parseStsd(stsdBox()); codec != "" {
+	if codec, _, _, _, _, _ := parseStsd(stsdBox()); codec != "" {
 		t.Errorf("an empty stsd reported codec %q", codec)
 	}
 }
@@ -359,13 +359,13 @@ func TestParseStsd_UnreadableEntries(t *testing.T) {
 // A non-visual sample entry has no width or height to read, and a visual one
 // that is too short to hold them must not have them read out of bounds.
 func TestParseStsd_ResolutionOnlyFromVisualEntries(t *testing.T) {
-	if _, w, h, _, _ := parseStsd(stsdBox(mkbox("mp4a", make([]byte, 40)))); w != 0 || h != 0 {
+	if _, w, h, _, _, _ := parseStsd(stsdBox(mkbox("mp4a", make([]byte, 40)))); w != 0 || h != 0 {
 		t.Errorf("an audio sample entry reported %dx%d", w, h)
 	}
-	if _, w, h, _, _ := parseStsd(stsdBox(mkbox("avc1", make([]byte, 20)))); w != 0 || h != 0 {
+	if _, w, h, _, _, _ := parseStsd(stsdBox(mkbox("avc1", make([]byte, 20)))); w != 0 || h != 0 {
 		t.Errorf("a truncated visual entry reported %dx%d", w, h)
 	}
-	if codec, w, h, _, _ := parseStsd(stsdBox(visualEntry("hvc1", 3840, 2160))); codec != "hevc" || w != 3840 || h != 2160 {
+	if codec, w, h, _, _, _ := parseStsd(stsdBox(visualEntry("hvc1", 3840, 2160))); codec != "hevc" || w != 3840 || h != 2160 {
 		t.Errorf("hvc1 entry = %q %dx%d", codec, w, h)
 	}
 }
@@ -819,12 +819,12 @@ func TestParseTkhdAndStsd_RefuseAnImplausibleResolution(t *testing.T) {
 	}
 
 	// And a visual sample entry stating the same.
-	if _, w, h, _, _ := parseStsd(stsdBox(visualEntry("avc1", 60000, 50000))); w != 0 || h != 0 {
+	if _, w, h, _, _, _ := parseStsd(stsdBox(visualEntry("avc1", 60000, 50000))); w != 0 || h != 0 {
 		t.Errorf("sample entry reported %dx%d, want it refused", w, h)
 	}
 
 	// A real 8K frame is still well inside the bound.
-	if _, w, h, _, _ := parseStsd(stsdBox(visualEntry("avc1", 7680, 4320))); w != 7680 || h != 4320 {
+	if _, w, h, _, _, _ := parseStsd(stsdBox(visualEntry("avc1", 7680, 4320))); w != 7680 || h != 4320 {
 		t.Errorf("8K sample entry = %dx%d, want it accepted", w, h)
 	}
 }

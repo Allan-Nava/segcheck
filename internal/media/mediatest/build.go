@@ -912,3 +912,85 @@ func insertIntoMoov(init, extra []byte) []byte {
 	}
 	return init
 }
+
+// MP4InitCENCTenc is MP4InitCENC with a `tenc` box inside sinf/schi, which is
+// where the scheme's defaults live: the key id every sample is encrypted under,
+// and — for the pattern schemes cbcs and cens — how many encrypted blocks
+// alternate with how many clear ones.
+//
+// A crypt/skip pattern of 0:0 writes a version-0 box, which is what cenc and
+// cbc1 use; anything else writes version 1 with the pattern byte, which is what
+// cbcs and cens use. The distinction is the point: a pattern under cenc, or its
+// absence under cbcs, is a container contradicting itself.
+func MP4InitCENCTenc(trackID, timescale uint32, width, height int, originalFormat, scheme, keyID string, crypt, skip int) []byte {
+	version := byte(0)
+	pattern := byte(0)
+	if crypt != 0 || skip != 0 {
+		version = 1
+		pattern = byte(crypt<<4 | skip&0x0F)
+	}
+	tenc := box("tenc", concat(
+		[]byte{version, 0, 0, 0},
+		[]byte{0},        // reserved
+		[]byte{pattern},  // reserved in v0, crypt/skip byte block in v1
+		[]byte{1},        // default_isProtected
+		[]byte{8},        // default_Per_Sample_IV_Size
+		uuidBytes(keyID), // default_KID
+	))
+	children := concat(
+		box("frma", []byte(originalFormat)),
+		box("schm", concat(u32(0), []byte(scheme), u32(0x00010000))),
+		box("schi", tenc),
+	)
+	entry := box("encv", concat(
+		make([]byte, 6),
+		[]byte{0x00, 0x01},
+		make([]byte, 16),
+		u16(uint16(width)),
+		u16(uint16(height)),
+		u32(0x00480000), u32(0x00480000), u32(0),
+		u16(1),
+		make([]byte, 32),
+		u16(0x0018),
+		[]byte{0xFF, 0xFF},
+		box("sinf", children),
+	))
+	return mp4InitFrom(trackID, timescale, "vide", entry, nil, width, height)
+}
+
+// MP4InitCENCAudioTenc is MP4InitCENCTenc for an audio track. It exists because
+// the pattern rule differs by media type: common encryption gives video a
+// crypt-to-clear pattern and audio full-sample encryption, so a cbcs audio
+// track states no pattern and is right not to.
+func MP4InitCENCAudioTenc(trackID, timescale uint32, channels, sampleRate int, scheme, keyID string, crypt, skip int) []byte {
+	version := byte(0)
+	pattern := byte(0)
+	if crypt != 0 || skip != 0 {
+		version = 1
+		pattern = byte(crypt<<4 | skip&0x0F)
+	}
+	tenc := box("tenc", concat(
+		[]byte{version, 0, 0, 0},
+		[]byte{0},
+		[]byte{pattern},
+		[]byte{1},
+		[]byte{8},
+		uuidBytes(keyID),
+	))
+	children := concat(
+		box("frma", []byte("mp4a")),
+		box("schm", concat(u32(0), []byte(scheme), u32(0x00010000))),
+		box("schi", tenc),
+	)
+	entry := box("enca", concat(
+		make([]byte, 6),
+		[]byte{0x00, 0x01},
+		make([]byte, 8),
+		u16(uint16(channels)),
+		u16(16),
+		u32(0),
+		u32(uint32(sampleRate)<<16),
+		box("sinf", children),
+	))
+	return mp4InitFrom(trackID, timescale, "soun", entry, nil, 0, 0)
+}

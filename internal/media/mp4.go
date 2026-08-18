@@ -32,6 +32,13 @@ type initTrack struct {
 	sampleRate   int
 	channels     int
 	protection   string
+	// keyID, cryptBlock, skipBlock and hasPattern are the `tenc` defaults: the
+	// key every sample is encrypted under, and the pattern of encrypted to clear
+	// blocks that belongs to cbcs and cens and must not appear under cenc.
+	keyID      string
+	cryptBlock int
+	skipBlock  int
+	hasPattern bool
 	// nalLengthSize is how many bytes prefix each NAL unit in the mdat, from the
 	// avcC or hvcC box. fMP4 uses a length prefix where an elementary stream uses
 	// start codes, so a walk that assumes Annex-B finds nothing at all.
@@ -319,6 +326,10 @@ func (it *initTrack) track() Track {
 		// The samples of an encrypted track are protected even when the container
 		// around them is not, and every reader that looks inside one has to stay out.
 		SamplesEncrypted: it.encrypted,
+		KeyID:            it.keyID,
+		CryptByteBlock:   it.cryptBlock,
+		SkipByteBlock:    it.skipBlock,
+		HasCryptPattern:  it.hasPattern,
 	}
 }
 
@@ -393,9 +404,10 @@ func parseMoov(moov []byte, out map[uint32]*initTrack) {
 		if minf, ok := findBox(mdia, "minf"); ok {
 			if stbl, ok := findBox(minf, "stbl"); ok {
 				if stsd, ok := findBox(stbl, "stsd"); ok {
-					codec, w, h, enc, scheme := parseStsd(stsd)
+					codec, w, h, enc, scheme, tenc := parseStsd(stsd)
 					t.codec = codec
 					t.protection = scheme
+					t.keyID, t.cryptBlock, t.skipBlock, t.hasPattern = tenc.keyID, tenc.crypt, tenc.skip, tenc.hasPattern
 					// The sample entries follow stsd's version, flags and entry
 					// count. A truncated stsd has none, and slicing past its end
 					// panics — which is how the fuzzer found this.
@@ -601,13 +613,21 @@ func parseDEC3(b []byte) (channels, sampleRate int, ok bool) {
 	return ac3ChannelCounts[acmod] + lfeon, sampleRate, true
 }
 
-func parseStsd(b []byte) (codec string, width, height int, encrypted bool, scheme string) {
+// tencDefaults is what a `tenc` box states about how the samples are protected.
+type tencDefaults struct {
+	keyID      string
+	crypt      int
+	skip       int
+	hasPattern bool
+}
+
+func parseStsd(b []byte) (codec string, width, height int, encrypted bool, scheme string, tenc tencDefaults) {
 	if len(b) < 8 {
-		return "", 0, 0, false, ""
+		return "", 0, 0, false, "", tenc
 	}
 	entries := boxesIn(b[8:])
 	if len(entries) == 0 {
-		return "", 0, 0, false, ""
+		return "", 0, 0, false, "", tenc
 	}
 	e := entries[0]
 	typ := e.typ
@@ -636,6 +656,14 @@ func parseStsd(b []byte) (codec string, width, height int, encrypted bool, schem
 				if schm, ok := findBox(sinf, "schm"); ok && len(schm) >= 8 {
 					scheme = string(schm[4:8])
 				}
+				// schi/tenc states the scheme's defaults. It is the only place the
+				// pattern lives, and a pattern under cenc — or none under cbcs — is
+				// a container contradicting itself with no manifest involved.
+				if schi, ok := findBox(sinf, "schi"); ok {
+					if tb, ok := findBox(schi, "tenc"); ok {
+						tenc = parseTenc(tb)
+					}
+				}
 			}
 		}
 	}
@@ -647,7 +675,34 @@ func parseStsd(b []byte) (codec string, width, height int, encrypted bool, schem
 			width, height = w, h
 		}
 	}
-	return codec, width, height, encrypted, scheme
+	return codec, width, height, encrypted, scheme, tenc
+}
+
+// parseTenc reads the TrackEncryption box.
+//
+// Its layout hinges on the version byte: version 0 leaves byte 5 reserved,
+// version 1 uses it for crypt_byte_block in the high nibble and skip_byte_block
+// in the low one. Reading it unconditionally would report a pattern on every
+// cenc track, which is precisely the contradiction this exists to catch.
+func parseTenc(b []byte) tencDefaults {
+	var out tencDefaults
+	if len(b) < 4+4+16 {
+		return out
+	}
+	version := b[0]
+	if version >= 1 {
+		out.crypt = int(b[5] >> 4)
+		out.skip = int(b[5] & 0x0F)
+		out.hasPattern = out.crypt != 0 || out.skip != 0
+	}
+	kid := b[8 : 8+16]
+	for _, c := range kid {
+		if c != 0 {
+			out.keyID = formatUUID(kid)
+			break
+		}
+	}
+	return out
 }
 
 // nalLengthSizeFrom reads how many bytes prefix each NAL unit in the samples,
