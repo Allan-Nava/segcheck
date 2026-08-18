@@ -131,6 +131,13 @@ type Segment struct {
 	// PDT is the wall-clock mapping (EXT-X-PROGRAM-DATE-TIME).
 	PDT    time.Time `json:"pdt,omitempty"`
 	HasPDT bool      `json:"has_pdt,omitempty"`
+	// PDTDerived is true when this segment carried no EXT-X-PROGRAM-DATE-TIME of
+	// its own and its wall clock was computed by adding the declared durations
+	// forward from the segment that did. That is exactly what a player does — a
+	// playlist states the tag once and leaves the rest to arithmetic — so the
+	// derived value is a real claim and not an invention. It is marked because a
+	// derived time is only as good as the durations it was summed over.
+	PDTDerived bool `json:"pdt_derived,omitempty"`
 	// DeclaredStart is the segment's start on the media timeline in seconds,
 	// when the manifest states it outright (DASH SegmentTimeline @t). HLS does
 	// not carry this, so HasDeclaredStart is false there.

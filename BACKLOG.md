@@ -420,14 +420,18 @@ continuous, every rung codes what it promises, and a seek still lands in the
 wrong place, an ad splices two frames late, or a scrub back into the DVR window
 404s. Shares the live-edge machinery with M5, so the two ship together.
 
-- [ ] **SC-51 — `EXT-X-PROGRAM-DATE-TIME` against the media**: the manifest
-  claims segment N starts at wallclock T while the media says it starts at PTS
-  P. Check that the mapping is monotonic, that it stays consistent from segment
-  to segment, and above all that it is **the same across renditions** — a ladder
-  whose rungs disagree about PDT makes one seek land in two different places
-  depending on which rung the player happens to be on. PDT is parsed today
-  (SC-4) and compared against nothing.
-  <!-- sc: prio=high size=M labels=check -->
+- [x] **SC-51 — `EXT-X-PROGRAM-DATE-TIME` against the media**: the `pdt` check
+  reports a wall clock that goes backwards, one that advances at a different rate
+  from the media it is stamped on, and rungs of a ladder that map the same media to
+  different wall clocks — the last being why the item existed: a seek then lands in
+  two different places depending on which rung the player is on. The
+  cross-rendition comparison is on the offset between wall clock and media, and
+  only where the media already lines up, so `alignment` is not double-counted.
+  Real streams corrected the design: a playlist states the tag once at the top and
+  leaves a client to add the durations forward, so the check saw one segment per
+  playlist and none at all when sampling the live edge. The parser carries the
+  clock forward now (`PDTDerived`), stopping at a discontinuity with no fresh tag.
+  <!-- sc: prio=high size=M labels=check ver=0.4.0 -->
 - [ ] **SC-52 — DASH `availabilityStartTime` and `UTCTiming`**: is the segment
   the MPD says is available right now actually fetchable, and is the live edge
   where the clock says it is? Clock skew between packager and client is the
@@ -1023,6 +1027,14 @@ checks roadmap and blocks nothing.
   the next release anyway. Belongs in the tap; filed here because segcheck's release is
   what surfaced it.
   <!-- sc: prio=low size=S labels=release -->
+- [ ] **SC-100 — Two rungs at one resolution get one name**: `renditionName` derives an
+  HLS variant's label from its `RESOLUTION`, so a ladder with two 720p rungs at different
+  bitrates produces two `bitrate 720p` rows, two `pdt 720p` rows and two `container 720p`
+  rows, and an operator cannot tell which rung any of them is about. Unified Streaming's
+  own live demo has exactly that shape. The fix is to disambiguate only when a name
+  repeats — appending the bandwidth to the rungs that collide rather than to every rung,
+  because `720p` is what an operator says out loud and `720p@1.3M` is not.
+  <!-- sc: prio=med size=S labels=output -->
 - [ ] **SC-99 — No low-latency reference stream in the smoke suite**: every check this
   project has shipped a false positive in was caught by SC-36 against real media rather
   than by a unit test, and `parts` (SC-39) is the first check to ship without that pass:

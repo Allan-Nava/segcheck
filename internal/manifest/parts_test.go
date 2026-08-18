@@ -1,6 +1,9 @@
 package manifest
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 // Low-latency HLS publishes fractions of a segment before the segment exists.
 // An EXT-X-PART is therefore a second, finer description of the same media, and
@@ -124,5 +127,75 @@ func TestParseHLS_GapPartIsMarked(t *testing.T) {
 	}
 	if !pl.Segments[0].Parts[0].Gap {
 		t.Error("GAP=YES was dropped; segcheck would report a deliberate hole as a missing part")
+	}
+}
+
+// A real playlist states EXT-X-PROGRAM-DATE-TIME once, at the top, and leaves a
+// client to derive every later segment's wall clock by adding the declared
+// durations. Every live playlist Unified Streaming and most other packagers
+// emit has exactly that shape — so a check that only looked at segments
+// carrying the tag would look at one segment per playlist, and at none at all
+// when sampling the live edge, which is where it was found doing nothing.
+func TestParseHLS_ProgramDateTimeIsCarriedForward(t *testing.T) {
+	pl, err := ParseHLS([]byte("#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXT-X-MEDIA-SEQUENCE:100\n"+
+		"#EXT-X-PROGRAM-DATE-TIME:2026-08-10T12:00:00.000Z\n"+
+		"#EXTINF:2.0,\na.ts\n#EXTINF:2.0,\nb.ts\n#EXTINF:2.0,\nc.ts\n"),
+		"https://cdn.example/v.m3u8")
+	if err != nil {
+		t.Fatalf("ParseHLS: %v", err)
+	}
+	want := []string{"2026-08-10T12:00:00Z", "2026-08-10T12:00:02Z", "2026-08-10T12:00:04Z"}
+	for i, s := range pl.Segments {
+		if !s.HasPDT {
+			t.Fatalf("segment %d has no wall clock; a client derives one for every segment after the tag", i)
+		}
+		if got := s.PDT.UTC().Format(time.RFC3339); got != want[i] {
+			t.Errorf("segment %d PDT = %s, want %s", i, got, want[i])
+		}
+		// Which segment actually carried the tag still has to be knowable: a
+		// derived time is only as good as the durations it was summed over.
+		if derived := s.PDTDerived; derived != (i > 0) {
+			t.Errorf("segment %d PDTDerived = %v, want %v", i, derived, i > 0)
+		}
+	}
+}
+
+// After an EXT-X-DISCONTINUITY the specification requires a fresh
+// EXT-X-PROGRAM-DATE-TIME, because the timeline restarts and the old anchor
+// says nothing about what follows. A playlist that omits one has no wall-clock
+// claim past that point, and inventing one by carrying the old anchor across
+// would make segcheck report drift against a number it made up itself.
+func TestParseHLS_ProgramDateTimeStopsAtAnUndeclaredDiscontinuity(t *testing.T) {
+	pl, err := ParseHLS([]byte("#EXTM3U\n#EXT-X-TARGETDURATION:2\n"+
+		"#EXT-X-PROGRAM-DATE-TIME:2026-08-10T12:00:00.000Z\n"+
+		"#EXTINF:2.0,\na.ts\n#EXT-X-DISCONTINUITY\n#EXTINF:2.0,\nb.ts\n#EXTINF:2.0,\nc.ts\n"),
+		"https://cdn.example/v.m3u8")
+	if err != nil {
+		t.Fatalf("ParseHLS: %v", err)
+	}
+	if !pl.Segments[0].HasPDT {
+		t.Error("the segment carrying the tag lost its wall clock")
+	}
+	for i := 1; i < len(pl.Segments); i++ {
+		if pl.Segments[i].HasPDT {
+			t.Errorf("segment %d carried a wall clock across a discontinuity with no fresh tag: %s",
+				i, pl.Segments[i].PDT)
+		}
+	}
+}
+
+// A fresh tag after the discontinuity re-anchors, and everything after it is
+// derived from the new anchor rather than the old one.
+func TestParseHLS_ProgramDateTimeReanchorsAfterADiscontinuity(t *testing.T) {
+	pl, err := ParseHLS([]byte("#EXTM3U\n#EXT-X-TARGETDURATION:2\n"+
+		"#EXT-X-PROGRAM-DATE-TIME:2026-08-10T12:00:00.000Z\n#EXTINF:2.0,\na.ts\n"+
+		"#EXT-X-DISCONTINUITY\n#EXT-X-PROGRAM-DATE-TIME:2026-08-10T13:00:00.000Z\n"+
+		"#EXTINF:2.0,\nb.ts\n#EXTINF:2.0,\nc.ts\n"),
+		"https://cdn.example/v.m3u8")
+	if err != nil {
+		t.Fatalf("ParseHLS: %v", err)
+	}
+	if got := pl.Segments[2].PDT.UTC().Format(time.RFC3339); got != "2026-08-10T13:00:02Z" {
+		t.Errorf("segment 2 PDT = %s, want 2026-08-10T13:00:02Z derived from the new anchor", got)
 	}
 }

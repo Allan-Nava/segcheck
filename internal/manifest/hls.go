@@ -19,13 +19,22 @@ func ParseHLS(body []byte, baseURL string) (Playlist, error) {
 	sc.Buffer(make([]byte, 0, 64*1024), 16<<20)
 
 	var (
-		sawHeader       bool
-		pendingStream   map[string]string // EXT-X-STREAM-INF awaiting its URI
-		pendingDur      float64
-		pendingDisc     bool
-		pendingRange    *pendingByteRange
-		pendingPDT      time.Time
-		havePendingPDT  bool
+		sawHeader      bool
+		pendingStream  map[string]string // EXT-X-STREAM-INF awaiting its URI
+		pendingDur     float64
+		pendingDisc    bool
+		pendingRange   *pendingByteRange
+		pendingPDT     time.Time
+		havePendingPDT bool
+		// pdtCursor is where the wall clock stands after the last segment
+		// emitted. A playlist states EXT-X-PROGRAM-DATE-TIME once and leaves a
+		// client to add the declared durations forward from there, so every later
+		// segment carries a real claim about the real world even without a tag of
+		// its own — and a checker that only looked at the tagged segments would
+		// look at one segment per playlist, and at none at all when sampling the
+		// live edge.
+		pdtCursor       time.Time
+		havePDTCursor   bool
 		expectSegment   bool
 		endList         bool
 		currentMap      string
@@ -314,6 +323,21 @@ func ParseHLS(body []byte, baseURL string) (Playlist, error) {
 					br := pendingRange.resolve(uri, lastRangeURI, lastRangeEnd)
 					seg.ByteRange = &br
 					lastRangeURI, lastRangeEnd = uri, br.Offset+br.Length
+				}
+				// A segment with no tag of its own inherits the running wall
+				// clock. After a discontinuity with no fresh tag there is none:
+				// the timeline restarted and the old anchor says nothing about
+				// what follows, so segcheck would be comparing the media against
+				// a number it made up itself.
+				if !seg.HasPDT && havePDTCursor {
+					seg.PDT, seg.HasPDT, seg.PDTDerived = pdtCursor, true, true
+				}
+				if seg.Discontinuity && !havePendingPDT {
+					seg.PDT, seg.HasPDT, seg.PDTDerived = time.Time{}, false, false
+					havePDTCursor = false
+				}
+				if seg.HasPDT {
+					pdtCursor, havePDTCursor = seg.PDT.Add(time.Duration(seg.Duration*float64(time.Second))), true
 				}
 				seg.Parts = pendingParts
 				pendingParts = nil

@@ -19,6 +19,28 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   a stall rather than jitter. Watching a VOD playlist is not a defect and is reported as
   an OK finding saying there is no live edge, not as a problem in the stream. Only
   manifests are re-fetched: the segments are downloaded once, at the start.
+- **`EXT-X-PROGRAM-DATE-TIME` is compared against the media** (SC-51). It is the only
+  thing in an HLS playlist that claims a time in the real world, players seek by it, DVR
+  windows are addressed by it and ad decisions are timed against it — and until now it was
+  parsed and believed. The new `pdt` check reports a wall clock that goes backwards (two
+  moments in the stream then answer to the same time), one that advances at a different
+  rate from the media it is stamped on, and — the one the check exists for — rungs of a
+  ladder that map the same media to different wall clocks, which makes one seek land in
+  two different places depending on which rung the player happened to be on. The
+  cross-rendition comparison is on the *offset* between wall clock and media, and only at
+  segment indexes where the media already lines up: where it does not, `alignment` owns
+  the finding and repeating it would double-count one bug. A jump at a declared
+  discontinuity is the packager doing what the specification requires, and is not
+  reported.
+- **A playlist's wall clock is now carried forward** the way a player carries it. A real
+  playlist states `EXT-X-PROGRAM-DATE-TIME` once, at the top, and leaves a client to add
+  the declared durations from there; a check that only looked at tagged segments looked at
+  one segment per playlist and at *none at all* when sampling the live edge — which is
+  where it was found doing nothing, against a real Unified Streaming live ladder. Derived
+  times are marked `PDTDerived`, and the carry stops at a discontinuity with no fresh tag:
+  past that point the timeline has restarted and the old anchor says nothing, so segcheck
+  would be comparing the media against a number it invented. The ad-break check gains the
+  same reach, since it anchors `EXT-X-DATERANGE` onto the media through the same tag.
 - **`--parts N` checks the low-latency path** (SC-39). Low-latency HLS describes the same
   media twice: as segments, and at a finer grain as the `EXT-X-PART`s published before each
   segment exists. A packager muxes the two separately, so they can disagree — and when they

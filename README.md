@@ -155,6 +155,7 @@ environment.
 | `alignment` | Segment boundaries across renditions, so ABR switching does not glitch | BAD |
 | `encryption` | Declared protection against what the segments carry, whether a supplied key actually decrypts them, and — for SAMPLE-AES and CENC, which protect the samples and not the container — which half of the tool could run at all | BAD |
 | `ladder` | Duplicate rungs, inverted rungs, dangling `AUDIO` groups, missing `CODECS` | BAD |
+| `pdt` | `EXT-X-PROGRAM-DATE-TIME` against the media: that it never goes backwards, that it advances at the media's rate, and that every rung of the ladder maps the same media to the same wall clock | BAD |
 | `parts` | Low-latency `EXT-X-PART` parts fetched and compared with the segment they make up: contiguity, coverage, `INDEPENDENT=YES` against the real sync sample, and measured length against `PART-TARGET` | BAD |
 | `watch` | With `--watch`, whether the live edge actually advances: new-segment latency, a stall, and a packager that stopped publishing | BAD |
 
