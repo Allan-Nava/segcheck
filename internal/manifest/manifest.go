@@ -85,6 +85,12 @@ type Rendition struct {
 	// the index has to be found by reading the head of the file. Both are one
 	// file, so both are addressed by byte range.
 	SingleFile bool `json:"single_file,omitempty"`
+	// KeyMethod is the protection declared for the whole rendition (DASH
+	// ContentProtection). It exists because a single-file representation's segments do
+	// not: they are synthesised from the index after the manifest is parsed, and
+	// without this the protection had nowhere to come from — which produced
+	// "encrypted but the manifest declares no key" on manifests that declare it.
+	KeyMethod string `json:"key_method,omitempty"`
 	// Unsupported explains why a rendition could not be expanded into segments
 	// (DASH SegmentBase, for instance). Empty when it was.
 	Unsupported string `json:"unsupported,omitempty"`

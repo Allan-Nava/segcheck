@@ -78,15 +78,25 @@ func ParseWebVTT(data []byte) (SegmentInfo, error) {
 	// For a text segment the cues *are* the samples, but the check reads Cues so it
 	// has one field to read whether the rendition arrived as text or wrapped in fMP4.
 	track.Cues, track.CuesRead = cues, true
-	if haveCue && haveMap {
-		// mapOffset is the media time the local zero corresponds to.
-		track.MinPTS = int64((first + mapOffset) * TSTimescale)
-		track.MaxPTS = int64((last + mapOffset) * TSTimescale)
-		track.HasPTS = true
-		// For a text segment the cues *are* the track's timestamps, and the check
-		// reads one pair of fields whichever way the rendition arrived.
-		track.CueMin, track.CueMax = int(track.MinPTS), int(track.MaxPTS)
+	if haveCue {
+		// The cue span is always reported, with the map applied when there is one.
+		// Without one the local times stand: DASH does not use X-TIMESTAMP-MAP and puts
+		// cue times on the presentation timeline directly, so dropping them left a real
+		// sidecar rendition unplaceable when it was not.
+		offset := 0.0
+		if haveMap {
+			offset = mapOffset
+		}
+		track.CueMin = int((first + offset) * TSTimescale)
+		track.CueMax = int((last + offset) * TSTimescale)
 		track.HasCueSpan = true
+		track.CuesAnchored = haveMap
+		if haveMap {
+			// HasPTS says the cue clock is tied to the media clock, which is what an
+			// HLS rendition needs the map for.
+			track.MinPTS, track.MaxPTS = int64(track.CueMin), int64(track.CueMax)
+			track.HasPTS = true
+		}
 	}
 	info.Tracks = append(info.Tracks, track)
 	return info, nil
@@ -281,7 +291,7 @@ func ParseTTML(data []byte) (SegmentInfo, error) {
 		track.MaxPTS = int64(last * TSTimescale)
 		track.HasPTS = true
 		track.CueMin, track.CueMax = int(track.MinPTS), int(track.MaxPTS)
-		track.HasCueSpan = true
+		track.HasCueSpan, track.CuesAnchored = true, true
 	}
 	info.Tracks = append(info.Tracks, track)
 	return info, nil

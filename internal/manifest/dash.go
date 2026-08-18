@@ -180,7 +180,8 @@ func ParseDASH(body []byte, baseURL string, now time.Time) (Playlist, error) {
 						dashChannels(rep.AudioChannelConfiguration),
 						dashChannels(as.AudioChannelConfiguration),
 					),
-					Captions: dashCaptions(as.Accessibility),
+					Captions:  dashCaptions(as.Accessibility),
+					KeyMethod: dashKeyMethod(protected),
 				}
 
 				switch {
@@ -227,12 +228,25 @@ func ParseDASH(body []byte, baseURL string, now time.Time) (Playlist, error) {
 						r.InitRange = &init
 					}
 				case len(rep.BaseURL) > 0 || len(as.BaseURL) > 0:
+					r.URI = Resolve(rbase, "")
+					if sidecarSubtitle(firstNonEmpty(rep.MimeType, as.MimeType)) {
+						// A sidecar subtitle: one file that *is* the subtitle, not an
+						// ISO-BMFF container with an index inside it. Sending the index
+						// probe after a sidx that cannot exist reported "no segment
+						// index found" — an ERROR claiming the tool could not look at a
+						// file it could have read whole.
+						r.Segments = []Segment{{
+							URI:      r.URI,
+							Duration: periodDur,
+							Sequence: 1,
+						}}
+						break
+					}
 					// The on-demand profile: one file, a BaseURL and nothing else.
 					// The index is inside the file and its position is not stated,
 					// so it has to be found by reading the head — which needs a
 					// fetch, and happens in the analysis rather than here. This is
 					// the commonest shape of single-file DASH in the wild.
-					r.URI = Resolve(rbase, "")
 					r.InitURI = r.URI
 					r.SingleFile = true
 				default:
@@ -738,6 +752,17 @@ func dashCaptions(descs []struct {
 		}
 	}
 	return out
+}
+
+// sidecarSubtitle reports whether a mime type names a subtitle file rather than a
+// container. A text/vtt or application/ttml+xml representation with only a BaseURL is the
+// whole subtitle in one file, and there is no box structure in it to index.
+func sidecarSubtitle(mime string) bool {
+	switch strings.ToLower(strings.TrimSpace(mime)) {
+	case "text/vtt", "application/ttml+xml", "application/mp4;codecs=\"stpp\"":
+		return true
+	}
+	return false
 }
 
 // mpegChannelConfigScheme is the one AudioChannelConfiguration scheme whose

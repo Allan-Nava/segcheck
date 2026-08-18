@@ -253,7 +253,7 @@ func TestExpandSegmentBase(t *testing.T) {
 	}
 	idxBox := mediatest.SIDX(0, 90000, 0, 0, entries)
 
-	segs, err := expandSegmentBase("https://cdn.example.com/d/media.mp4", idxBox, 500, nil, Defaults())
+	segs, err := expandSegmentBase("https://cdn.example.com/d/media.mp4", idxBox, 500, nil, "", Defaults())
 	if err != nil {
 		t.Fatalf("expandSegmentBase: %v", err)
 	}
@@ -293,7 +293,7 @@ func TestExpandSegmentBase_FollowsAHierarchicalIndex(t *testing.T) {
 	}
 	data := mediatest.HierarchicalSIDX(90000, leaves)
 
-	segs, err := expandSegmentBase("https://cdn.example.com/d/media.mp4", data, 0, nil, Defaults())
+	segs, err := expandSegmentBase("https://cdn.example.com/d/media.mp4", data, 0, nil, "", Defaults())
 	if err != nil {
 		t.Fatalf("expandSegmentBase: %v", err)
 	}
@@ -312,7 +312,7 @@ func TestExpandSegmentBase_FollowsAHierarchicalIndex(t *testing.T) {
 }
 
 func TestExpandSegmentBase_UnreadableIndex(t *testing.T) {
-	if _, err := expandSegmentBase("https://x/media.mp4", []byte("not an index"), 0, nil, Defaults()); err == nil {
+	if _, err := expandSegmentBase("https://x/media.mp4", []byte("not an index"), 0, nil, "", Defaults()); err == nil {
 		t.Error("bytes that are not an index expanded into segments")
 	}
 }
@@ -352,7 +352,7 @@ func TestExpandSegmentBase_IndexWithNoMedia(t *testing.T) {
 	// The leaves are not in the bytes to hand, so they cannot be followed — which
 	// has to be said rather than silently yielding nothing.
 	_, err := expandSegmentBase("https://x/media.mp4",
-		mediatest.SIDX(0, 90000, 0, 0, entries), 0, nil, Defaults())
+		mediatest.SIDX(0, 90000, 0, 0, entries), 0, nil, "", Defaults())
 	if err == nil {
 		t.Fatal("an index whose leaves were never read expanded into segments")
 	}
@@ -472,5 +472,42 @@ func TestRun_OnDemandIndexBeyondTheProbe(t *testing.T) {
 	}
 	if !said {
 		t.Errorf("a file with no locatable index was not explained:\n%s", dump(res))
+	}
+}
+
+// SC-96: the protection a single-file representation's segments carry.
+//
+// These segments do not exist in the manifest — they are synthesised from the index —
+// so the protection the MPD declared has nowhere to come from but the rendition. Without
+// it, a real cbcs stream reported "4/4 segments are encrypted but the manifest declares
+// no key" against a manifest that declares it three times over.
+func TestExpandSegmentBase_CarriesTheProtection(t *testing.T) {
+	idx := mediatest.SIDX(0, 90000, 0, 0, []mediatest.SIDXEntry{
+		{Size: 1000, Duration: 180000, StartsWithSAP: true},
+		{Size: 1000, Duration: 180000, StartsWithSAP: true},
+	})
+	segs, err := expandSegmentBase("https://cdn.example.com/d/media.mp4", idx, 500, nil, "SAMPLE-AES-CTR", Defaults())
+	if err != nil {
+		t.Fatalf("expandSegmentBase: %v", err)
+	}
+	if len(segs) == 0 {
+		t.Fatal("no segments")
+	}
+	for i, s := range segs {
+		if s.KeyMethod != "SAMPLE-AES-CTR" {
+			t.Errorf("segment %d states key method %q, want the rendition's", i, s.KeyMethod)
+		}
+	}
+
+	// And an unprotected rendition stamps nothing, which is what keeps this from
+	// marking every single-file stream as encrypted.
+	clear, err := expandSegmentBase("https://cdn.example.com/d/media.mp4", idx, 500, nil, "", Defaults())
+	if err != nil {
+		t.Fatalf("expandSegmentBase: %v", err)
+	}
+	for i, s := range clear {
+		if s.KeyMethod != "" {
+			t.Errorf("segment %d of an unprotected rendition states %q", i, s.KeyMethod)
+		}
 	}
 }

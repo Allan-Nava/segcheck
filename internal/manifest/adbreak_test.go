@@ -264,3 +264,58 @@ func TestParseHexSection(t *testing.T) {
 		}
 	}
 }
+
+// SC-96, found on a real stream: a sidecar subtitle is one file that *is* the subtitle.
+//
+// A DASH text representation with only a BaseURL is a plain WebVTT or TTML file, not an
+// ISO-BMFF container with an index. Treating it as an on-demand single-file
+// representation sent segcheck hunting a sidx that cannot exist, and reported "no segment
+// index found" — an ERROR claiming the tool could not look at a file it could have read
+// whole.
+func TestParseDASH_SidecarSubtitleIsOneSegment(t *testing.T) {
+	m := `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" mediaPresentationDuration="PT30S">
+ <Period>
+  <AdaptationSet contentType="text" mimeType="text/vtt" lang="en">
+   <Representation bandwidth="1225" id="9">
+    <BaseURL>subs-en.vtt</BaseURL>
+   </Representation>
+  </AdaptationSet>
+  <AdaptationSet contentType="text" mimeType="application/ttml+xml" lang="de">
+   <Representation bandwidth="1225" id="10">
+    <BaseURL>subs-de.ttml</BaseURL>
+   </Representation>
+  </AdaptationSet>
+ </Period>
+</MPD>
+`
+	pl, err := ParseDASH([]byte(m), "https://e.test/m.mpd", fixedNow())
+	if err != nil {
+		t.Fatalf("ParseDASH: %v", err)
+	}
+	if len(pl.Renditions) != 2 {
+		t.Fatalf("renditions = %d, want 2", len(pl.Renditions))
+	}
+	for _, r := range pl.Renditions {
+		if r.SingleFile {
+			t.Errorf("%s was marked single-file, which sends the index probe after a sidx that cannot exist", r.Name)
+		}
+		if r.Unsupported != "" {
+			t.Errorf("%s was marked unsupported: %q", r.Name, r.Unsupported)
+		}
+		if len(r.Segments) != 1 {
+			t.Errorf("%s has %d segments, want one covering the whole period", r.Name, len(r.Segments))
+			continue
+		}
+		seg := r.Segments[0]
+		if seg.ByteRange != nil {
+			t.Errorf("%s: a sidecar is fetched whole, not by range: %+v", r.Name, seg.ByteRange)
+		}
+		if seg.Duration != 30 {
+			t.Errorf("%s: segment duration = %v, want the period's 30s", r.Name, seg.Duration)
+		}
+	}
+	if got := pl.Renditions[0].Segments[0].URI; got != "https://e.test/subs-en.vtt" {
+		t.Errorf("URI = %q", got)
+	}
+}

@@ -114,6 +114,22 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   noise — but *not* against a real encrypted stream, because no public AES-128 test
   stream was reachable. SC-96 tracks that, and it matters: every other reader in this
   project had a design error that only a real stream found.
+- **Three false findings on real protected and DASH streams**, all found by going looking
+  for one (SC-96):
+  - **Protected single-file DASH reported "encrypted but the manifest declares no key"**
+    against a manifest that declares it three times. A `SegmentBase` representation's
+    segments are synthesised from its index rather than parsed, so the protection had
+    nowhere to come from; it now travels on the rendition and is stamped on as they are
+    built.
+  - **A sidecar subtitle is one file that *is* the subtitle**, not an ISO-BMFF container
+    with an index. A `text/vtt` or `application/ttml+xml` representation with only a
+    `BaseURL` was sent through the on-demand index probe and reported "no segment index
+    found" — an ERROR claiming the tool could not look at a file it could read whole. It
+    now becomes one segment covering the period, and a real stream's 78 cues are read.
+  - **`X-TIMESTAMP-MAP` is an HLS mechanism.** DASH does not use the tag and puts WebVTT
+    cue times on the presentation timeline directly, so warning about its absence there
+    was a warning about a tag the format does not have. The local times are now always
+    kept, and whether anything anchors them is recorded separately.
 - **SAMPLE-AES and CENC no longer make the bitstream checks lie** (SC-95). Full-segment
   AES-128 is the honest kind of blindness: nothing parses and every check says it could
   not look. Partial encryption is the dangerous kind — the container parses, the timing

@@ -252,6 +252,8 @@ func TestCheckSubtitles_NoVideoToAnchorAgainst(t *testing.T) {
 			info: media.SegmentInfo{Container: media.ContainerWebVTT, Tracks: []media.Track{{
 				Kind: media.Text, Codec: "webvtt", Timescale: 90000,
 				HasPTS: true, MinPTS: 900000, MaxPTS: 990000, Samples: 1,
+				Cues: 1, CuesRead: true, CueMin: 900000, CueMax: 990000,
+				HasCueSpan: true, CuesAnchored: true,
 			}}},
 		}},
 	}

@@ -86,3 +86,66 @@ func TestParseHexIV(t *testing.T) {
 		}
 	}
 }
+
+// SC-96: a real stream found this one.
+//
+// A DASH MPD declares protection with ContentProtection on the AdaptationSet, and the
+// SegmentTemplate path already carried it onto every segment. The SegmentBase path did
+// not — and nothing on the rendition itself said so either, so a single-file protected
+// stream produced "segments are encrypted but the manifest declares no key", a BAD on a
+// manifest that declares it three times over.
+func TestParseDASH_SegmentBaseRenditionCarriesTheProtection(t *testing.T) {
+	m := `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" mediaPresentationDuration="PT10S">
+ <Period>
+  <AdaptationSet contentType="video" mimeType="video/mp4">
+   <ContentProtection value="cbcs" schemeIdUri="urn:mpeg:dash:mp4protection:2011"/>
+   <Representation id="v1" bandwidth="1000000" width="1280" height="720" codecs="avc1.4d401f">
+    <BaseURL>v1.mp4</BaseURL>
+    <SegmentBase indexRange="100-500" timescale="90000">
+     <Initialization range="0-99"/>
+    </SegmentBase>
+   </Representation>
+  </AdaptationSet>
+ </Period>
+</MPD>
+`
+	pl, err := ParseDASH([]byte(m), "https://e.test/m.mpd", fixedNow())
+	if err != nil {
+		t.Fatalf("ParseDASH: %v", err)
+	}
+	if len(pl.Renditions) != 1 {
+		t.Fatalf("renditions = %d, want 1", len(pl.Renditions))
+	}
+	r := pl.Renditions[0]
+	if !r.SingleFile {
+		t.Fatalf("the rendition is not marked single-file: %+v", r)
+	}
+	// The protection has to be on the rendition, because its segments do not exist yet:
+	// they are synthesised later from the index, and that is where it gets stamped on.
+	if r.KeyMethod == "" {
+		t.Error("a protected SegmentBase rendition states no key method")
+	}
+}
+
+// An unprotected rendition states none, which is what keeps this from marking every
+// stream as encrypted.
+func TestParseDASH_UnprotectedRenditionStatesNoKey(t *testing.T) {
+	m := `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" mediaPresentationDuration="PT10S">
+ <Period>
+  <AdaptationSet contentType="video" mimeType="video/mp4">
+   <SegmentTemplate media="v-$Number$.m4s" initialization="v-init.mp4" duration="2" timescale="1"/>
+   <Representation id="v1" bandwidth="1000000" width="1280" height="720" codecs="avc1.4d401f"/>
+  </AdaptationSet>
+ </Period>
+</MPD>
+`
+	pl, err := ParseDASH([]byte(m), "https://e.test/m.mpd", fixedNow())
+	if err != nil {
+		t.Fatalf("ParseDASH: %v", err)
+	}
+	if pl.Renditions[0].KeyMethod != "" {
+		t.Errorf("an unprotected rendition states %q", pl.Renditions[0].KeyMethod)
+	}
+}

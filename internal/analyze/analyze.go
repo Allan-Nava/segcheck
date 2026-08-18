@@ -123,6 +123,11 @@ type renditionData struct {
 	// adBreaks are the ad-break signals declared for this rendition: from its own
 	// media playlist in HLS, from the Period's EventStreams in DASH.
 	adBreaks []manifest.AdBreak
+	// dash marks a rendition from an MPD. It matters for exactly one thing: WebVTT cue
+	// times. HLS anchors them with X-TIMESTAMP-MAP and requires it; DASH does not use
+	// the tag and puts them on the presentation timeline directly, so its absence is a
+	// problem in one format and normal in the other.
+	dash bool
 }
 
 // Run performs the whole analysis and returns its findings, worst first.
@@ -260,7 +265,7 @@ func selectRenditions(ctx context.Context, c *fetch.Client, pl manifest.Playlist
 
 	out := make([]*renditionData, 0, len(chosen))
 	for _, r := range chosen {
-		rd := &renditionData{r: r}
+		rd := &renditionData{r: r, dash: pl.Kind == manifest.KindDASH}
 		switch {
 		case r.Unsupported != "":
 			rd.err = fmt.Errorf("%s", r.Unsupported)

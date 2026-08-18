@@ -968,12 +968,14 @@ func checkSubtitles(rends []*renditionData, opts Options) []finding.Finding {
 				if d := driftFrom(starts, sd, t, origin, haveOrigin, opts, t.CueMin, t.CueMax); d != "" {
 					drifted = append(drifted, d)
 				}
-			case !t.HasPTS:
-				// A WebVTT segment whose cues could not be placed on the media
-				// timeline, which means it carried no X-TIMESTAMP-MAP. A segment with
-				// no cues needs no map and is not counted here — it has nothing that
-				// wanted placing.
-				if t.Samples > 0 {
+			case !t.CuesAnchored && !rd.dash:
+				// A WebVTT segment with no X-TIMESTAMP-MAP. HLS requires it, so without
+				// one the cue clock is tied to nothing. DASH does not use the tag at all
+				// and puts cue times on the presentation timeline directly, which is why
+				// this only applies to HLS — reporting it there was a WARN about a tag
+				// the format does not have. A segment with no cues needs no map and is
+				// not counted: it has nothing that wanted placing.
+				if t.Cues > 0 {
 					unmapped++
 				}
 			case !haveOrigin:

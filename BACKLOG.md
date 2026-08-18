@@ -355,12 +355,14 @@ stream that break in production and that no manifest-only checker can see.
   check now says which half of the tool ran. Verified against a real CENC stream whose
   clear twin produces the same findings minus the encryption notes.
   <!-- sc: prio=med size=L labels=parser ver=0.3.0 -->
-- [ ] **SC-96 — Verify AES-128 and a segmentation descriptor against real streams**: the
-  CENC half of SC-95 is verified against `media.axprod.net`, but SC-22 is asserted against a
-  synthetic origin whose plaintext is known by construction, which is the only way to
-  tell a working decrypter from one producing plausible noise — but no public AES-128
-  test stream was reachable to confirm it end to end, and every other reader in this
-  project had a design error that only a real stream found.
+- [ ] **SC-96 — Verify AES-128 against a real stream**: SC-22 is asserted against a
+  synthetic origin whose plaintext is known by construction, which is the only way to tell
+  a working decrypter from one producing plausible noise — but no public AES-128 test
+  stream has been reachable to confirm it end to end. The CENC half of SC-95 *is* verified
+  against `media.axprod.net`, and looking for a real stream is what found three bugs:
+  a false BAD on protected single-file DASH, a false ERROR on sidecar subtitles, and a
+  false WARN about a tag DASH does not use. A real segmentation descriptor (SC-92) is
+  still unverified for the same reason.
   <!-- sc: prio=med size=S labels=tests -->
 
 ## M5 — Live and delivery <!-- ms: target=v0.4.0 phase=next -->

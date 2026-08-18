@@ -646,3 +646,48 @@ func TestParseMP4_SubtitleCueSpanConvertsTheTimescale(t *testing.T) {
 			tr.CueMin, tr.CueMax, tr.HasCueSpan)
 	}
 }
+
+// SC-96, found on a real stream: X-TIMESTAMP-MAP is an HLS mechanism.
+//
+// A DASH sidecar WebVTT carries no such line, and does not need one — its cue times are
+// on the presentation timeline already. Reporting "the cues cannot be placed" there is a
+// WARN about a tag the format does not use, so the local times are always kept and a flag
+// says whether anything anchors them.
+func TestParseWebVTT_LocalTimesAreAlwaysKept(t *testing.T) {
+	mapped := mediatest.WebVTT(mediatest.WebVTTOptions{
+		MPEGTS: 900000, Cues: []mediatest.Cue{{Start: 1, End: 3}},
+	})
+	info, err := ParseWebVTT(mapped)
+	if err != nil {
+		t.Fatalf("ParseWebVTT: %v", err)
+	}
+	tr, _ := info.Track(Text)
+	if !tr.CuesAnchored {
+		t.Error("a segment with a timestamp map was not reported as anchored")
+	}
+	if tr.CueMin != 11*90000 {
+		t.Errorf("cue span starts at %d, want the mapped 11s", tr.CueMin)
+	}
+
+	unmapped := mediatest.WebVTT(mediatest.WebVTTOptions{
+		NoTimestampMap: true, Cues: []mediatest.Cue{{Start: 1, End: 3}},
+	})
+	info, err = ParseWebVTT(unmapped)
+	if err != nil {
+		t.Fatalf("ParseWebVTT: %v", err)
+	}
+	tr, _ = info.Track(Text)
+	if tr.CuesAnchored {
+		t.Error("a segment with no map was reported as anchored")
+	}
+	// The local times are still there, because in DASH they are the presentation times.
+	if !tr.HasCueSpan || tr.CueMin != 1*90000 || tr.CueMax != 3*90000 {
+		t.Errorf("cue span = %d..%d (have %v), want the local 1s..3s",
+			tr.CueMin, tr.CueMax, tr.HasCueSpan)
+	}
+	// HasPTS stays false: without a map nothing ties the cue clock to the media clock,
+	// and an HLS rendition genuinely cannot be placed.
+	if tr.HasPTS {
+		t.Error("an unmapped segment claimed a media timeline")
+	}
+}

@@ -60,7 +60,7 @@ func resolveSegmentBase(ctx context.Context, c *fetch.Client, rends []*rendition
 			}
 		}
 
-		segs, err := expandSegmentBase(rd.r.URI, resp.Body, offset, initRange, opts)
+		segs, err := expandSegmentBase(rd.r.URI, resp.Body, offset, initRange, rd.r.KeyMethod, opts)
 		if err != nil {
 			if rd.r.IndexRange == nil {
 				// The index was looked for rather than pointed at, so say that the
@@ -89,7 +89,7 @@ var indexProbeRange = fmt.Sprintf("bytes=0-%d", indexProbeBytes-1)
 // the index sits in the file, because the offsets the index yields are absolute
 // and anchoring them at zero would make every range wrong by the size of
 // everything that precedes it.
-func expandSegmentBase(uri string, index []byte, indexOffset int64, initRange *manifest.ByteRange, opts Options) ([]manifest.Segment, error) {
+func expandSegmentBase(uri string, index []byte, indexOffset int64, initRange *manifest.ByteRange, keyMethod string, opts Options) ([]manifest.Segment, error) {
 	// ResolveSIDX rather than ParseSIDX: real on-demand files carry a two-level
 	// index, and stopping at the root finds only references to leaf indexes.
 	idx, err := media.ResolveSIDX(index, indexOffset)
@@ -108,6 +108,12 @@ func expandSegmentBase(uri string, index []byte, indexOffset int64, initRange *m
 			// ranged initialisation.
 			InitURI:   uri,
 			InitRange: initRange,
+			// The protection the manifest declared for the rendition. These segments
+			// are synthesised here rather than parsed, so this is the only place it can
+			// be stamped on — and without it a protected single-file stream reported
+			// "encrypted but the manifest declares no key" on a manifest that declares
+			// it three times over.
+			KeyMethod: keyMethod,
 			ByteRange: &manifest.ByteRange{Offset: e.Offset, Length: e.Size},
 		})
 	}

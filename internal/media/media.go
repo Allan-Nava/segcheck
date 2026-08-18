@@ -120,6 +120,12 @@ type Track struct {
 	// from — a wvtt sample times its cue by the sample's duration, not inside it.
 	CueMin, CueMax int  `json:"-"`
 	HasCueSpan     bool `json:"has_cue_span,omitempty"`
+	// CuesAnchored reports whether anything ties the cue clock to the media clock. A
+	// WebVTT segment needs X-TIMESTAMP-MAP for that, and HLS requires it — but DASH
+	// does not use the tag at all and puts cue times on the presentation timeline
+	// directly, so its absence is only a problem in HLS. TTML is absolute by
+	// definition and is always anchored.
+	CuesAnchored bool `json:"cues_anchored,omitempty"`
 	// Captions is the closed-caption data found in a video track's bitstream.
 	// Its Scanned field is what separates "no captions here" from "nobody
 	// looked", which lead to opposite verdicts.

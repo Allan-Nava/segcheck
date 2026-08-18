@@ -91,7 +91,7 @@ Target `v0.3.0` · **now** · 1 open · 13 shipped · `#########.` 93%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
-| **SC-96** — Verify AES-128 and a segmentation descriptor against real streams | med | S | tests | open |
+| **SC-96** — Verify AES-128 against a real stream | med | S | tests | open |
 | **SC-18** — Audio sanity | high | M | check | shipped `0.3.0` |
 | **SC-20** — SCTE-35 / `EXT-X-DATERANGE` | high | L | check,parser | shipped `0.3.0` |
 | **SC-37** — CEA-608/708 captions | high | L | check,parser | shipped `0.3.0` |
