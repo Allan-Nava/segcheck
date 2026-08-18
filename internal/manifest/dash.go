@@ -324,6 +324,7 @@ func ParseDASH(body []byte, baseURL string, now time.Time) (Playlist, error) {
 	if len(pl.Renditions) == 0 {
 		return pl, fmt.Errorf("MPD declares no Representation")
 	}
+	disambiguate(pl.Renditions)
 	return pl, nil
 }
 

@@ -9,6 +9,17 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **Two rungs at one resolution no longer get one name** (SC-100). A rendition's name is
+  the key every finding is filed under, so a ladder with two 720p rungs at different
+  bitrates produced two `bitrate 720p` rows, two `container 720p` rows and two `pdt 720p`
+  rows with nothing to say which rung any of them was about — the operator was left to
+  guess which half of the ladder to go and look at. Names are now made unique once the
+  whole ladder is parsed, and only where they collide: the colliding rungs gain their
+  bitrate, and a ladder that never had the problem is untouched, because `720p` is what an
+  operator says out loud and `720p 1316kbps` is not. Two rungs identical in both respects
+  — the duplicate rung `ladder` reports — fall through to an index, since a suffix that is
+  the same on both would leave the report as ambiguous as it was. HLS and DASH share the
+  pass. Verified against the Unified Streaming live demo this was filed from.
 - **The roadmap generator and the backlog linter have tests** (SC-64).
   `scripts/backlog_test.sh` runs `roadmap`, `check`, `stats`, `next` and `lint` against a
   fixture backlog: 23 assertions, POSIX sh and awk, in the `backlog` CI job beside the

@@ -399,6 +399,9 @@ func ParseHLS(body []byte, baseURL string) (Playlist, error) {
 	// A media playlist without EXT-X-ENDLIST is a sliding window: live.
 	pl.Live = !pl.Master && !endList
 	_ = seqSet
+	// Once every variant is known, and not before: whether a name collides is a
+	// property of the ladder rather than of the variant.
+	disambiguate(pl.Renditions)
 	return pl, nil
 }
 

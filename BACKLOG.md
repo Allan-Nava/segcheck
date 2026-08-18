@@ -1116,14 +1116,16 @@ checks roadmap and blocks nothing.
   probes bound the answer to an eighth of the window, and they are only spent on a stream
   already known to be broken.
   <!-- sc: prio=med size=M labels=check,delivery -->
-- [ ] **SC-100 — Two rungs at one resolution get one name**: `renditionName` derives an
-  HLS variant's label from its `RESOLUTION`, so a ladder with two 720p rungs at different
-  bitrates produces two `bitrate 720p` rows, two `pdt 720p` rows and two `container 720p`
-  rows, and an operator cannot tell which rung any of them is about. Unified Streaming's
-  own live demo has exactly that shape. The fix is to disambiguate only when a name
-  repeats — appending the bandwidth to the rungs that collide rather than to every rung,
-  because `720p` is what an operator says out loud and `720p@1.3M` is not.
-  <!-- sc: prio=med size=S labels=output -->
+- [x] **SC-100 — Two rungs at one resolution get one name**: names are made unique once
+  the whole ladder is parsed, because whether one collides is a property of the ladder
+  and not of the variant. Only the rungs that actually collide grow a suffix — the
+  bitrate, which is what differs and what an operator picks between them by — so `720p`
+  stays `720p` on every ladder that never had the problem. Two rungs identical in both
+  respects are a defect `ladder` reports and still have to be nameable, so they fall
+  through to an index. HLS and DASH share the pass. Verified against the Unified
+  Streaming live demo this was filed from: its two `container 720p` rows are now
+  `720p 1316kbps` and `720p 658kbps`.
+  <!-- sc: prio=med size=S labels=output ver=0.4.0 -->
 - [ ] **SC-99 — No low-latency reference stream in the smoke suite**: every check this
   project has shipped a false positive in was caught by SC-36 against real media rather
   than by a unit test, and `parts` (SC-39) is the first check to ship without that pass:
