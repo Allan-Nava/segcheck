@@ -9,6 +9,20 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **A failed DVR window reports how much of it the origin really holds** (SC-101). Saying
+  the window is short was only half an answer: the number an operator changes a retention
+  setting with is how much is really there, and it is the one thing the manifest cannot
+  supply, the manifest being what just turned out to be wrong. When the oldest promised
+  segment is missing or unreadable, four more requests bisect the window and the `dvr`
+  finding carries the depth it found. `manifest.Rendition.WindowProbes` is the new seam:
+  sixteen segments spanning the window, which only the manifest package can produce
+  because a dynamic MPD lists no intermediate segment at all — the template has to be
+  evaluated at indices nobody asked for. An HLS playlist lists everything it has, so it is
+  its own ladder. The boundary is monotone, so four probes place it within an eighth of
+  the window, and they are only ever spent on a stream already known to be broken. The
+  figure is a lower bound and says so: the bisection lands on a probe point and the real
+  boundary is somewhere before it, and understating is the only safe direction, because
+  retention set from an overstated figure shortens a window that was already too short.
 - **Two rungs at one resolution no longer get one name** (SC-100). A rendition's name is
   the key every finding is filed under, so a ladder with two 720p rungs at different
   bitrates produced two `bitrate 720p` rows, two `container 720p` rows and two `pdt 720p`

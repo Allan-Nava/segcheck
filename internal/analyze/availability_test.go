@@ -262,6 +262,58 @@ func TestRun_FindsADVRWindowTheOriginDoesNotHave(t *testing.T) {
 	}
 }
 
+// Saying the window is short is only half an answer. The number an operator
+// needs in order to change the origin's retention is how much of it is really
+// there, and it is not in the manifest — the manifest is the thing that turned
+// out to be wrong. Here the MPD claims a minute and the origin has kept the last
+// forty seconds of it.
+func TestRun_ReportsHowMuchOfTheDVRWindowTheOriginReallyHolds(t *testing.T) {
+	// 100s in, 2s segments, startNumber 1: the edge is segment 50 and the MPD's
+	// 60s window reaches back to segment 21. The origin holds 31 upwards, which
+	// is segment 31's start at 60s against the edge at 100s: forty seconds.
+	o := &availOrigin{availableUpTo: 50, availableFrom: 31}
+	url := newAvailOrigin(t, o)
+
+	res := runAvail(t, url)
+
+	f, ok := findFinding(res, "dvr", finding.BAD)
+	if !ok {
+		t.Fatalf("a DVR window the origin cannot honour was not reported:\n%s", dump(res))
+	}
+	if f.Value == nil {
+		t.Fatalf("the dvr finding carries no measurement of what is really there: %q", f.Message)
+	}
+	// Four probes bound the answer to an eighth of the window, which is 7.5s
+	// here, and the bound is one-sided: the bisection lands on a probe point and
+	// the real boundary is somewhere before it, so the figure understates what
+	// the origin holds and must never overstate it.
+	if *f.Value < 32 || *f.Value > 40 {
+		t.Errorf("the origin holds 40s and the finding says %.1f%s: %q", *f.Value, f.Unit, f.Message)
+	}
+	if !strings.Contains(f.Message, "60") {
+		t.Errorf("the dvr finding does not quote the window it disproved: %q", f.Message)
+	}
+}
+
+// An origin that has kept nothing at all behind the live edge is a different
+// answer from one that has kept most of the window, and the difference is the
+// whole point of measuring: there is no retention to adjust, there is retention
+// that is not working.
+func TestRun_ReportsADVRWindowWithNothingBehindTheEdge(t *testing.T) {
+	o := &availOrigin{availableUpTo: 50, availableFrom: 50}
+	url := newAvailOrigin(t, o)
+
+	res := runAvail(t, url)
+
+	f, ok := findFinding(res, "dvr", finding.BAD)
+	if !ok {
+		t.Fatalf("an origin holding only the live edge was not reported:\n%s", dump(res))
+	}
+	if f.Value != nil && *f.Value > 12 {
+		t.Errorf("an origin holding one segment was measured at %.1f%s: %q", *f.Value, f.Unit, f.Message)
+	}
+}
+
 // A window the origin really holds is not a defect, and the check has to say so
 // rather than stay silent: the whole value is knowing the promise was collected.
 func TestRun_ADVRWindowTheOriginHonoursIsClean(t *testing.T) {

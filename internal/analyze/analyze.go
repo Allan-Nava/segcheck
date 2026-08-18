@@ -175,6 +175,11 @@ type renditionData struct {
 	// promises no window at all.
 	oldest *manifest.Segment
 	window float64
+	// probes span the DVR window, oldest first. They are only ever fetched when
+	// the oldest one turns out not to be there, and then only a handful of them:
+	// they are how "the window claims sixty seconds" becomes "and the origin
+	// holds forty".
+	probes []manifest.Segment
 	// adBreaks are the ad-break signals declared for this rendition: from its own
 	// media playlist in HLS, from the Period's EventStreams in DASH.
 	adBreaks []manifest.AdBreak
@@ -393,6 +398,7 @@ func selectRenditions(ctx context.Context, c *fetch.Client, pl manifest.Playlist
 			hasParts:       playlistHasParts(pl),
 		}
 		rd.oldest, rd.window = playlistWindow(pl)
+		rd.probes = pl.Segments
 		return []*renditionData{rd}, findings
 	}
 
@@ -422,6 +428,7 @@ func selectRenditions(ctx context.Context, c *fetch.Client, pl manifest.Playlist
 			rd.live = pl.Live
 			rd.adBreaks = pl.AdBreaks
 			rd.oldest, rd.window = r.OldestSegment, pl.TimeShiftBufferDepth
+			rd.probes = r.WindowProbes
 			// DASH has no EXT-X-PART; low latency there is chunked transfer of a
 			// segment that is already listed, with nothing extra to compare.
 			rd.segs = toSegmentData(sampleSegments(r.Segments, pl.Live, opts))
@@ -442,6 +449,9 @@ func selectRenditions(ctx context.Context, c *fetch.Client, pl manifest.Playlist
 				rd.partTarget = sub.PartTarget
 				rd.hasParts = playlistHasParts(sub)
 				rd.oldest, rd.window = playlistWindow(sub)
+				// HLS lists everything it has, so the playlist is its own set of
+				// probe points and no template needs re-evaluating.
+				rd.probes = sub.Segments
 				rd.segs = toSegmentData(sampleSegments(sub.Segments, sub.Live, opts))
 			}
 		default:

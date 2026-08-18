@@ -139,6 +139,18 @@ type Rendition struct {
 	// collected on purpose rather than only by a viewer scrubbing back, which is
 	// to say in a complaint rather than in monitoring.
 	OldestSegment *Segment `json:"oldest_segment,omitempty"`
+	// WindowProbes are segments spanning the DVR window, oldest first, and they
+	// exist for one question: when the oldest one turns out not to be there, how
+	// much of the window *is*. That number is the one an operator changes a
+	// retention setting with, and it is not in the manifest — the manifest is the
+	// thing that just turned out to be wrong. Nothing outside this package can
+	// produce them, because a dynamic MPD lists no intermediate segment: the
+	// template has to be evaluated at an index nobody asked for.
+	//
+	// Like OldestSegment they are deliberately kept out of Segments. They are
+	// candidates for a bisection over a stream already known to be broken, not
+	// media to sample.
+	WindowProbes []Segment `json:"window_probes,omitempty"`
 	// PeriodID, PeriodIndex, PeriodStart and PeriodDuration place a DASH
 	// rendition in its Period. A multi-period MPD is several presentations
 	// spliced into one, and the splice is exactly where an encoder change lands —

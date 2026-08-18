@@ -1106,16 +1106,20 @@ checks roadmap and blocks nothing.
   the next release anyway. Belongs in the tap; filed here because segcheck's release is
   what surfaced it.
   <!-- sc: prio=low size=S labels=release -->
-- [ ] **SC-101 — A failed DVR window reports the claim, not the truth**: when the oldest
-  segment `timeShiftBufferDepth` promises is missing (SC-53), the finding says the window
-  claims sixty seconds and cannot honour it — but not how much of it the origin really
-  holds, which is the number an operator needs to set retention. Finding it means
-  bisecting between the oldest claimed segment and the newest listed one, and in DASH
-  those intermediate segments are not in the manifest: the template has to be re-evaluated
-  at arbitrary indices, which nothing outside `internal/manifest` can do today. Four
-  probes bound the answer to an eighth of the window, and they are only spent on a stream
-  already known to be broken.
-  <!-- sc: prio=med size=M labels=check,delivery -->
+- [x] **SC-101 — A failed DVR window reports the claim, not the truth**: when the oldest
+  segment `timeShiftBufferDepth` promises is missing, the `dvr` finding now also says how
+  much of the window the origin really holds — the number an operator changes a retention
+  setting with, and the one thing the manifest cannot supply, the manifest being what
+  just turned out to be wrong. `Rendition.WindowProbes` carries sixteen segments spanning
+  the window, which only `internal/manifest` can produce because a dynamic MPD lists no
+  intermediate segment and the template has to be evaluated at indices nobody asked for;
+  HLS lists everything it has, so its playlist is its own ladder. The boundary is
+  monotone, so four requests bisect it, and they are only ever spent on a stream already
+  known to be broken. The figure is reported as a lower bound — the bisection lands on a
+  probe point and the real boundary is somewhere before it — because understating is the
+  only safe direction: retention set from an overstated figure shortens a window that was
+  already too short.
+  <!-- sc: prio=med size=M labels=check,delivery ver=0.4.0 -->
 - [x] **SC-100 — Two rungs at one resolution get one name**: names are made unique once
   the whole ladder is parsed, because whether one collides is a property of the ladder
   and not of the variant. Only the rungs that actually collide grow a suffix — the

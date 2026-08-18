@@ -257,6 +257,7 @@ func ParseDASH(body []byte, baseURL string, now time.Time) (Playlist, error) {
 					r.InitURI = init
 					r.Segments = segs
 					r.NextSegment, r.OldestSegment = edges.next, edges.oldest
+					r.WindowProbes = edges.probes
 				case rep.SegmentList != nil:
 					ts := rep.SegmentList.Timescale
 					if ts == 0 {
@@ -339,7 +340,18 @@ func ParseDASH(body []byte, baseURL string, now time.Time) (Playlist, error) {
 type templateEdges struct {
 	next   *Segment
 	oldest *Segment
+	// probes span the window from the oldest to the newest, so a failed DVR
+	// promise can be bisected into a real depth. windowProbeCount of them puts
+	// the answer within a sixteenth of the window after four fetches.
+	probes []Segment
 }
+
+// windowProbeCount is how many candidate segments span the DVR window. Sixteen
+// costs nothing to compute and nothing to fetch — they are only ever asked for
+// on a stream already known to be broken — and four probes over them bound the
+// answer to an eighth of the window, which is the precision a retention setting
+// is actually changed in.
+const windowProbeCount = 16
 
 func expandTemplate(t *mpdSegTemplate, rep mpdRepresentation, base *url.URL, ast, now time.Time, periodStart, periodDur, tsbd float64, live, protected bool) (string, []Segment, templateEdges, error) {
 	timescale := t.Timescale
@@ -483,10 +495,24 @@ func expandTemplate(t *mpdSegTemplate, rep mpdRepresentation, base *url.URL, ast
 			if oldest < 0 {
 				oldest = 0
 			}
-			if last := firstIndex + count - 1; oldest > last {
+			last := firstIndex + count - 1
+			if oldest > last {
 				oldest = last
 			}
 			edges.oldest = at(oldest)
+			// Evenly spaced from the oldest to the newest. Duplicates are dropped
+			// rather than deduplicated by index, because a window shallower than
+			// the probe count collapses several of them onto one segment and a
+			// bisection over repeats measures nothing.
+			prev := -1
+			for i := 0; i < windowProbeCount; i++ {
+				idx := oldest + (last-oldest)*i/(windowProbeCount-1)
+				if idx == prev {
+					continue
+				}
+				prev = idx
+				edges.probes = append(edges.probes, *at(idx))
+			}
 		}
 	}
 
