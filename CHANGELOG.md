@@ -114,6 +114,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   noise — but *not* against a real encrypted stream, because no public AES-128 test
   stream was reachable. SC-96 tracks that, and it matters: every other reader in this
   project had a design error that only a real stream found.
+- **HE-AAC v2's mono core is not a channel-count mismatch.** Parametric Stereo codes a
+  mono core that the decoder renders as stereo, so an `mp4a.40.29` representation
+  declaring `AudioChannelConfiguration value="1"` over stereo media is right about the
+  core while the sample entry is right about the output — and which of the two each side
+  states is not something a checker can adjudicate. A real DASH vector does exactly that,
+  and calling it a defect was the same mistake as calling HE-AAC's half sampling rate one.
+  The allowance is that profile and that pair only: 5.1 declared as mono is still wrong
+  however the audio is coded.
 - **Decryption and the splice descriptors are checked against an authority outside this
   repository** (SC-96). Every other assertion about them round-trips through this
   project's own builders, and a builder and a reader written from the same misreading

@@ -147,7 +147,9 @@ AGENTS.md wins and this file gets fixed.
   dependent substreams present the count is genuinely unknowable); HLS
   `CHANNELS="16/JOC"` counts a rendered Atmos presentation, not the coded 5.1 bed;
   and HE-AAC (`mp4a.40.5`, `mp4a.40.29`) codes at half the rate it plays, so a
-  sample entry saying 24 kHz against a manifest saying 48 kHz is correct. Each of
+  sample entry saying 24 kHz against a manifest saying 48 kHz is correct — and
+  HE-AAC **v2** (`mp4a.40.29`) additionally codes a mono core that Parametric Stereo
+  renders as stereo, so a declared 1 against a measured 2 is also correct. Each of
   these produced a BAD on a public reference stream before it was understood.
 - **Partial encryption is more dangerous than full.** With AES-128 nothing parses and
   every check says it could not look. With SAMPLE-AES or CENC the container parses,

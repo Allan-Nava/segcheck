@@ -544,3 +544,66 @@ func TestDeclaredAudioCodec(t *testing.T) {
 		}
 	}
 }
+
+// HE-AAC v2 is AAC LC plus SBR plus Parametric Stereo: the coded core is mono and the
+// decoder outputs stereo, so a manifest stating one channel and a sample entry stating two
+// are both right about different things. A real DASH test vector does exactly that —
+// mp4a.40.29 with AudioChannelConfiguration value="1" over stereo media — and calling it a
+// defect is the same mistake as calling HE-AAC's half sampling rate one.
+func TestCheckAudio_ParametricStereoCoreIsNotAMismatch(t *testing.T) {
+	frag := mediatest.MP4Segment(1, 1, 0, 3600, 50, 2000)
+	stereo, err := media.ParseMP4(frag, mediatest.MP4InitAudio(1, 90000, "mp4a", 2, 48000))
+	if err != nil {
+		t.Fatalf("ParseMP4: %v", err)
+	}
+
+	// Declared mono, media stereo, under HE-AAC v2: the two numbers are the core and the
+	// output.
+	rd := &renditionData{
+		r: manifest.Rendition{Name: "a", Kind: manifest.Audio,
+			Codecs: "mp4a.40.29", Channels: 1, SampleRate: 48000},
+		segs: []segmentData{{info: stereo, parsed: true}},
+	}
+	for _, f := range checkAudio([]*renditionData{rd}) {
+		if f.Status != finding.OK {
+			t.Errorf("HE-AAC v2 mono-core produced %s: %s", f.Status, f.Message)
+		}
+	}
+
+	// The other way round is the same claim from the other side, and equally unarguable.
+	mono, err := media.ParseMP4(frag, mediatest.MP4InitAudio(1, 90000, "mp4a", 1, 48000))
+	if err != nil {
+		t.Fatalf("ParseMP4: %v", err)
+	}
+	rd.r.Channels = 2
+	rd.segs = []segmentData{{info: mono, parsed: true}}
+	for _, f := range checkAudio([]*renditionData{rd}) {
+		if f.Status != finding.OK {
+			t.Errorf("HE-AAC v2 stereo-output declaration produced %s: %s", f.Status, f.Message)
+		}
+	}
+
+	// The allowance is for that profile and that pair only. Plain AAC-LC declaring mono
+	// over stereo media is still a defect, and so is 5.1 declared as mono under HE-AAC v2.
+	lc := &renditionData{
+		r: manifest.Rendition{Name: "a", Kind: manifest.Audio,
+			Codecs: "mp4a.40.2", Channels: 1, SampleRate: 48000},
+		segs: []segmentData{{info: stereo, parsed: true}},
+	}
+	if out := checkAudio([]*renditionData{lc}); len(out) != 1 || out[0].Status != finding.BAD {
+		t.Errorf("AAC-LC mono over stereo: want a BAD, got %+v", out)
+	}
+
+	surround, err := media.ParseMP4(frag, mediatest.MP4InitAudio(1, 90000, "mp4a", 6, 48000))
+	if err != nil {
+		t.Fatalf("ParseMP4: %v", err)
+	}
+	ps := &renditionData{
+		r: manifest.Rendition{Name: "a", Kind: manifest.Audio,
+			Codecs: "mp4a.40.29", Channels: 1, SampleRate: 48000},
+		segs: []segmentData{{info: surround, parsed: true}},
+	}
+	if out := checkAudio([]*renditionData{ps}); len(out) != 1 || out[0].Status != finding.BAD {
+		t.Errorf("HE-AAC v2 mono declared over 5.1: want a BAD, got %+v", out)
+	}
+}

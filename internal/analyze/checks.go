@@ -1517,7 +1517,7 @@ func checkAudio(rends []*renditionData) []finding.Finding {
 				humanSampleRate(got.rate), humanSampleRate(rd.r.SampleRate)))
 			value, unit = float64(got.rate), "Hz"
 		}
-		if rd.r.Channels > 0 && got.channels > 0 && rd.r.Channels != got.channels {
+		if rd.r.Channels > 0 && got.channels > 0 && !channelsAgree(got.channels, rd.r.Channels, rd.r.Codecs) {
 			problems = append(problems, fmt.Sprintf("media is %s but the manifest declares %s",
 				humanChannels(got.channels), humanChannels(rd.r.Channels)))
 			if unit == "" {
@@ -1817,11 +1817,45 @@ func ratesAgree(coded, declared int, codecs string) bool {
 	return codecSignalsSBR(codecs) && declared == coded*2
 }
 
+// channelsAgree compares a coded channel count against a declared one.
+//
+// HE-AAC v2 is AAC LC plus SBR plus Parametric Stereo: the coded core is mono and the
+// decoder outputs stereo, so a manifest stating one channel and a sample entry stating two
+// are both right about different things — and which of the two each side chose to state is
+// not something segcheck can adjudicate. A real DASH vector declares
+// AudioChannelConfiguration value="1" for an mp4a.40.29 representation over stereo media,
+// and calling that a defect is the same mistake as calling HE-AAC's half sampling rate one.
+//
+// The allowance is that profile and that pair only: 5.1 declared as mono is still wrong
+// however the audio is coded.
+func channelsAgree(coded, declared int, codecs string) bool {
+	if coded == declared {
+		return true
+	}
+	if !codecSignalsParametricStereo(codecs) {
+		return false
+	}
+	return (coded == 1 && declared == 2) || (coded == 2 && declared == 1)
+}
+
+// codecSignalsParametricStereo reports whether a CODECS value names HE-AAC v2, object
+// type 29 — the only AAC profile whose coded channel count and output channel count
+// differ.
+func codecSignalsParametricStereo(codecs string) bool {
+	return aacObjectTypeIn(codecs, 29)
+}
+
 // codecSignalsSBR reports whether a CODECS value names an AAC profile that uses
 // Spectral Band Replication: object type 5 is HE-AAC, 29 is HE-AAC v2. RFC 6381
 // allows the object type to be zero-padded, so "mp4a.40.05" means the same thing
 // as "mp4a.40.5".
 func codecSignalsSBR(codecs string) bool {
+	return aacObjectTypeIn(codecs, 5, 29)
+}
+
+// aacObjectTypeIn reports whether a CODECS value names an AAC object type among those
+// given. RFC 6381 allows the number to be zero-padded, so "mp4a.40.05" is object type 5.
+func aacObjectTypeIn(codecs string, types ...int) bool {
 	for _, c := range strings.Split(codecs, ",") {
 		c = strings.ToLower(strings.TrimSpace(c))
 		rest, ok := strings.CutPrefix(c, "mp4a.40.")
@@ -1832,8 +1866,10 @@ func codecSignalsSBR(codecs string) bool {
 		if err != nil {
 			continue
 		}
-		if n == 5 || n == 29 {
-			return true
+		for _, t := range types {
+			if n == t {
+				return true
+			}
 		}
 	}
 	return false
