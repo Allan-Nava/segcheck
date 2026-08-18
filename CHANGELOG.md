@@ -19,6 +19,21 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   a stall rather than jitter. Watching a VOD playlist is not a defect and is reported as
   an OK finding saying there is no live edge, not as a problem in the stream. Only
   manifests are re-fetched: the segments are downloaded once, at the start.
+- **The audio codec string against the configuration** (SC-83), the audio counterpart of
+  SC-74. Its classic is the quietest of the set: declaring plain AAC-LC over HE-AAC content
+  means every device that trusts the string decodes the base layer only, so the whole
+  ladder plays with half the intended top end — which sounds like a bad encode rather than
+  a manifest error and gets chased through the encoder for weeks. `ec-3` declared over an
+  `ac-3` sample entry is reported too: that is a different decoder, not a different
+  configuration of one.
+  Two public reference vectors corrected the check before it shipped. HE-AAC is normally
+  signalled *implicitly* — the AudioSpecificConfig states an AAC-LC core and the SBR data
+  lives in the payload, discovered at decode time — so explicit signalling with 5 or 29 in
+  the configuration is the exception, not the rule. `mp4a.40.5` over a configuration
+  stating object type 2 is the ordinary way HE-AAC is carried, and the configuration alone
+  can neither confirm nor deny it; segcheck says exactly that instead of reporting it. The
+  opposite direction, a manifest declaring AAC-LC over a configuration that explicitly
+  states HE-AAC, remains a BAD.
 - **`CHANNELS` is checked against the coded configuration, not the codec string** (SC-82).
   It is the claim a player acts on before it decodes anything: a receiver reads "6",
   selects a surround output, and upmixes stereo into it — so the defect is audible on

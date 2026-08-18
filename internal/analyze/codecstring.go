@@ -103,7 +103,176 @@ func checkCodecString(rends []*renditionData) []finding.Finding {
 			Value: finding.Num(float64(measured.Level)),
 		})
 	}
+	out = append(out, checkAudioCodecString(rends)...)
 	return out
+}
+
+// checkAudioCodecString is the audio counterpart, and its classic is the
+// quietest defect in the milestone.
+//
+// Declaring plain AAC-LC over HE-AAC content means every device that trusts the
+// string decodes the base layer only: the whole ladder plays with half the
+// intended top end, on every device, and it sounds like a bad encode rather than
+// a manifest error — so it is chased through the encoder for weeks before anyone
+// reads the string.
+func checkAudioCodecString(rends []*renditionData) []finding.Finding {
+	var out []finding.Finding
+	for _, rd := range rends {
+		if rd.err != nil || rd.r.Codecs == "" {
+			continue
+		}
+		cfg := audioConfigOf(rd)
+		codec, haveCodec := audioCodecOf(rd)
+		if !cfg.Stated && !haveCodec {
+			continue // the media states nothing about its audio to compare against
+		}
+		declared, ok := audioComponentOf(rd.r.Codecs)
+		if !ok {
+			continue // the string describes no audio at all
+		}
+		label := rendLabel(rd.r)
+
+		// A family mismatch first: ec-3 declared over an ac-3 sample entry is a
+		// different decoder, not a different configuration of one.
+		if declared.family != "" && haveCodec && declared.family != codec {
+			out = append(out, finding.Finding{
+				Check: "codecstring", Target: label, Status: finding.BAD,
+				Message: fmt.Sprintf("CODECS=%q declares %s and the media carries %s", rd.r.Codecs, declared.family, codec),
+				Hint:    "a player negotiates a decoder from the string before it fetches anything, and this is a different decoder",
+			})
+			continue
+		}
+		if !declared.hasObjectType {
+			out = append(out, finding.Finding{
+				Check: "codecstring", Target: label, Status: finding.OK,
+				Message: fmt.Sprintf("CODECS=%q states no audio object type: not verifiable", rd.r.Codecs),
+			})
+			continue
+		}
+		if !cfg.Stated {
+			out = append(out, finding.Finding{
+				Check: "codecstring", Target: label, Status: finding.OK,
+				Message: fmt.Sprintf("CODECS=%q declares audio object type %d and the media states no configuration to compare it with",
+					rd.r.Codecs, declared.objectType),
+			})
+			continue
+		}
+
+		if declared.objectType == cfg.ObjectType {
+			out = append(out, finding.Finding{
+				Check: "codecstring", Target: label, Status: finding.OK,
+				Message: fmt.Sprintf("CODECS=%q matches the media: audio object type %d%s",
+					rd.r.Codecs, cfg.ObjectType, sbrNote(cfg)),
+				Value: finding.Num(float64(cfg.ObjectType)),
+			})
+			continue
+		}
+
+		// Which way round it is decides everything, and one direction is not a
+		// defect at all.
+		//
+		// HE-AAC is normally signalled *implicitly*: the AudioSpecificConfig
+		// states an AAC-LC core — object type 2 — and the SBR data lives in the
+		// payload, discovered at decode time. Explicit hierarchical signalling,
+		// with 5 or 29 in the configuration, is the exception. So a string
+		// declaring HE-AAC over a configuration that says 2 is the ordinary way
+		// HE-AAC is carried, and segcheck cannot see the SBR data from the
+		// configuration alone — reporting it turned two public reference streams
+		// into findings.
+		declaredHE := declared.objectType == 5 || declared.objectType == 29
+		if declaredHE && cfg.ObjectType == 2 && !cfg.SBR {
+			out = append(out, finding.Finding{
+				Check: "codecstring", Target: label, Status: finding.OK,
+				Message: fmt.Sprintf("CODECS=%q declares audio object type %d over an AAC-LC core: HE-AAC signalled implicitly, which the configuration alone cannot confirm or deny",
+					rd.r.Codecs, declared.objectType),
+				Value: finding.Num(float64(cfg.ObjectType)),
+			})
+			continue
+		}
+		if !declaredHE && cfg.SBR {
+			out = append(out, finding.Finding{
+				Check: "codecstring", Target: label, Status: finding.BAD,
+				Message: fmt.Sprintf("CODECS=%q declares audio object type %d and the media codes %d%s",
+					rd.r.Codecs, declared.objectType, cfg.ObjectType, sbrNote(cfg)),
+				Value: finding.Num(float64(cfg.ObjectType)),
+				Hint: "a device that trusts the string decodes the base layer only, so the whole ladder plays at half the intended top end — " +
+					"which sounds like a bad encode rather than a manifest error",
+			})
+			continue
+		}
+		out = append(out, finding.Finding{
+			Check: "codecstring", Target: label, Status: finding.WARN,
+			Message: fmt.Sprintf("CODECS=%q declares audio object type %d and the media codes %d%s",
+				rd.r.Codecs, declared.objectType, cfg.ObjectType, sbrNote(cfg)),
+			Value: finding.Num(float64(cfg.ObjectType)),
+			Hint:  "the media does not support the claim: a device prepares for an extension that is not there, and devices that could decode the real coding may be excluded",
+		})
+	}
+	return out
+}
+
+// sbrNote spells out the extensions, because "object type 5" means nothing to
+// most readers and "with SBR" means everything.
+func sbrNote(cfg media.AudioConfig) string {
+	switch {
+	case cfg.PS:
+		return " (SBR and Parametric Stereo)"
+	case cfg.SBR:
+		return " (SBR)"
+	}
+	return " (no SBR)"
+}
+
+// declaredAudio is what the audio component of a CODECS string spells out.
+type declaredAudio struct {
+	family        string // the parser's own vocabulary: aac, ac3, eac3, opus, flac
+	objectType    int
+	hasObjectType bool
+}
+
+// audioComponentOf finds the audio component of a CODECS string and decomposes
+// it. `mp4a.40.N` states the object type as its third component; the other
+// families state only which decoder, and that is the whole of their claim.
+func audioComponentOf(codecs string) (declaredAudio, bool) {
+	for _, c := range strings.Split(codecs, ",") {
+		c = strings.ToLower(strings.TrimSpace(c))
+		switch {
+		case strings.HasPrefix(c, "mp4a"):
+			out := declaredAudio{family: "aac"}
+			parts := strings.Split(c, ".")
+			// mp4a.40.2: the 40 is the MPEG-4 audio object type indication, and
+			// the component after it is the audio object type itself.
+			if len(parts) >= 3 && parts[1] == "40" {
+				if v, err := strconv.Atoi(parts[2]); err == nil {
+					out.objectType, out.hasObjectType = v, true
+				}
+			}
+			return out, true
+		case c == "ac-3":
+			return declaredAudio{family: "ac3"}, true
+		case c == "ec-3":
+			return declaredAudio{family: "eac3"}, true
+		case c == "opus":
+			return declaredAudio{family: "opus"}, true
+		case c == "flac", strings.HasPrefix(c, "flac"):
+			return declaredAudio{family: "flac"}, true
+		}
+	}
+	return declaredAudio{}, false
+}
+
+// audioCodecOf is the codec the media's audio track really is, in the parser's
+// vocabulary.
+func audioCodecOf(rd *renditionData) (string, bool) {
+	for _, sd := range rd.segs {
+		if !sd.parsed {
+			continue
+		}
+		if t, ok := sd.info.Track(media.Audio); ok && t.Codec != "" {
+			return t.Codec, true
+		}
+	}
+	return "", false
 }
 
 func tierName(tier int) string {

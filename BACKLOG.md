@@ -739,15 +739,16 @@ which is why SC-18 already rules it out and why nothing here reintroduces it.
   where the media says, the media decides, and the codec string is the fallback only
   for media that states nothing.
   <!-- sc: prio=high size=M labels=check,parser ver=0.8.0 -->
-- [ ] **SC-83 — Audio codec string against the configuration**: the audio
-  counterpart of SC-74 — `mp4a.40.2` against an audio object type that is really
-  5 or 29, `ec-3` declared over an `ac-3` sample entry, `mp4a.40.5` over content
-  with no SBR at all. Declaring plain AAC-LC over HE-AAC is the classic of the
-  set: devices that trust the string decode the base layer only and play the
-  whole ladder at half the intended bandwidth's worth of top end, which sounds
-  like a bad encode rather than a manifest error. Unparseable strings report
-  OK-level "not verifiable", never a mismatch.
-  <!-- sc: prio=high size=M labels=check -->
+- [x] **SC-83 — Audio codec string against the configuration**: `mp4a.40.2` declared
+  over a configuration that explicitly states object type 5 or 29, and `ec-3` declared
+  over an `ac-3` sample entry — a different decoder rather than a different
+  configuration of one. Two public reference vectors corrected it before it shipped:
+  HE-AAC is normally signalled *implicitly*, with an AAC-LC core in the configuration
+  and the SBR data in the payload, so `mp4a.40.5` over object type 2 is the ordinary
+  way HE-AAC is carried and the configuration alone can neither confirm nor deny it.
+  segcheck says so rather than reporting it. Unparseable strings are OK-level "not
+  verifiable".
+  <!-- sc: prio=high size=M labels=check ver=0.8.0 -->
 - [ ] **SC-84 — Loudness metadata**: `dialnorm` in the AC-3/E-AC-3 bitstream and
   the `ludt`/`loud` box where it is present, reported per rendition and compared
   across the ladder. A ladder whose rungs disagree on dialnorm steps in volume
