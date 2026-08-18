@@ -26,6 +26,12 @@ const (
 	Video StreamKind = "video"
 	Audio StreamKind = "audio"
 	Text  StreamKind = "text"
+	// IFrame is a trick-play rung: EXT-X-I-FRAME-STREAM-INF, whose entries are
+	// byte ranges holding one keyframe each rather than segments of media. It is
+	// a kind of its own precisely so nothing that reads a segment as an extent
+	// ever sees one — a single picture where a check expects two seconds of
+	// media reports as a hole in every timeline check there is.
+	IFrame StreamKind = "iframe"
 )
 
 // Rendition is one selectable version of the content: an HLS variant or

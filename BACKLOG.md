@@ -529,11 +529,17 @@ manifest-only reader would call fine.
   the inference reported bipbop as non-conformant — `media.Track.KeyframeStated`
   separates them now.
   <!-- sc: prio=high size=L labels=check ver=0.5.0 -->
-- [ ] **SC-60 — I-frame playlists**: `EXT-X-I-FRAME-STREAM-INF` declares byte
-  ranges that must resolve to keyframes and to nothing else, and the I-frame
-  rung must span the same timeline as the video it belongs to. A trick-play
-  track whose ranges land on non-keyframes is the scrub that shows a grey frame,
-  and no manifest reader can see it. <!-- sc: prio=high size=M labels=check,parser -->
+- [x] **SC-60 — I-frame playlists**: the `iframe` check fetches the ranges
+  `EXT-X-I-FRAME-STREAM-INF` declares and reads them — each must resolve to a
+  keyframe and to nothing else, and the rung must sit on the video's own timeline.
+  The rung is a `StreamKind` of its own and never enters `rends`: one picture where
+  a check expects two seconds of media is a hole in the timeline, a duration
+  mismatch and a bitrate ten times the declared, which is the subtitle trap again.
+  Real streams forced two fixes: `EXT-X-MAP` byte ranges were ignored for the rung,
+  and fMP4 trick-play fragments state nothing about sync at all, so the keyframe is
+  read out of the length-prefixed samples instead — an inference, marked as one. An
+  MPEG-TS range carries no PAT or PMT and stays honestly unverified.
+  <!-- sc: prio=high size=M labels=check,parser ver=0.5.0 -->
 - [ ] **SC-62 — DASH-IF IOP, the measurable subset**: `@codecs` against the
   sample entry the segments actually carry, timescales consistent across the
   representations of one adaptation set, `@segmentAlignment="true"` that is

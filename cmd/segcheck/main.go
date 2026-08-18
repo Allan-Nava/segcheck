@@ -34,6 +34,7 @@ Sampling:
   --renditions N      video renditions to inspect, 0 = all (default 0)
   --audio N           audio renditions to inspect (default 1)
   --subtitles N       subtitle renditions to inspect (default 1)
+  --iframes N         EXT-X-I-FRAME-STREAM-INF trick-play rungs to inspect (default 1)
   --from MODE         where to sample: auto|edge|start (default auto: edge for live, start for VOD)
   --parts N           sampled segments whose EXT-X-PART parts are also fetched
                       and compared with the segment they make up (default 1,
@@ -157,6 +158,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	fs.IntVar(&opts.MaxRenditions, "renditions", opts.MaxRenditions, "")
 	fs.IntVar(&opts.MaxAudio, "audio", opts.MaxAudio, "")
 	fs.IntVar(&opts.MaxText, "subtitles", opts.MaxText, "")
+	fs.IntVar(&opts.MaxIFrame, "iframes", opts.MaxIFrame, "")
 	fs.StringVar(&opts.From, "from", opts.From, "")
 	fs.IntVar(&opts.PartSegments, "parts", opts.PartSegments, "")
 	fs.StringVar(&opts.Profile, "profile", opts.Profile, "")

@@ -64,6 +64,10 @@ type Options struct {
 	// 29.97 where the media runs at 30000/1001, and those are the same rate
 	// spelled two ways.
 	FrameRateTolerancePct float64
+	// MaxIFrame caps how many EXT-X-I-FRAME-STREAM-INF trick-play rungs are
+	// inspected. They are cheap — one picture per entry — but a ladder can carry
+	// one per resolution.
+	MaxIFrame int
 	// Profile selects a conformance rule set: ProfileNone (the default),
 	// ProfileApple or ProfileDASHIF. It is opt-in because a conformance rule with
 	// no way to turn it off turns a run that was clean yesterday into a wall of
@@ -104,6 +108,7 @@ func Defaults() Options {
 		GapToleranceMS:        100,
 		BitrateTolerancePct:   10,
 		FrameRateTolerancePct: 2,
+		MaxIFrame:             1,
 		PartSegments:          1,
 		Profile:               ProfileNone,
 		StallTolerance:        3,
@@ -227,6 +232,11 @@ func Run(ctx context.Context, c *fetch.Client, rawurl string, opts Options) find
 	// than in the manifest package.
 	resolveSegmentBase(ctx, c, rends, opts)
 
+	// Trick-play rungs are sampled apart from everything else and never enter
+	// rends: their entries are single pictures, and every check that reads a
+	// segment as an extent of media would be wrong about one.
+	iframes := sampleIFrames(ctx, c, *pl, opts)
+
 	// One small request per run: the segment the MPD says does not exist yet. It
 	// is the only way to see a packager that is *ahead* of its own availability
 	// window, which costs every player latency without ever raising an error.
@@ -265,6 +275,7 @@ func Run(ctx context.Context, c *fetch.Client, rawurl string, opts Options) find
 	res.Findings = append(res.Findings, checkDVR(dvr)...)
 	res.Findings = append(res.Findings, checkPDT(rends, opts)...)
 	res.Findings = append(res.Findings, checkParts(rends, opts)...)
+	res.Findings = append(res.Findings, checkIFrame(iframes, rends, opts)...)
 	res.Findings = append(res.Findings, checkLadder(*pl)...)
 	res.Findings = append(res.Findings, checkProfile(*pl, rends, opts)...)
 
@@ -370,13 +381,16 @@ func selectRenditions(ctx context.Context, c *fetch.Client, pl manifest.Playlist
 	sel := chooseRenditions(pl, opts)
 	video, audio, text := sel.video, sel.audio, sel.text
 	chosen := sel.all()
+	// Trick-play rungs are sampled separately, but they are renditions in the
+	// manifest and the count has to add up or the line reads as a silent drop.
+	iframes := len(chooseIFrames(pl, opts))
 
-	if skipped := len(pl.Renditions) - len(chosen); skipped > 0 {
+	if skipped := len(pl.Renditions) - len(chosen) - iframes; skipped > 0 {
 		findings = append(findings, finding.Finding{
 			Check: "manifest", Target: shortTarget(pl.URL), Status: finding.OK,
-			Message: fmt.Sprintf("sampling %d of %d renditions (%d video, %d audio, %d subtitle)",
-				len(chosen), len(pl.Renditions), len(video), len(audio), len(text)),
-			Hint: "raise --renditions / --audio / --subtitles to cover the rest",
+			Message: fmt.Sprintf("sampling %d of %d renditions (%d video, %d audio, %d subtitle, %d trick-play)",
+				len(chosen)+iframes, len(pl.Renditions), len(video), len(audio), len(text), iframes),
+			Hint: "raise --renditions / --audio / --subtitles / --iframes to cover the rest",
 		})
 	}
 
@@ -565,17 +579,28 @@ type initRef struct {
 // initFor returns the initialisation segment a sampled segment needs, falling
 // back to the rendition's own (DASH states it once per representation).
 func initFor(rd *renditionData, sd segmentData) initRef {
-	uri, rangeHeader := sd.seg.InitURI, ""
-	if sd.seg.InitRange != nil {
-		rangeHeader = sd.seg.InitRange.Header()
+	if ref := segInitRef(sd.seg); !ref.empty {
+		return ref
 	}
-	if uri == "" {
-		uri, rangeHeader = rd.r.InitURI, ""
-	}
-	if uri == "" {
+	if rd.r.InitURI == "" {
 		return initRef{empty: true}
 	}
-	return initRef{uri: uri, rng: rangeHeader}
+	return initRef{uri: rd.r.InitURI}
+}
+
+// segInitRef is the initialisation segment a single segment names, byte range
+// and all. The range is not optional: Apple's own streams put the init in the
+// first few hundred bytes of the same file that holds every segment, so
+// ignoring it downloads the whole asset and then fails to parse it as an init.
+func segInitRef(seg manifest.Segment) initRef {
+	if seg.InitURI == "" {
+		return initRef{empty: true}
+	}
+	ref := initRef{uri: seg.InitURI}
+	if seg.InitRange != nil {
+		ref.rng = seg.InitRange.Header()
+	}
+	return ref
 }
 
 // sampleAll downloads and parses every sampled segment, bounded by

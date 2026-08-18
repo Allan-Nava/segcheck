@@ -19,6 +19,29 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   a stall rather than jitter. Watching a VOD playlist is not a defect and is reported as
   an OK finding saying there is no live edge, not as a problem in the stream. Only
   manifests are re-fetched: the segments are downloaded once, at the start.
+- **Trick-play rungs are checked** (SC-60). `EXT-X-I-FRAME-STREAM-INF` is parsed — its URI
+  is an attribute, not the line that follows — into a rendition kind of its own, and the
+  new `iframe` check fetches the ranges it declares and reads them. Each must resolve to a
+  keyframe and to nothing else, and the rung must sit on the same timeline as the video it
+  belongs to; a rung that is internally perfect and half a minute adrift sends every scrub
+  to the wrong moment. The offsets are arithmetic a packager did and the playlist reads
+  perfectly either way, so nothing but the media can settle it — and the symptom, a grey
+  frame in the scrub preview, is reported as a player bug.
+  The rung is kept out of `rends` entirely rather than filtered out of each check in turn:
+  one picture where two seconds of media are expected is a hole in the timeline, a duration
+  mismatch and a bitrate ten times the declared, which is the same trap subtitle renditions
+  sprang. `--iframes N` caps how many are inspected.
+- **fMP4 keyframes are read from the samples when the container says nothing.** Real
+  trick-play fragments state nothing about sync: Apple's carry a `trun` with only a data
+  offset, a `tfhd` with only a duration and a size, and a `trex` of zeroes — and a zeroed
+  `trex` is the unset default, not an assertion that every sample is a sync sample. The
+  samples are the evidence, and they are length-prefixed NAL units where an elementary
+  stream uses start codes. Walking them is an inference, marked as one, exactly as it is
+  in MPEG-TS.
+- **`EXT-X-MAP` byte ranges are honoured for trick-play rungs.** They were not, so the
+  init fetch pulled the whole asset and then failed to parse it — the trap the repository
+  already documents for segments, sprung again in new code, and caught by pointing the
+  binary at Apple's advanced example.
 - **`--profile apple` runs the measurable subset of Apple's HLS Authoring Specification**
   (SC-59): peak segment bit rate within 200% of the average, segment durations consistent
   within a rendition and across the ladder, an IDR at every segment start, average bit rate

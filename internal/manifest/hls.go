@@ -88,6 +88,25 @@ func ParseHLS(body []byte, baseURL string) (Playlist, error) {
 			pl.Master = true
 			pendingStream = parseAttrs(strings.TrimPrefix(line, "#EXT-X-STREAM-INF:"))
 
+		case strings.HasPrefix(line, "#EXT-X-I-FRAME-STREAM-INF:"):
+			// Unlike EXT-X-STREAM-INF this tag carries its URI as an attribute, so
+			// there is no following line to wait for and the rendition is complete
+			// here.
+			pl.Master = true
+			attrs := parseAttrs(strings.TrimPrefix(line, "#EXT-X-I-FRAME-STREAM-INF:"))
+			if uri := attrs["URI"]; uri != "" {
+				w, h := attrResolution(attrs)
+				pl.Renditions = append(pl.Renditions, Rendition{
+					Name:      renditionName(attrs, w, h),
+					URI:       Resolve(base, uri),
+					Kind:      IFrame,
+					Bandwidth: attrInt(attrs, "BANDWIDTH"),
+					Width:     w,
+					Height:    h,
+					Codecs:    attrs["CODECS"],
+				})
+			}
+
 		case strings.HasPrefix(line, "#EXT-X-MEDIA:"):
 			pl.Master = true
 			attrs := parseAttrs(strings.TrimPrefix(line, "#EXT-X-MEDIA:"))

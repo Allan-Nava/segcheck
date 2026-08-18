@@ -115,6 +115,75 @@ func hevcKeyframes(es []byte) keyframeVerdict {
 	return v
 }
 
+// lengthPrefixedKeyframes is the same question over an fMP4 fragment's samples,
+// which carry length-prefixed NAL units where an elementary stream uses start
+// codes.
+//
+// It exists because real content states nothing: Apple's own trick-play
+// fragments carry a trun with only a data offset, a tfhd with only a duration
+// and a size, and a trex of zeroes — and a zeroed trex is the unset default,
+// not an assertion that every sample is a sync sample. Reading it as one would
+// call every such fragment a keyframe on no evidence. The samples are the
+// evidence, and walking them is an inference, exactly as it is in MPEG-TS.
+func lengthPrefixedKeyframes(samples []byte, lengthSize int, hevc bool) keyframeVerdict {
+	if lengthSize < 1 || lengthSize > 4 {
+		return keyframeVerdict{}
+	}
+	v := keyframeVerdict{Scanned: true}
+	units := 0
+	for pos := 0; pos+lengthSize <= len(samples) && units < keyframeScanNALUs; units++ {
+		n := 0
+		for i := 0; i < lengthSize; i++ {
+			n = n<<8 | int(samples[pos+i])
+		}
+		pos += lengthSize
+		if n <= 0 || pos+n > len(samples) {
+			// A length that runs past the buffer means the offsets are not what
+			// this reader thinks they are; stopping is honest, guessing is not.
+			v.Scanned = false
+			break
+		}
+		nal := samples[pos : pos+n]
+		pos += n
+
+		if hevc {
+			if len(nal) < 2 {
+				continue
+			}
+			t := int(nal[0]>>1) & 0x3F
+			if t < nalHEVCFirstVCL || t > nalHEVCLastVCL {
+				continue
+			}
+			irap := t >= nalHEVCFirstIRAP && t <= nalHEVCLastIRAP
+			if !v.Known {
+				v.Opens, v.Known = irap, true
+			}
+			if irap {
+				v.Present = true
+				return v
+			}
+			continue
+		}
+
+		switch nal[0] & 0x1F {
+		case nalH264IDR:
+			v.Present = true
+			if !v.Known {
+				v.Opens, v.Known = true, true
+			}
+			return v
+		case nalH264NonIDR, 2, 3, 4:
+			if !v.Known {
+				v.Opens, v.Known = false, true
+			}
+		}
+	}
+	if units >= keyframeScanNALUs {
+		v.Scanned = false
+	}
+	return v
+}
+
 // sampleIsNonSync reads sample_is_non_sync_sample out of an ISO-BMFF sample_flags
 // word. It is a single bit fifteen places down from the most significant, which is
 // easy to place wrongly: sample_depends_on sits at bits 6 and 7 and reads 2 for a

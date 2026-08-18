@@ -159,6 +159,7 @@ environment.
 | `alignment` | Segment boundaries across renditions, so ABR switching does not glitch | BAD |
 | `encryption` | Declared protection against what the segments carry, whether a supplied key actually decrypts them, and — for SAMPLE-AES and CENC, which protect the samples and not the container — which half of the tool could run at all | BAD |
 | `ladder` | Duplicate rungs, inverted rungs, dangling `AUDIO` groups, missing `CODECS` | BAD |
+| `iframe` | `EXT-X-I-FRAME-STREAM-INF` trick-play ranges fetched and read: each must resolve to a keyframe and to nothing else, and the rung must sit on the same timeline as the video it belongs to | BAD |
 | `profile` | With `--profile apple`, the measurable subset of Apple's HLS Authoring Specification: peak-to-average bit rate, consistent segment durations, an IDR at every segment start, average bit rate against the tier the resolution implies, and a frame rate constant within a rung and shared across the ladder. Every finding names its rule and puts the measured value beside the limit | WARN |
 | `dvr` | The oldest segment the DVR window still promises — DASH `timeShiftBufferDepth`, or an HLS playlist's own span — is fetched and parsed. It is the only promise nobody collects on purpose | BAD |
 | `availability` | A dynamic MPD's live edge is computed, not listed: the `UTCTiming` source it names is honoured, the skew against this machine's clock is reported, and the computed edge is probed against what the origin actually has in both directions | BAD |
@@ -167,6 +168,8 @@ environment.
 | `watch` | With `--watch`, whether the live edge actually advances: new-segment latency, a stall, and a packager that stopped publishing | BAD |
 
 A dynamic MPD is checked against its own clock, not this machine's. `availabilityStartTime` makes the live edge a computed claim rather than a listed one, so segcheck resolves the `UTCTiming` source the MPD names — `http-head`, `http-iso`, `http-xsdate` and `direct` — re-expands the segment list against that answer, and reports the skew. Without it a laptop thirty seconds fast asks for segments the packager has not published and reports the resulting 404s as a broken origin. NTP sources are named and skipped rather than silently ignored.
+
+A trick-play rung is checked as media rather than skipped. `EXT-X-I-FRAME-STREAM-INF` declares byte ranges the packager computed, and nothing in the manifest says whether they landed on keyframes; when they did not, the scrub preview shows a grey frame and it gets reported as a player bug. The rung is deliberately kept out of every other check — one picture where two seconds of media are expected is a hole in the timeline, a duration mismatch and a bitrate ten times the declared, which is the same trap subtitle renditions sprang.
 
 Low-latency HLS is read as well as delivered: `EXT-X-PART-INF`, `EXT-X-SERVER-CONTROL`, `EXT-X-PART` and `EXT-X-PRELOAD-HINT`. The parts of a segment are fetched and compared with the segment itself, because a packager muxes the two separately and they can disagree — and when they do, a viewer on the low-latency path gets different media from one fetching whole segments. The preload hint is parsed and never fetched: it is designed to block until the media exists, and a checker that blocked on one would hang instead of reporting.
 

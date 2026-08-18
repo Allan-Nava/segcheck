@@ -146,6 +146,16 @@ func ParseMP4(data, init []byte) (SegmentInfo, error) {
 			// The container said so, rather than a bitstream walk having worked it
 			// out, and a conformance rule may act on the difference.
 			t.KeyframeStated = true
+		} else if t.Kind == Video && !t.SamplesEncrypted && len(mdat) > 0 {
+			// The fragment states nothing, which is what real trick-play content
+			// does. The samples answer it anyway, as an inference.
+			size := 4
+			if it, ok := inits[id]; ok && it.nalLengthSize > 0 {
+				size = it.nalLengthSize
+			}
+			kf := lengthPrefixedKeyframes(mdat, size, t.Codec == "hevc")
+			t.OpensOnKeyframe, t.HasKeyframe = kf.Opens, kf.Present
+			t.KeyframeKnown, t.KeyframeScanned = kf.Known, kf.Scanned
 		}
 		if f.samples > 0 && f.sumDuration > 0 {
 			t.FrameDur = f.sumDuration / int64(f.samples)
