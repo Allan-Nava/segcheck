@@ -260,6 +260,7 @@ func Run(ctx context.Context, c *fetch.Client, rawurl string, opts Options) find
 	}
 
 	res.Findings = append(res.Findings, checkFetch(rends)...)
+	res.Findings = append(res.Findings, checkCache(rends)...)
 	res.Findings = append(res.Findings, checkInit(rends)...)
 	res.Findings = append(res.Findings, checkContainer(rends)...)
 	res.Findings = append(res.Findings, checkContinuity(rends, opts)...)

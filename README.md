@@ -162,6 +162,7 @@ environment.
 | `tracks` | Expected video/audio present, codecs match `CODECS`, track layout stable across segments | BAD |
 | `alignment` | Segment boundaries across renditions, so ABR switching does not glitch | BAD |
 | `encryption` | Declared protection against what the segments carry, whether a supplied key actually decrypts them, and — for SAMPLE-AES and CENC, which protect the samples and not the container — which half of the tool could run at all | BAD |
+| `cache` | Whether the CDN is actually caching: `X-Cache`, `CF-Cache-Status`, `Age` and their vendor spellings per segment, a live edge served entirely from the origin, and segments the origin tells caches not to store | BAD |
 | `ladder` | Duplicate rungs, inverted rungs, dangling `AUDIO` groups, missing `CODECS` | BAD |
 | `codecstring` | The whole `CODECS` string, not just its first component: video profile, level and tier against `avcC`/`hvcC`/`av1C`/`vpcC` or the parameter set, and the audio object type against the `esds` configuration — reported in both directions, because declaring below the media hides a rung and declaring above it hides viewers | BAD |
 | `videorange` | `VIDEO-RANGE=SDR\|HLG\|PQ` and DASH's CICP transfer descriptor against the transfer characteristic the media really codes — the difference between an HDR delivery and one the audience sees two different ways | BAD |

@@ -9,6 +9,20 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **Cache behaviour** (SC-23). A CDN that is not caching a live edge is an origin serving
+  every viewer directly, and nothing in the media shows it: every segment arrives, parses
+  and lines up perfectly. It surfaces as origin load during a peak, which is the worst
+  moment to start diagnosing it. The new `cache` check reads the response headers —
+  `X-Cache`, `CF-Cache-Status`, `Akamai-Cache-Status`, `X-Cache-Hits`, `Age` — because
+  every vendor spells this differently and a checker that knew one vocabulary would call a
+  warm Akamai or Fastly edge cold. A multi-tier value like `MISS, HIT` is a hit: that is
+  the tier the viewer reached.
+  Two findings carry weight. Every sampled segment a miss on a *live* stream is a BAD; on
+  demand the same shape is usually cold content nobody has asked for, so it is a WARN. And
+  a segment whose `Cache-Control` says `no-store`, `no-cache` or `private` is a BAD
+  whatever the CDN is configured to do — every viewer reaches the origin. `max-age=0` is
+  deliberately not one of them: it is what live playlists use. An origin that states no
+  cache status at all is reported as unreadable rather than as a miss.
 - **`--watch DUR` observes the live edge** (SC-25). A packager that stopped publishing an
   hour ago serves a flawless playlist: every segment downloads, parses and lines up, and a
   single-shot check has nothing to compare it against. `--watch` re-reads the manifest for

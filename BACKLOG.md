@@ -396,10 +396,16 @@ stream the way a viewer receives it".
   the presentation-time offset resets and an encoder change lands. Today each
   period is checked as if the others did not exist.
   <!-- sc: prio=med size=L labels=check,parser -->
-- [ ] **SC-23 — Cache behaviour**: report `X-Cache`/`Age`/`CF-Cache-Status` per
-  segment and flag segments served `MISS` that should be warm; a live edge that
-  is always MISS is a real origin-load problem.
-  <!-- sc: prio=med size=M labels=delivery,check -->
+- [x] **SC-23 — Cache behaviour**: the `cache` check reads `X-Cache`,
+  `CF-Cache-Status`, `Akamai-Cache-Status`, `X-Cache-Hits` and `Age` — every vendor
+  spells it differently, and one vocabulary would call a warm edge cold — and reports
+  a live edge served entirely from the origin as a BAD, the same shape on demand as a
+  WARN, and any segment whose `Cache-Control` says `no-store`, `no-cache` or `private`
+  as a BAD whatever the CDN does. `max-age=0` is not one of those: it is what live
+  playlists use. An origin stating no cache status is reported as unreadable, not as a
+  miss. Verified against Apple's CDN (hits with ages), Akamai's DASH vectors and a
+  Unified Streaming origin (both silent).
+  <!-- sc: prio=med size=M labels=delivery,check ver=0.4.0 -->
 - [ ] **SC-24 — Multi-POP comparison**: run the same check through several
   resolvers or `--header Host:` overrides and report renditions that differ
   between POPs. <!-- sc: prio=med size=L labels=delivery,cli -->
