@@ -59,7 +59,10 @@ A frozen packager serves a flawless playlist: every segment downloads, parses
 and lines up, and only a second look a TARGETDURATION later tells it from a
 healthy stream. --watch re-reads at the interval the manifest itself implies —
 TARGETDURATION in HLS, minimumUpdatePeriod in DASH — and costs one request per
-selected rendition per poll, so --renditions bounds what it costs.
+selected rendition per poll, so --renditions bounds what it costs. It reports
+three shapes of a packager losing its clock: a stall, an edge that advances at
+every poll and still loses ground against real time, and an edge that moves
+backwards onto media a viewer has already played.
 
 Low-latency HLS describes the same media twice — as segments and, more finely,
 as the parts published before each segment exists — and a packager muxes the two

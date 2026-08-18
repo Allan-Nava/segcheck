@@ -42,6 +42,14 @@ type edgeState struct {
 	span   float64 // their total declared duration, in seconds
 	target float64 // the re-read interval the manifest implies, 0 when it states none
 	err    error   // this rendition's playlist could not be re-read
+	// uris and durs are the whole window, in order. They are what makes the
+	// distance between two polls measurable rather than merely visible: finding
+	// the previous poll's newest segment in this one and summing what follows it
+	// is how much media the packager published in between, and comparing that
+	// with the wall clock is the only thing that shows an edge advancing every
+	// time it is looked at and still losing ground.
+	uris []string
+	durs []float64
 }
 
 // observation is one poll of the whole manifest.
@@ -140,6 +148,8 @@ func edgeOf(name string, target float64, segs []manifest.Segment) edgeState {
 	e := edgeState{name: name, target: target, count: len(segs)}
 	for _, s := range segs {
 		e.span += s.Duration
+		e.uris = append(e.uris, s.URI)
+		e.durs = append(e.durs, s.Duration)
 	}
 	if len(segs) > 0 {
 		e.newest = segs[len(segs)-1].URI
@@ -191,6 +201,8 @@ type edgePoint struct {
 	newest string
 	target float64
 	err    error
+	uris   []string
+	durs   []float64
 }
 
 // watchFindings turns the series of observations into findings, one rendition
@@ -232,7 +244,9 @@ func watchFindings(rawurl string, series []observation, interval time.Duration, 
 			if _, seen := byRendition[e.name]; !seen {
 				order = append(order, e.name)
 			}
-			byRendition[e.name] = append(byRendition[e.name], edgePoint{at: o.at, newest: e.newest, target: e.target, err: e.err})
+			byRendition[e.name] = append(byRendition[e.name], edgePoint{
+				at: o.at, newest: e.newest, target: e.target, err: e.err, uris: e.uris, durs: e.durs,
+			})
 		}
 	}
 	if len(order) == 0 {
@@ -344,6 +358,8 @@ func edgeFindings(name string, points []edgePoint, interval time.Duration, state
 		gap = d
 	}
 
+	out = append(out, edgeRateFindings(name, good, window)...)
+
 	if target <= 0 {
 		return append(out, finding.Finding{
 			Check: "watch", Target: name, Status: finding.OK,
@@ -394,4 +410,126 @@ func waitFor(ctx context.Context, d time.Duration) error {
 	case <-t.C:
 		return nil
 	}
+}
+
+// A live edge must advance at 1x real time. That is not the same claim as "it
+// advanced", which is all a stall check can settle: a packager publishing two
+// seconds of media every three seconds moves at every single poll and still
+// loses a second of ground per three, so the live latency grows without bound
+// until the viewer's buffer is gone and they rebuffer at a moment nothing in the
+// stream explains. Only the ratio over the whole window shows it.
+//
+// The other shape is the edge going backwards, which the advance count reads as
+// health — the newest segment changed, which is exactly what a working edge
+// does. It is a packager that restarted, or a CDN that began answering from a
+// POP holding an older playlist, and a viewer at the edge has the timeline
+// pulled out from under them.
+
+// edgeRateSlack is how much of the wall clock the ratio may be out by before it
+// is worth reporting, on top of a whole segment of granularity. Media is
+// published one segment at a time, so a perfectly healthy edge measures a little
+// under or over depending on where the polls fall; 20% plus a segment is outside
+// that and inside any real drift.
+const edgeRateSlack = 0.2
+
+func edgeRateFindings(name string, good []edgePoint, window time.Duration) []finding.Finding {
+	var out []finding.Finding
+
+	published, segDur, measured := 0.0, 0.0, false
+	for i := 1; i < len(good); i++ {
+		prev, cur := good[i-1], good[i]
+		if back, from, to := movedBackwards(prev, cur); back {
+			out = append(out, finding.Finding{
+				Check: "watch", Target: name, Status: finding.BAD,
+				Message: fmt.Sprintf("live edge moved backwards: the newest segment went from %s to %s, which a viewer at the edge has already played",
+					shortTarget(from), shortTarget(to)),
+				Hint: "the packager restarted, or this request reached a POP holding an older playlist; the timeline is pulled out from under anyone watching live",
+			})
+			return out
+		}
+		d, ok := mediaPublished(prev, cur)
+		if !ok {
+			// The window slid past everything the previous poll held, so how much
+			// media went by is not knowable from these two. Saying nothing beats
+			// guessing at it.
+			continue
+		}
+		published += d
+		measured = true
+		for _, x := range cur.durs {
+			if x > segDur {
+				segDur = x
+			}
+		}
+	}
+	// Under a few segments of window the ratio is mostly granularity.
+	if !measured || segDur <= 0 || window.Seconds() < 4*segDur {
+		return out
+	}
+
+	elapsed := window.Seconds()
+	slack := segDur + edgeRateSlack*elapsed
+	switch {
+	case elapsed-published > slack:
+		out = append(out, finding.Finding{
+			Check: "watch", Target: name, Status: finding.BAD,
+			Message: fmt.Sprintf("live edge is falling behind real time: %.1fs of media published in %.1fs of wall clock (%.2fx)",
+				published, elapsed, published/elapsed),
+			Value: finding.Num(elapsed - published), Unit: "s",
+			Hint: "the edge advances every time it is looked at and still loses ground, so the live latency grows until the viewer's buffer is gone — which they see as a rebuffer nothing in the stream explains",
+		})
+	case published-elapsed > slack:
+		out = append(out, finding.Finding{
+			Check: "watch", Target: name, Status: finding.WARN,
+			Message: fmt.Sprintf("live edge is running ahead of real time: %.1fs of media published in %.1fs of wall clock (%.2fx)",
+				published, elapsed, published/elapsed),
+			Value: finding.Num(published - elapsed), Unit: "s",
+			Hint: "a packager catching up after a stall looks like this and is recovering; so does one whose clock is fast, and that one keeps going",
+		})
+	}
+	return out
+}
+
+// mediaPublished is how much media appeared between two polls: the durations of
+// the segments after the one that was newest last time. The second return is
+// false when the previous poll's edge has already fallen out of the window,
+// which is a measurement that was missed rather than one that came out zero.
+func mediaPublished(prev, cur edgePoint) (float64, bool) {
+	if prev.newest == "" {
+		return 0, false
+	}
+	for i, u := range cur.uris {
+		if u != prev.newest {
+			continue
+		}
+		total := 0.0
+		for _, d := range cur.durs[i+1:] {
+			total += d
+		}
+		return total, true
+	}
+	return 0, false
+}
+
+// movedBackwards says whether this poll's edge sits before the last one's. It
+// asks the question in the previous window, where both segments are known to
+// have existed: a newest segment that used to be in the middle of the window is
+// an edge that has gone back to media a viewer already played.
+func movedBackwards(prev, cur edgePoint) (bool, string, string) {
+	if cur.newest == "" || cur.newest == prev.newest {
+		return false, "", ""
+	}
+	at, was := -1, -1
+	for i, u := range prev.uris {
+		if u == cur.newest {
+			at = i
+		}
+		if u == prev.newest {
+			was = i
+		}
+	}
+	if at < 0 || was < 0 || at >= was {
+		return false, "", ""
+	}
+	return true, prev.newest, cur.newest
 }

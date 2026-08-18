@@ -493,11 +493,19 @@ wrong place, an ad splices two frames late, or a scrub back into the DVR window
   `@presentationTimeOffset`, and that is where it is checked. Shipped without a
   real-stream pass; see SC-103.
   <!-- sc: prio=med size=M labels=check ver=0.4.0 -->
-- [ ] **SC-55 — Live-edge drift**: over a `--watch` window (SC-25) the edge must
-  advance at 1× real time. Report an edge that drifts against the wallclock,
-  stalls, or moves backwards — the three shapes of a packager losing its clock,
-  none of which a single-shot check can see.
-  <!-- sc: prio=med size=M labels=check,cli -->
+- [x] **SC-55 — Live-edge drift**: `--watch` now measures the media published against
+  the wall clock over the whole window, not only whether the edge moved. A packager
+  publishing two seconds every three advances at every single poll and still loses a
+  second of ground per three, so the live latency grows without bound until the
+  viewer's buffer is gone — a rebuffer nothing in the stream explains, and a shape no
+  pair of polls can show. Falling behind is a BAD, running ahead a WARN, because a
+  packager catching up after a stall looks the same as one whose clock is fast and only
+  the second keeps going. An edge that moves backwards is the third shape and the one a
+  stall check reads as health — the newest segment changed, which is what a working edge
+  does — and it is a packager that restarted or a POP answering with an older playlist.
+  Verified against Unified Streaming's and DASH-IF livesim2's live edges, both of which
+  measure 1x and stay quiet.
+  <!-- sc: prio=med size=M labels=check,cli ver=0.4.0 -->
 
 ## M6 — Integration <!-- ms: target=v0.5.0 phase=later -->
 

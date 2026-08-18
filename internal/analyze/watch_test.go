@@ -56,6 +56,15 @@ func (o *liveOrigin) publish() {
 	o.published++
 }
 
+// rewind takes segments back off the edge, which is what an operator sees when
+// a packager restarts or a CDN starts answering from a POP holding an older
+// playlist: the newest segment is one a viewer has already played.
+func (o *liveOrigin) rewind(n int) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.published -= n
+}
+
 func (o *liveOrigin) handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/master.m3u8", func(w http.ResponseWriter, _ *http.Request) {
@@ -330,4 +339,79 @@ func newLiveDASHOrigin(t *testing.T, published int) (*liveOrigin, string) {
 		_, _ = w.Write(mediatest.MP4Segment(1, uint32(n), int64(n)*dashSegTicks, dashSampleDur, dashSamples, dashPayload))
 	})
 	return o, srv.URL + "/live.mpd"
+}
+
+// A packager that publishes but publishes slowly never trips the stall check:
+// no single gap is long, and the edge advances every time it is looked at. What
+// grows instead is the distance between the edge and now — the live latency —
+// and it grows without bound until the viewer's buffer runs out. Only the ratio
+// of media published to wall clock elapsed shows it, which needs the whole
+// window rather than any pair of polls.
+func TestWatch_ReportsAnEdgeFallingBehindRealTime(t *testing.T) {
+	o, url := newLiveOrigin(t, 5, 5)
+
+	// One 2s segment every second poll: two seconds of media per four seconds of
+	// wall clock, and the edge loses half a second of latency per second.
+	res := watchOn(t, url, 40*time.Second, func(poll int) {
+		if poll%2 == 0 {
+			o.publish()
+		}
+	})
+
+	f, ok := findFinding(res, "watch", finding.BAD)
+	if !ok {
+		t.Fatalf("an edge publishing at half real time was not reported:\n%s", dump(res))
+	}
+	if !strings.Contains(f.Message, "behind") {
+		t.Errorf("the finding does not say the edge is losing ground: %q", f.Message)
+	}
+}
+
+// The edge going backwards is a different incident from the edge standing
+// still, and the stall check cannot see it: the newest segment changed at every
+// poll, which is exactly what a healthy edge does. A viewer sitting at the edge
+// has the timeline pulled out from under them.
+func TestWatch_ReportsAnEdgeThatMovesBackwards(t *testing.T) {
+	o, url := newLiveOrigin(t, 12, 6)
+
+	res := watchOn(t, url, 20*time.Second, func(poll int) {
+		if poll == 3 {
+			o.rewind(3)
+			return
+		}
+		o.publish()
+	})
+
+	var said bool
+	for _, f := range res.Findings {
+		if f.Check == "watch" && f.Status == finding.BAD && strings.Contains(f.Message, "backwards") {
+			said = true
+		}
+	}
+	if !said {
+		t.Errorf("an edge that moved backwards was not reported:\n%s", dump(res))
+	}
+}
+
+// A packager that catches up after a stall publishes faster than real time for
+// a while, and that is recovery rather than a defect — but it is worth saying,
+// because the other thing that produces it is a clock running fast.
+func TestWatch_AnEdgeRunningAheadIsAWarningRatherThanADefect(t *testing.T) {
+	o, url := newLiveOrigin(t, 5, 12)
+
+	res := watchOn(t, url, 20*time.Second, func(int) {
+		o.publish()
+		o.publish()
+	})
+
+	f, ok := findFinding(res, "watch", finding.WARN)
+	if !ok {
+		t.Fatalf("an edge publishing at twice real time said nothing:\n%s", dump(res))
+	}
+	if !strings.Contains(f.Message, "ahead") {
+		t.Errorf("the finding does not say which way: %q", f.Message)
+	}
+	if _, bad := findFinding(res, "watch", finding.BAD); bad {
+		t.Errorf("catching up was reported as a defect:\n%s", dump(res))
+	}
 }

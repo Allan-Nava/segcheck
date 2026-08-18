@@ -9,6 +9,24 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **`--watch` measures the live edge against real time** (SC-55). A live edge has to
+  advance at 1x, which is not the same claim as "it advanced" — all a stall check can
+  settle. A packager publishing two seconds of media every three moves at every single
+  poll and still loses a second of ground per three, so the live latency grows without
+  bound until the viewer's buffer is gone and they rebuffer at a moment nothing in the
+  stream explains. The media published between polls is now measured — the previous poll's
+  newest segment is found in this one and what follows it is summed — and compared with
+  the wall clock over the whole window, since no pair of polls can show it. Falling behind
+  is a BAD and running ahead a WARN, because a packager catching up after a stall looks
+  exactly like one whose clock is fast and only the second keeps going. A whole segment of
+  granularity plus 20% of the window is allowed before either fires, and windows shorter
+  than four segments are not judged at all.
+  An edge that moves *backwards* is the third shape, and the one a stall check reads as
+  health: the newest segment changed, which is what a working edge does. It is a packager
+  that restarted or a request that reached a POP holding an older playlist, and a viewer
+  at the edge has the timeline pulled out from under them. Verified against Unified
+  Streaming's and DASH-IF livesim2's live edges over 30s windows — both measure 1x and
+  stay quiet.
 - **`EXT-X-DISCONTINUITY` is checked against the reset it promises** (SC-54). The tag is
   an instruction, not a description: it tells the player to throw its decoder away and
   start again. `continuity` read it as a licence — a timeline jump here is expected rather
