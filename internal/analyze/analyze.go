@@ -64,6 +64,11 @@ type Options struct {
 	// 29.97 where the media runs at 30000/1001, and those are the same rate
 	// spelled two ways.
 	FrameRateTolerancePct float64
+	// Profile selects a conformance rule set: ProfileNone (the default),
+	// ProfileApple or ProfileDASHIF. It is opt-in because a conformance rule with
+	// no way to turn it off turns a run that was clean yesterday into a wall of
+	// findings today, on a stream nobody changed.
+	Profile string
 	// PartSegments is how many of the sampled segments have their EXT-X-PART
 	// parts fetched and compared with the segment they make up. The cap is on
 	// segments rather than parts because half a segment's parts cannot answer
@@ -100,6 +105,7 @@ func Defaults() Options {
 		BitrateTolerancePct:   10,
 		FrameRateTolerancePct: 2,
 		PartSegments:          1,
+		Profile:               ProfileNone,
 		StallTolerance:        3,
 		Now:                   time.Now,
 		Sleep:                 waitFor,
@@ -260,6 +266,7 @@ func Run(ctx context.Context, c *fetch.Client, rawurl string, opts Options) find
 	res.Findings = append(res.Findings, checkPDT(rends, opts)...)
 	res.Findings = append(res.Findings, checkParts(rends, opts)...)
 	res.Findings = append(res.Findings, checkLadder(*pl)...)
+	res.Findings = append(res.Findings, checkProfile(*pl, rends, opts)...)
 
 	// The watch loop runs last and takes as long as it was asked to: everything
 	// a single look can establish is already in res before the first poll, so an

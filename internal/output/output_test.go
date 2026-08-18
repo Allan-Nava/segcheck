@@ -132,3 +132,34 @@ func TestMarkdown_EscapesPipes(t *testing.T) {
 		t.Errorf("pipe not escaped:\n%s", got)
 	}
 }
+
+// A conformance rule has an identity of its own: a finding that says a stream
+// fails something has to name what, so it can be argued with — and a machine
+// consumer must not have to parse prose to find out which rule fired.
+func TestRenderers_NameTheRuleAFindingComesFrom(t *testing.T) {
+	res := finding.Result{
+		Source: "https://cdn.example/master.m3u8",
+		Findings: []finding.Finding{{
+			Check: "profile", Rule: "apple:peak-vs-average", Target: "1080p", Status: finding.WARN,
+			Message: "peak 5.2 Mbps is 260% of the 2.0 Mbps average",
+		}},
+	}
+
+	text := Text(res, false)
+	if !strings.Contains(text, "apple:peak-vs-average") {
+		t.Errorf("the text renderer drops the rule:\n%s", text)
+	}
+
+	md := Markdown(res)
+	if !strings.Contains(md, "apple:peak-vs-average") {
+		t.Errorf("the markdown renderer drops the rule:\n%s", md)
+	}
+
+	js, err := JSON(res)
+	if err != nil {
+		t.Fatalf("JSON: %v", err)
+	}
+	if !strings.Contains(js, `"rule": "apple:peak-vs-average"`) {
+		t.Errorf("the rule is not a field of its own in JSON, so a consumer has to parse prose:\n%s", js)
+	}
+}

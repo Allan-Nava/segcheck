@@ -39,6 +39,15 @@ Sampling:
                       and compared with the segment they make up (default 1,
                       0 = off; ignored by a stream that publishes no parts)
 
+Conformance:
+  --profile NAME      run a conformance rule set: none|apple|dash-if (default none)
+
+Profiles are opt-in, because a rule with no way to turn it off turns a run that
+was clean yesterday into a wall of findings today on a stream nobody changed.
+Only rules the media can arbitrate are here; a manifest-only assertion belongs
+in a manifest linter. Each finding names the rule it comes from and reports the
+measured value beside the limit, so it can be argued with.
+
 Live edge:
   --watch DUR         after checking the segments, keep re-reading the manifest
                       for DUR and report what the live edge did (default: off)
@@ -95,6 +104,7 @@ Examples:
   segcheck check https://cdn.example/master.m3u8 --exit-on bad
   segcheck check https://cdn.example/live.m3u8 --watch 2m --exit-on bad
   segcheck check https://cdn.example/ll.m3u8 --parts 2
+  segcheck check https://cdn.example/master.m3u8 --profile apple
 `
 
 type headerFlag map[string]string
@@ -149,6 +159,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	fs.IntVar(&opts.MaxText, "subtitles", opts.MaxText, "")
 	fs.StringVar(&opts.From, "from", opts.From, "")
 	fs.IntVar(&opts.PartSegments, "parts", opts.PartSegments, "")
+	fs.StringVar(&opts.Profile, "profile", opts.Profile, "")
 	fs.Float64Var(&opts.DurationTolerancePct, "duration-tolerance", opts.DurationTolerancePct, "")
 	fs.Float64Var(&opts.GapToleranceMS, "gap-tolerance", opts.GapToleranceMS, "")
 	fs.Float64Var(&opts.BitrateTolerancePct, "bitrate-tolerance", opts.BitrateTolerancePct, "")
@@ -276,6 +287,9 @@ func validate(opts analyze.Options, format, exitOn string) error {
 	}
 	if opts.PartSegments < 0 {
 		return fmt.Errorf("--parts cannot be negative")
+	}
+	if !analyze.ValidProfile(opts.Profile) {
+		return fmt.Errorf("--profile must be none, apple or dash-if, got %q", opts.Profile)
 	}
 	// A tolerance of zero would make every advance a stall, including the
 	// healthy one, which is a checker that cries wolf on every live stream.

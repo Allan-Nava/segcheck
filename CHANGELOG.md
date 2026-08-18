@@ -19,6 +19,18 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   a stall rather than jitter. Watching a VOD playlist is not a defect and is reported as
   an OK finding saying there is no live edge, not as a problem in the stream. Only
   manifests are re-fetched: the segments are downloaded once, at the start.
+- **`--profile apple|dash-if|none` selects a conformance rule set** (SC-63), `none` by
+  default. Profiles are opt-in and that is the point: a conformance rule with no way to
+  turn it off turns a run that was clean yesterday into a wall of findings today, on a
+  stream nobody changed. Only rules the media can arbitrate live here — a manifest-only
+  assertion belongs in a manifest linter — and a rule set segcheck has not implemented
+  says so at OK level rather than reporting a pass it never made.
+- `finding.Finding` gains a `Rule` field, rendered by all three renderers and a field of
+  its own in JSON. A rule an operator wants to argue with has to be quotable, and a
+  machine consumer must never parse prose to find out which rule fired. Rule ids are
+  segcheck's own (`apple:peak-vs-average`) rather than the specification's section
+  numbers: Apple renumbers between revisions, and a citation against the wrong revision
+  is worse than none — the requirement itself is quoted in the message instead.
 - **The DVR window is collected rather than believed** (SC-53). A DVR window is a promise
   about the past — `timeShiftBufferDepth` in DASH, the playlist's own span in HLS — and it
   is the one promise nobody collects on purpose: a viewer only reaches the back of the

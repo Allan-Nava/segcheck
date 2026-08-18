@@ -510,11 +510,14 @@ here would make segcheck a second manifest linter, which is exactly the line
 `AGENTS.md` draws. Every rule implemented here must fail on media that a
 manifest-only reader would call fine.
 
-- [ ] **SC-63 — `--profile apple|dash-if|none`**: selects which rule set runs,
-  `none` by default. Lands first: a conformance rule with no way to turn it off
-  turns a run that was clean yesterday into a wall of findings today, on a
-  stream nobody changed. Profiles are opt-in, and each finding names the rule it
-  comes from so it can be argued with. <!-- sc: prio=high size=S labels=cli -->
+- [x] **SC-63 — `--profile apple|dash-if|none`**: selects which rule set runs,
+  `none` by default and opt-in for the reason filed. `finding.Finding` gained a
+  `Rule` field so a rule is quotable rather than buried in prose, rendered by all
+  three renderers. Rule ids are segcheck's own — Apple renumbers its document
+  between revisions and a citation against the wrong one is worse than none, so the
+  requirement is quoted in the message instead. `dash-if` is accepted and says
+  plainly that nothing ran (SC-62) rather than reporting a pass it never made.
+  <!-- sc: prio=high size=S labels=cli ver=0.5.0 -->
 - [ ] **SC-59 — Apple HLS Authoring Spec, the measurable subset**: peak segment
   bitrate within 200% of average, segment durations consistent across the
   ladder, an IDR at every segment start (SC-16), video bitrate within the tier

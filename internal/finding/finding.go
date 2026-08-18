@@ -35,7 +35,13 @@ func AtLeast(s, threshold Status) bool { return severity[s] >= severity[threshol
 // playlist. Value/Unit carry the measurement when there is one, so machine
 // consumers do not have to parse Message.
 type Finding struct {
-	Check   string   `json:"check"`
+	Check string `json:"check"`
+	// Rule identifies the conformance rule a finding comes from, for the checks
+	// that have one — `apple:peak-vs-average` and its like. It is a field rather
+	// than a prefix on Message for the same reason Value is: a machine consumer
+	// must never have to parse prose, and a rule an operator wants to argue with
+	// has to be quotable.
+	Rule    string   `json:"rule,omitempty"`
 	Target  string   `json:"target"`
 	Status  Status   `json:"status"`
 	Message string   `json:"message"`

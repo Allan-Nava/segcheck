@@ -114,6 +114,7 @@ func TestRun_UsageErrorsExitTwo(t *testing.T) {
 		{"unknown flag", []string{"check", "http://x/m.m3u8", "--nope"}, "nope"},
 		{"negative --watch", []string{"check", "http://x/m.m3u8", "--watch", "-5s"}, "--watch"},
 		{"negative --parts", []string{"check", "http://x/m.m3u8", "--parts", "-1"}, "--parts"},
+		{"unknown --profile", []string{"check", "http://x/m.m3u8", "--profile", "netflix"}, "--profile"},
 		{"zero --stall-tolerance", []string{"check", "http://x/m.m3u8", "--watch", "30s", "--stall-tolerance", "0"}, "--stall-tolerance"},
 	}
 	for _, tc := range cases {

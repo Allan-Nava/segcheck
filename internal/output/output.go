@@ -50,7 +50,7 @@ func Text(res finding.Result, color bool) string {
 			status = fmt.Sprintf("%-5s", status)
 		}
 		fmt.Fprintf(&b, "%s %s  %-*s  %-*s  %s\n",
-			statusIcon[f.Status], status, checkW, f.Check, targetW, truncate(f.Target, targetW), f.Message)
+			statusIcon[f.Status], status, checkW, f.Check, targetW, truncate(f.Target, targetW), ruledMessage(f))
 		if f.Hint != "" && f.Status != finding.OK {
 			fmt.Fprintf(&b, "%s↳ %s\n", strings.Repeat(" ", 9+checkW+2), f.Hint)
 		}
@@ -125,7 +125,7 @@ func Markdown(res finding.Result) string {
 	} else {
 		b.WriteString("## Needs attention\n\n")
 		for _, f := range problems {
-			fmt.Fprintf(&b, "- **%s** · `%s` · %s — %s\n", f.Status, f.Check, f.Target, f.Message)
+			fmt.Fprintf(&b, "- **%s** · `%s` · %s — %s\n", f.Status, f.Check, f.Target, ruledMessage(f))
 			if f.Hint != "" {
 				fmt.Fprintf(&b, "  - %s\n", f.Hint)
 			}
@@ -136,13 +136,23 @@ func Markdown(res finding.Result) string {
 	b.WriteString("## All findings\n\n")
 	b.WriteString("| Status | Check | Target | Message |\n|---|---|---|---|\n")
 	for _, f := range res.Findings {
-		msg := f.Message
+		msg := ruledMessage(f)
 		if f.Hint != "" && f.Status != finding.OK {
 			msg += "<br>↳ " + f.Hint
 		}
 		fmt.Fprintf(&b, "| %s %s | `%s` | %s | %s |\n", statusIcon[f.Status], f.Status, f.Check, escapePipes(f.Target), escapePipes(msg))
 	}
 	return b.String()
+}
+
+// ruledMessage prefixes the message with the rule a finding came from, where
+// there is one. It reads as "apple:peak-vs-average: peak 5.2 Mbps is 260% of
+// …", which is the order an operator wants: what rule, then why.
+func ruledMessage(f finding.Finding) string {
+	if f.Rule == "" {
+		return f.Message
+	}
+	return f.Rule + ": " + f.Message
 }
 
 func escapePipes(s string) string { return strings.ReplaceAll(s, "|", "\\|") }

@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**101 items · 60 shipped · 41 open · 13 milestones.**
+**101 items · 61 shipped · 40 open · 13 milestones.**
 
 ## At a glance
 
@@ -19,7 +19,7 @@
 | **M5** — Live and delivery | `v0.4.0` | **now** | `###.......` 33% | 4 | 2 |
 | **M9** — Wallclock and DVR correctness | `v0.4.0` | next | `######....` 60% | 2 | 3 |
 | **M6** — Integration | `v0.5.0` | later | `..........` 0% | 6 | 0 |
-| **M10** — Authoring-spec conformance | `v0.5.0` | later | `..........` 0% | 5 | 0 |
+| **M10** — Authoring-spec conformance | `v0.5.0` | later | `##........` 20% | 4 | 1 |
 | **M11** — Content protection, in depth | `v0.6.0` | later | `..........` 0% | 5 | 0 |
 | **M12** — Colour, HDR and the codec string | `v0.7.0` | later | `..........` 0% | 6 | 0 |
 | **M13** — Audio, past the sanity check | `v0.8.0` | later | `..........` 0% | 6 | 0 |
@@ -146,15 +146,15 @@ Target `v0.5.0` · later · 6 open · 0 shipped · `..........` 0%
 
 ### M10 — Authoring-spec conformance
 
-Target `v0.5.0` · later · 5 open · 0 shipped · `..........` 0%
+Target `v0.5.0` · later · 4 open · 1 shipped · `##........` 20%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
 | **SC-59** — Apple HLS Authoring Spec, the measurable subset | high | L | check | open |
 | **SC-60** — I-frame playlists | high | M | check,parser | open |
-| **SC-63** — `--profile apple\|dash-if\|none` | high | S | cli | open |
 | **SC-62** — DASH-IF IOP, the measurable subset | med | L | check | open |
 | **SC-61** — Trick-play thumbnails | low | M | check,parser | open |
+| **SC-63** — `--profile apple\|dash-if\|none` | high | S | cli | shipped `0.5.0` |
 
 ### M11 — Content protection, in depth
 
@@ -239,7 +239,7 @@ Target `ongoing` · ongoing · 7 open · 13 shipped · `#######...` 65%
 |---|---|---|
 | `check` | 47 | 25 |
 | `parser` | 44 | 18 |
-| `cli` | 8 | 5 |
+| `cli` | 8 | 4 |
 | `delivery` | 6 | 4 |
 | `integration` | 4 | 4 |
 | `output` | 5 | 4 |
