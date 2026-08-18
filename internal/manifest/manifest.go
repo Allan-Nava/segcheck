@@ -91,6 +91,13 @@ type Rendition struct {
 	// without this the protection had nowhere to come from — which produced
 	// "encrypted but the manifest declares no key" on manifests that declare it.
 	KeyMethod string `json:"key_method,omitempty"`
+	// NextSegment is the segment immediately past a dynamic MPD's live edge: the
+	// one @availabilityStartTime arithmetic says does not exist yet. It is kept
+	// out of Segments deliberately — sampling it would report a 404 the MPD
+	// itself predicted — and exists so the availability claim can be probed in
+	// the direction a listed segment cannot answer. If the origin serves it, the
+	// packager is ahead of the clock the MPD is computed against.
+	NextSegment *Segment `json:"next_segment,omitempty"`
 	// Unsupported explains why a rendition could not be expanded into segments
 	// (DASH SegmentBase, for instance). Empty when it was.
 	Unsupported string `json:"unsupported,omitempty"`
@@ -200,6 +207,19 @@ type PreloadHint struct {
 	ByteRangeLength int64  `json:"byte_range_length,omitempty"`
 }
 
+// UTCTiming is one time source a dynamic MPD names for a client to synchronise
+// against before doing any availability arithmetic.
+type UTCTiming struct {
+	// Scheme is the schemeIdUri: urn:mpeg:dash:utc:http-head:2014,
+	// http-iso:2014, http-xsdate:2014, direct:2014, ntp:2014 and so on. Which
+	// one it is decides how Value is read, and segcheck can honour the HTTP ones
+	// and the direct one — an NTP source is a protocol this tool does not speak,
+	// and saying so is better than silently falling back to the local clock the
+	// element exists to distrust.
+	Scheme string `json:"scheme"`
+	Value  string `json:"value,omitempty"`
+}
+
 // ByteRange is an HLS EXT-X-BYTERANGE.
 type ByteRange struct {
 	Length int64 `json:"length"`
@@ -237,6 +257,23 @@ type Playlist struct {
 	PendingParts []Part `json:"pending_parts,omitempty"`
 	// PreloadHint is EXT-X-PRELOAD-HINT, when the playlist carries one.
 	PreloadHint *PreloadHint `json:"preload_hint,omitempty"`
+	// AvailabilityStart is DASH @availabilityStartTime: the wall clock the whole
+	// presentation timeline is measured from, and therefore the only thing that
+	// says which segment exists right now. HLS lists what exists instead, so it
+	// makes no such claim.
+	AvailabilityStart    time.Time `json:"availability_start,omitempty"`
+	HasAvailabilityStart bool      `json:"has_availability_start,omitempty"`
+	// UTCTiming are the time sources the MPD names, in the order it lists them —
+	// its own fallback order. They exist because the client's clock is not to be
+	// trusted for the availability arithmetic, which is exactly why a checker
+	// that ignores them is measuring its own clock rather than the stream.
+	UTCTiming []UTCTiming `json:"utc_timing,omitempty"`
+	// TimeShiftBufferDepth is @timeShiftBufferDepth in seconds: how far back the
+	// MPD claims a viewer can still seek. PresentationDelay is
+	// @suggestedPresentationDelay, how far back from the edge it suggests they
+	// start. Zero means the MPD states neither.
+	TimeShiftBufferDepth float64 `json:"time_shift_buffer_depth,omitempty"`
+	PresentationDelay    float64 `json:"presentation_delay,omitempty"`
 	// UpdatePeriod is how often the manifest itself says it will change: DASH
 	// @minimumUpdatePeriod. HLS states no such interval — a player re-reads a
 	// live media playlist at TARGETDURATION — so it stays zero there.

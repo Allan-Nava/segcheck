@@ -432,13 +432,19 @@ wrong place, an ad splices two frames late, or a scrub back into the DVR window
   playlist and none at all when sampling the live edge. The parser carries the
   clock forward now (`PDTDerived`), stopping at a discontinuity with no fresh tag.
   <!-- sc: prio=high size=M labels=check ver=0.4.0 -->
-- [ ] **SC-52 — DASH `availabilityStartTime` and `UTCTiming`**: is the segment
-  the MPD says is available right now actually fetchable, and is the live edge
-  where the clock says it is? Clock skew between packager and client is the
-  classic cause of 404s at the live edge that get investigated as CDN faults for
-  a day. Requires honouring the `UTCTiming` element rather than assuming the
-  local clock, which is itself the thing under test.
-  <!-- sc: prio=high size=M labels=check,parser -->
+- [x] **SC-52 — DASH `availabilityStartTime` and `UTCTiming`**: the `UTCTiming`
+  sources an MPD names are resolved in its own fallback order (`http-head`,
+  `http-iso`, `http-xsdate`, `direct`; NTP is named and skipped rather than
+  silently ignored), half the round trip is corrected for, and the segment list is
+  re-expanded against that answer so the whole run uses the clock the stream
+  nominates rather than this machine's. The `availability` check then reports the
+  skew, an unbroken run of missing segments at the edge — the signature of a
+  packager behind the availability clock rather than of a CDN losing objects — and,
+  from one ranged probe of the segment the MPD says does not exist yet, a packager
+  ahead of its own window, where every player waits for media that is already
+  there. Verified against DASH-IF livesim2's `utc_head` and `http-xsdate` endpoints,
+  which is where the negative run duration was found.
+  <!-- sc: prio=high size=M labels=check,parser ver=0.4.0 -->
 - [ ] **SC-53 — The DVR window is real**: the oldest segment inside
   `timeShiftBufferDepth` — or inside the media playlist's own span — must still
   fetch and still parse. A DVR window that lies is a seek that fails, and it

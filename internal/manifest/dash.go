@@ -18,13 +18,21 @@ const maxExpandedSegments = 20000
 // ---------- MPD document ----------
 
 type mpdDoc struct {
-	Type                      string      `xml:"type,attr"`
-	AvailabilityStartTime     string      `xml:"availabilityStartTime,attr"`
-	PublishTime               string      `xml:"publishTime,attr"`
-	MediaPresentationDuration string      `xml:"mediaPresentationDuration,attr"`
-	MinimumUpdatePeriod       string      `xml:"minimumUpdatePeriod,attr"`
-	BaseURL                   []string    `xml:"BaseURL"`
-	Periods                   []mpdPeriod `xml:"Period"`
+	Type                       string        `xml:"type,attr"`
+	AvailabilityStartTime      string        `xml:"availabilityStartTime,attr"`
+	PublishTime                string        `xml:"publishTime,attr"`
+	MediaPresentationDuration  string        `xml:"mediaPresentationDuration,attr"`
+	MinimumUpdatePeriod        string        `xml:"minimumUpdatePeriod,attr"`
+	TimeShiftBufferDepth       string        `xml:"timeShiftBufferDepth,attr"`
+	SuggestedPresentationDelay string        `xml:"suggestedPresentationDelay,attr"`
+	UTCTiming                  []mpdUTCTimin `xml:"UTCTiming"`
+	BaseURL                    []string      `xml:"BaseURL"`
+	Periods                    []mpdPeriod   `xml:"Period"`
+}
+
+type mpdUTCTimin struct {
+	SchemeIDURI string `xml:"schemeIdUri,attr"`
+	Value       string `xml:"value,attr"`
 }
 
 type mpdPeriod struct {
@@ -142,7 +150,16 @@ func ParseDASH(body []byte, baseURL string, now time.Time) (Playlist, error) {
 	if doc.AvailabilityStartTime != "" {
 		if t, err := parsePDT(doc.AvailabilityStartTime); err == nil {
 			ast = t
+			pl.AvailabilityStart, pl.HasAvailabilityStart = t, true
 		}
+	}
+	pl.TimeShiftBufferDepth, _ = parseISODuration(doc.TimeShiftBufferDepth)
+	pl.PresentationDelay, _ = parseISODuration(doc.SuggestedPresentationDelay)
+	for _, u := range doc.UTCTiming {
+		if u.SchemeIDURI == "" {
+			continue
+		}
+		pl.UTCTiming = append(pl.UTCTiming, UTCTiming{Scheme: u.SchemeIDURI, Value: u.Value})
 	}
 	mpdDur, _ := parseISODuration(doc.MediaPresentationDuration)
 	pl.UpdatePeriod, _ = parseISODuration(doc.MinimumUpdatePeriod)
@@ -187,12 +204,13 @@ func ParseDASH(body []byte, baseURL string, now time.Time) (Playlist, error) {
 
 				switch {
 				case tmpl != nil:
-					init, segs, err := expandTemplate(tmpl, rep, rbase, ast, now, periodStart, periodDur, pl.Live, protected)
+					init, segs, next, err := expandTemplate(tmpl, rep, rbase, ast, now, periodStart, periodDur, pl.Live, protected)
 					if err != nil {
 						r.Unsupported = err.Error()
 					}
 					r.InitURI = init
 					r.Segments = segs
+					r.NextSegment = next
 				case rep.SegmentList != nil:
 					ts := rep.SegmentList.Timescale
 					if ts == 0 {
@@ -265,7 +283,7 @@ func ParseDASH(body []byte, baseURL string, now time.Time) (Playlist, error) {
 
 // expandTemplate turns a SegmentTemplate into concrete segment URLs — from its
 // SegmentTimeline when it has one, else from @duration plus the wall clock.
-func expandTemplate(t *mpdSegTemplate, rep mpdRepresentation, base *url.URL, ast, now time.Time, periodStart, periodDur float64, live, protected bool) (string, []Segment, error) {
+func expandTemplate(t *mpdSegTemplate, rep mpdRepresentation, base *url.URL, ast, now time.Time, periodStart, periodDur float64, live, protected bool) (string, []Segment, *Segment, error) {
 	timescale := t.Timescale
 	if timescale == 0 {
 		timescale = 1
@@ -279,7 +297,7 @@ func expandTemplate(t *mpdSegTemplate, rep mpdRepresentation, base *url.URL, ast
 		initURI = Resolve(base, substituteTemplate(t.Initialization, rep, 0, 0))
 	}
 	if t.Media == "" {
-		return initURI, nil, fmt.Errorf("SegmentTemplate without @media")
+		return initURI, nil, nil, fmt.Errorf("SegmentTemplate without @media")
 	}
 
 	var segs []Segment
@@ -318,7 +336,7 @@ func expandTemplate(t *mpdSegTemplate, rep mpdRepresentation, base *url.URL, ast
 			}
 			for i := 0; i <= repeat; i++ {
 				if len(segs) >= maxExpandedSegments {
-					return initURI, segs, nil
+					return initURI, segs, nil, nil
 				}
 				segs = append(segs, Segment{
 					URI:      Resolve(base, substituteTemplate(t.Media, rep, number, current)),
@@ -338,11 +356,11 @@ func expandTemplate(t *mpdSegTemplate, rep mpdRepresentation, base *url.URL, ast
 				number++
 			}
 		}
-		return initURI, segs, nil
+		return initURI, segs, nil, nil
 	}
 
 	if t.Duration <= 0 {
-		return initURI, nil, fmt.Errorf("SegmentTemplate has neither SegmentTimeline nor @duration")
+		return initURI, nil, nil, fmt.Errorf("SegmentTemplate has neither SegmentTimeline nor @duration")
 	}
 	segDur := float64(t.Duration) / float64(timescale)
 
@@ -356,7 +374,7 @@ func expandTemplate(t *mpdSegTemplate, rep mpdRepresentation, base *url.URL, ast
 		elapsed := now.Sub(ast).Seconds() - periodStart
 		available := int(math.Floor(elapsed / segDur))
 		if available <= 0 {
-			return initURI, nil, fmt.Errorf("no segment available yet: availabilityStartTime is %s in the future", ast.Sub(now).Truncate(time.Second))
+			return initURI, nil, nil, fmt.Errorf("no segment available yet: availabilityStartTime is %s in the future", ast.Sub(now).Truncate(time.Second))
 		}
 		// Sample the tail: the live edge is what matters, and the head of a
 		// long-running live window may have fallen out of the CDN already.
@@ -369,10 +387,25 @@ func expandTemplate(t *mpdSegTemplate, rep mpdRepresentation, base *url.URL, ast
 	case periodDur > 0:
 		count = int(math.Ceil(periodDur / segDur))
 	default:
-		return initURI, nil, fmt.Errorf("static MPD without mediaPresentationDuration: cannot tell how many segments exist")
+		return initURI, nil, nil, fmt.Errorf("static MPD without mediaPresentationDuration: cannot tell how many segments exist")
 	}
 	if count > maxExpandedSegments {
 		count = maxExpandedSegments
+	}
+
+	var next *Segment
+	if live && !ast.IsZero() {
+		// The segment past the edge: the MPD's arithmetic says it does not exist
+		// yet. It is returned rather than listed precisely so nothing samples it.
+		idx := firstIndex + count
+		number := startNumber + idx
+		next = &Segment{
+			URI:       Resolve(base, substituteTemplate(t.Media, rep, number, int64(float64(idx)*float64(t.Duration)))),
+			Duration:  segDur,
+			InitURI:   initURI,
+			Sequence:  number,
+			KeyMethod: key,
+		}
 	}
 
 	for i := 0; i < count; i++ {
@@ -391,7 +424,7 @@ func expandTemplate(t *mpdSegTemplate, rep mpdRepresentation, base *url.URL, ast
 			KeyMethod: key,
 		})
 	}
-	return initURI, segs, nil
+	return initURI, segs, next, nil
 }
 
 // substituteTemplate resolves the $Identifier$ placeholders, honouring the

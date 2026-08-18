@@ -19,6 +19,29 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   a stall rather than jitter. Watching a VOD playlist is not a defect and is reported as
   an OK finding saying there is no live edge, not as a problem in the stream. Only
   manifests are re-fetched: the segments are downloaded once, at the start.
+- **A dynamic MPD is checked against its own clock** (SC-52). A DASH live edge is not
+  listed, it is computed: `availabilityStartTime` plus arithmetic against "now", and which
+  "now" is the whole question. A machine thirty seconds fast asks for segments the packager
+  has not made yet and gets 404s that read as a CDN fault, which is a day of investigating
+  the wrong system. segcheck now resolves the `UTCTiming` sources the MPD names, in the
+  MPD's own fallback order — `http-head` (the `Date` header), `http-iso` and `http-xsdate`
+  (the body), and `direct` — corrects for half the round trip, re-expands the segment list
+  against that answer, and uses it for the rest of the run. An NTP source is named and
+  skipped rather than silently ignored: a zero-dependency binary does not speak NTP, and
+  saying so beats falling back to the clock the element exists to distrust.
+  The new `availability` check reports the skew between this machine and the MPD's source;
+  an unbroken run of missing segments at the live edge, which is the signature of a
+  packager behind the availability clock rather than of a CDN losing objects; and — from
+  one small ranged probe of the segment the MPD says does not exist yet — a packager
+  *ahead* of its own window, where every spec-following player waits for media that is
+  already there. An MPD naming no source gets an OK finding saying the verdict is only as
+  good as this machine's time.
+- `Playlist.AvailabilityStart`, `UTCTiming`, `TimeShiftBufferDepth`, `PresentationDelay`
+  and `Rendition.NextSegment` are parsed from the MPD. `NextSegment` is deliberately kept
+  out of the segment list: sampling it would report a 404 the MPD itself predicted.
+- **The run duration no longer follows the stream's clock.** Adopting a UTCTiming answer
+  shifted the clock the elapsed time was measured against, so a run against a packager
+  thirty seconds behind reported `-529ms`. Found against a live DASH-IF reference stream.
 - **`EXT-X-PROGRAM-DATE-TIME` is compared against the media** (SC-51). It is the only
   thing in an HLS playlist that claims a time in the real world, players seek by it, DVR
   windows are addressed by it and ad decisions are timed against it — and until now it was

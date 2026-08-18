@@ -167,13 +167,27 @@ func Run(ctx context.Context, c *fetch.Client, rawurl string, opts Options) find
 	if opts.Sleep == nil {
 		opts.Sleep = waitFor
 	}
-	started := opts.Now()
+	// wall is this machine's clock, kept apart from opts.Now because opts.Now may
+	// be shifted below to the one a dynamic MPD nominates. How long the run took
+	// is a fact about the real world: measured against a stream clock thirty
+	// seconds behind, it came out negative.
+	wall := opts.Now
+	started := wall()
 	res := finding.Result{Source: rawurl, Started: started}
 
-	pl, fs := loadManifest(ctx, c, rawurl, opts)
+	pl, clock, fs := loadManifest(ctx, c, rawurl, opts)
 	res.Findings = append(res.Findings, fs...)
+	// A dynamic MPD's live edge is computed against a clock, and the MPD may name
+	// which one. Everything after this point — the segments sampled, the watch
+	// loop, DASH template expansion — uses the clock the stream itself nominates
+	// rather than this machine's, because this machine's is the thing under test.
+	if clock.ok {
+		offset := clock.skew
+		base := opts.Now
+		opts.Now = func() time.Time { return base().Add(offset) }
+	}
 	if pl == nil {
-		res.Duration = opts.Now().Sub(started)
+		res.Duration = wall().Sub(started)
 		finding.SortWorstFirst(res.Findings)
 		return res
 	}
@@ -200,6 +214,11 @@ func Run(ctx context.Context, c *fetch.Client, rawurl string, opts Options) find
 	// subsegments are. Reading the index needs a fetch, so it happens here rather
 	// than in the manifest package.
 	resolveSegmentBase(ctx, c, rends, opts)
+
+	// One small request per run: the segment the MPD says does not exist yet. It
+	// is the only way to see a packager that is *ahead* of its own availability
+	// window, which costs every player latency without ever raising an error.
+	probes := probeNextSegments(ctx, c, *pl, rends)
 
 	// Sample every selected rendition's segments concurrently.
 	sampleAll(ctx, c, rends, opts)
@@ -230,6 +249,7 @@ func Run(ctx context.Context, c *fetch.Client, rawurl string, opts Options) find
 	res.Findings = append(res.Findings, checkTimeline(rends, opts)...)
 	res.Findings = append(res.Findings, checkEncryption(rends)...)
 	res.Findings = append(res.Findings, checkAlignment(rends, opts)...)
+	res.Findings = append(res.Findings, checkAvailability(*pl, rends, clock, probes, opts)...)
 	res.Findings = append(res.Findings, checkPDT(rends, opts)...)
 	res.Findings = append(res.Findings, checkParts(rends, opts)...)
 	res.Findings = append(res.Findings, checkLadder(*pl)...)
@@ -241,17 +261,19 @@ func Run(ctx context.Context, c *fetch.Client, rawurl string, opts Options) find
 		res.Findings = append(res.Findings, watchLiveEdge(ctx, c, rawurl, *pl, opts)...)
 	}
 
-	res.Duration = opts.Now().Sub(started)
+	res.Duration = wall().Sub(started)
 	finding.SortWorstFirst(res.Findings)
 	return res
 }
 
 // loadManifest fetches and parses the top-level manifest. A nil Playlist means
 // the run cannot continue, and the findings say why.
-func loadManifest(ctx context.Context, c *fetch.Client, rawurl string, opts Options) (*manifest.Playlist, []finding.Finding) {
+func loadManifest(ctx context.Context, c *fetch.Client, rawurl string, opts Options) (*manifest.Playlist, referenceClock, []finding.Finding) {
+	var clock referenceClock
+
 	resp, err := c.Get(ctx, rawurl, "")
 	if err != nil {
-		return nil, []finding.Finding{{
+		return nil, clock, []finding.Finding{{
 			Check: "manifest", Target: rawurl, Status: finding.ERROR,
 			Message: fmt.Sprintf("manifest not reachable: %v", err),
 		}}
@@ -265,14 +287,27 @@ func loadManifest(ctx context.Context, c *fetch.Client, rawurl string, opts Opti
 		pl, err = manifest.ParseHLS(resp.Body, rawurl)
 	}
 	if err != nil {
-		return nil, []finding.Finding{{
+		return nil, clock, []finding.Finding{{
 			Check: "manifest", Target: rawurl, Status: finding.BAD,
 			Message: err.Error(),
 			Hint:    "check that the URL serves a manifest and not an error page or a redirect to one",
 		}}
 	}
 
-	return &pl, nil
+	// The MPD's segment list was just computed against this machine's clock. If
+	// the MPD names a time source of its own, that answer supersedes it and the
+	// expansion has to be done again — the whole point of the element is that the
+	// first answer may be pointing at segments that do not exist.
+	if kind == manifest.KindDASH && pl.Live && len(pl.UTCTiming) > 0 {
+		clock = resolveClock(ctx, c, pl.UTCTiming, opts.Now())
+		if clock.ok && absDuration(clock.skew) > clockSkewTolerance {
+			if corrected, cerr := manifest.ParseDASH(resp.Body, rawurl, clock.now); cerr == nil {
+				pl = corrected
+			}
+		}
+	}
+
+	return &pl, clock, nil
 }
 
 // manifestShape is the one OK line that says what was loaded. It is emitted
