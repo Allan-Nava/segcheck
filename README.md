@@ -96,6 +96,10 @@ segcheck check https://cdn.example/live.m3u8 --from edge --segments 12
 # DASH is the same command
 segcheck check https://cdn.example/manifest.mpd
 
+# Protected content: is it actually encrypted, and is the clear lead the one
+# you asked your packager for?
+segcheck check https://cdn.example/manifest.mpd --clear-lead 2s
+
 # A low-latency ladder: fetch two segments' worth of EXT-X-PART parts and
 # check they reconstruct the segments a normal player would fetch
 segcheck check https://cdn.example/ll.m3u8 --parts 2
@@ -159,6 +163,7 @@ environment.
 | `alignment` | Segment boundaries across renditions, so ABR switching does not glitch | BAD |
 | `encryption` | Declared protection against what the segments carry, whether a supplied key actually decrypts them, and — for SAMPLE-AES and CENC, which protect the samples and not the container — which half of the tool could run at all | BAD |
 | `ladder` | Duplicate rungs, inverted rungs, dangling `AUDIO` groups, missing `CODECS` | BAD |
+| `clear` | Whether protected media is actually encrypted, sample by sample (`saiz`), and how long its clear lead really is — the defect nobody notices until a rights-holder audit | BAD |
 | `scheme` | The common encryption scheme the media really uses — `schm`, cross-checked against the `tenc` crypt pattern — against the one the manifest declares, and a ladder that mixes schemes | BAD |
 | `drm` | The DRM systems the initialisation segment's `pssh` boxes advertise against the ones the manifest promises (`ContentProtection`, `KEYFORMAT`) — the difference between a stream that plays on Chrome and one that also plays on Xbox | BAD |
 | `iframe` | `EXT-X-I-FRAME-STREAM-INF` trick-play ranges fetched and read: each must resolve to a keyframe and to nothing else, and the rung must sit on the same timeline as the video it belongs to | BAD |

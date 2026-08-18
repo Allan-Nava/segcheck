@@ -590,13 +590,17 @@ item here that would is out of scope.
   vector corrected that rule — common encryption gives video a pattern and audio
   full-sample encryption, so cbcs audio states none and is right not to.
   <!-- sc: prio=high size=M labels=check,parser ver=0.6.0 -->
-- [ ] **SC-69 — Clear lead, and media that is not protected at all**: read the
-  per-sample encryption state from `senc`/`saiz`/`saio` and report a rendition
-  whose samples are in the clear while the manifest declares it protected, plus
-  a clear lead longer or shorter than the one that was asked for. This is the
-  most expensive defect in the milestone and the quietest: the content ships
-  unprotected, every player plays it, nobody files a bug, and the first signal
-  is a rights-holder audit. <!-- sc: prio=high size=L labels=check,parser -->
+- [x] **SC-69 — Clear lead, and media that is not protected at all**: the `clear`
+  check reads the per-sample encryption state from `saiz` and reports a rendition the
+  manifest declares protected whose samples are all in the clear — the defect that
+  ships, plays everywhere, alerts on nothing and surfaces in a rights-holder audit.
+  The same measurement gives the clear lead, counted across the segment boundary
+  because a lead does not stop where a segment does; its length is a choice nothing
+  in the manifest records, so it is reported, and `--clear-lead` turns it into a
+  claim to check in both directions. A truncated `saiz` reports nothing rather than a
+  run of clear samples: unprotected content is the one direction this must never be
+  wrong in.
+  <!-- sc: prio=high size=L labels=check,parser ver=0.6.0 -->
 - [ ] **SC-68 — Key rotation integrity**: where the manifest rotates keys — a
   new `EXT-X-KEY`, a DASH period or KID change — the KID carried by the segments
   must actually change at that boundary, and no segment may reference a KID that

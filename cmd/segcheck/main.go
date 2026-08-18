@@ -83,6 +83,8 @@ Encrypted streams (AES-128):
   --key-file PATH     read the 16-byte content key from a file (raw or hex)
   --key-env NAME      read it from an environment variable, as hex
   --fetch-keys        fetch the key from the URI EXT-X-KEY states
+  --clear-lead DUR    the unencrypted lead-in you asked your packager for, so the
+                      measured one can be checked against it (default: report only)
 
 The key is never a flag value: one in argv lands in shell history, in the
 process list and in every CI log that echoes its own invocation, and unlike a
@@ -174,6 +176,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	keyFile := fs.String("key-file", "", "")
 	keyEnv := fs.String("key-env", "", "")
 	fs.BoolVar(&opts.FetchKeys, "fetch-keys", false, "")
+	fs.DurationVar(&opts.ClearLead, "clear-lead", opts.ClearLead, "")
 	format := fs.String("output", "text", "")
 	noColor := fs.Bool("no-color", false, "")
 	exitOn := fs.String("exit-on", "", "")
@@ -289,6 +292,9 @@ func validate(opts analyze.Options, format, exitOn string) error {
 	}
 	if opts.PartSegments < 0 {
 		return fmt.Errorf("--parts cannot be negative")
+	}
+	if opts.ClearLead < 0 {
+		return fmt.Errorf("--clear-lead cannot be negative")
 	}
 	if !analyze.ValidProfile(opts.Profile) {
 		return fmt.Errorf("--profile must be none, apple or dash-if, got %q", opts.Profile)

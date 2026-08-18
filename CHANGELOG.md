@@ -19,6 +19,22 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   a stall rather than jitter. Watching a VOD playlist is not a defect and is reported as
   an OK finding saying there is no live edge, not as a problem in the stream. Only
   manifests are re-fetched: the segments are downloaded once, at the start.
+- **Whether protected media is actually encrypted** (SC-69). This is the most expensive
+  defect segcheck reports and the quietest: content that ships unprotected plays
+  everywhere, every player accepts it, every other check passes, the manifest declares
+  cenc, the sample entries say `encv`, the key server hands out keys nothing uses, and
+  nobody files a bug. The first signal is a rights-holder audit, months later. The only
+  evidence is per-sample — `saiz` says how much encryption information each sample
+  carries, and a sample carrying none carries none because there is none — so the new
+  `clear` check reads it and reports a rendition declared protected whose samples are all
+  in the clear.
+  The same measurement gives the clear lead: the opening seconds deliberately left
+  readable so a player can start before the licence arrives, counted across the segment
+  boundary because a lead does not stop where a segment does. Its length is a choice
+  nothing in the manifest records, so it is measured and reported; `--clear-lead` turns
+  it into a claim to check, in both directions. A truncated `saiz` reports nothing rather
+  than a run of clear samples — unprotected content is the one direction this must never
+  be wrong in.
 - **The encryption scheme, checked against the manifest and against itself** (SC-67). cbcs
   and cenc encrypt the same media with the same key and differ by a four-character code in
   a box: the segments are the same size, the timing is identical, the manifest reads

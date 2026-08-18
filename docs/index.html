@@ -325,6 +325,7 @@ footer{border-top:1px solid var(--border);padding:34px 0;color:var(--muted);font
           <tr><td><code>alignment</code></td><td>Segment boundaries across renditions, so ABR switching does not glitch</td><td><span class="pill p-bad">BAD</span></td></tr>
           <tr><td><code>encryption</code></td><td>Declared protection against what the segments carry, whether a supplied key actually decrypts them, and — for SAMPLE-AES and CENC, which protect the samples and not the container — which half of the tool could run at all</td><td><span class="pill p-bad">BAD</span></td></tr>
           <tr><td><code>ladder</code></td><td>Duplicate rungs, inverted rungs, dangling <code>AUDIO</code> groups, missing <code>CODECS</code></td><td><span class="pill p-bad">BAD</span></td></tr>
+          <tr><td><code>clear</code></td><td>Whether protected media is actually encrypted, sample by sample (<code>saiz</code>), and how long its clear lead really is — the defect nobody notices until a rights-holder audit</td><td><span class="pill p-bad">BAD</span></td></tr>
           <tr><td><code>scheme</code></td><td>The common encryption scheme the media really uses — <code>schm</code>, cross-checked against the <code>tenc</code> crypt pattern — against the one the manifest declares, and a ladder that mixes schemes</td><td><span class="pill p-bad">BAD</span></td></tr>
           <tr><td><code>drm</code></td><td>The DRM systems the initialisation segment's <code>pssh</code> boxes advertise against the ones the manifest promises (<code>ContentProtection</code>, <code>KEYFORMAT</code>) — the difference between a stream that plays on Chrome and one that also plays on Xbox</td><td><span class="pill p-bad">BAD</span></td></tr>
           <tr><td><code>iframe</code></td><td><code>EXT-X-I-FRAME-STREAM-INF</code> trick-play ranges fetched and read: each must resolve to a keyframe and to nothing else, and the rung must sit on the same timeline as the video it belongs to</td><td><span class="pill p-bad">BAD</span></td></tr>
@@ -460,6 +461,7 @@ segcheck check https://cdn.example/master.m3u8 --exit-on bad</pre></div>
           <tr><td><code>--exit-on STATUS</code></td><td>Exit 1 when a finding reaches <code>warn|bad|error</code></td><td>never</td></tr>
           <tr><td><code>--key-file PATH</code></td><td>Read the AES-128 content key from a file (16 raw bytes or 32 hex digits)</td><td>—</td></tr>
           <tr><td><code>--key-env NAME</code></td><td>Read it from an environment variable, as hex</td><td>—</td></tr>
+          <tr><td><code>--clear-lead DUR</code></td><td>The unencrypted lead-in you asked your packager for, so the measured one can be checked against it</td><td>report only</td></tr>
           <tr><td><code>--fetch-keys</code></td><td>Fetch the key from the URI <code>EXT-X-KEY</code> states</td><td>off</td></tr>
         </tbody>
       </table>

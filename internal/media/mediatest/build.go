@@ -994,3 +994,35 @@ func MP4InitCENCAudioTenc(trackID, timescale uint32, channels, sampleRate int, s
 	))
 	return mp4InitFrom(trackID, timescale, "soun", entry, nil, 0, 0)
 }
+
+// MP4SegmentSAIZ is a fragment whose `saiz` box states, per sample, how much
+// encryption information that sample carries — and a sample carrying none is a
+// sample in the clear.
+//
+// clearLeading samples at the start get an info size of zero, the rest get a
+// real one. That is how a clear lead is expressed: the same track, the same
+// key, and the opening samples deliberately left readable so a player can start
+// before the licence arrives.
+func MP4SegmentSAIZ(trackID, sequence uint32, baseDecodeTime int64, sampleDuration uint32, samples, payloadBytes, clearLeading int) []byte {
+	sizes := make([]byte, samples)
+	for i := range sizes {
+		if i < clearLeading {
+			continue // zero: no encryption information, so this sample is clear
+		}
+		sizes[i] = 8 // an eight-byte initialisation vector and nothing else
+	}
+	saiz := box("saiz", concat(
+		u32(0),    // version 0, flags 0: no aux_info_type
+		[]byte{0}, // default_sample_info_size 0: the sizes follow, one per sample
+		u32(uint32(samples)),
+		sizes,
+	))
+	mfhd := box("mfhd", concat(u32(0), u32(sequence)))
+	tfhd := box("tfhd", concat(u32(0x000008), u32(trackID), u32(sampleDuration)))
+	tfdt := box("tfdt", concat([]byte{0x01, 0x00, 0x00, 0x00}, u64(uint64(baseDecodeTime))))
+	trun := box("trun", concat(u32(0x000001), u32(uint32(samples)), u32(0)))
+	traf := box("traf", concat(tfhd, tfdt, saiz, trun))
+	moof := box("moof", concat(mfhd, traf))
+	mdat := box("mdat", make([]byte, payloadBytes))
+	return concat(moof, mdat)
+}

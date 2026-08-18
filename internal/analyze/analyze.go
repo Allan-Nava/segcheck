@@ -68,6 +68,11 @@ type Options struct {
 	// inspected. They are cheap — one picture per entry — but a ladder can carry
 	// one per resolution.
 	MaxIFrame int
+	// ClearLead is the length of unencrypted lead-in the operator asked their
+	// packager for. Zero means they did not say, and the measured lead is then
+	// reported rather than judged: how much of a presentation is deliberately
+	// readable is a choice nothing in the manifest records.
+	ClearLead time.Duration
 	// Profile selects a conformance rule set: ProfileNone (the default),
 	// ProfileApple or ProfileDASHIF. It is opt-in because a conformance rule with
 	// no way to turn it off turns a run that was clean yesterday into a wall of
@@ -272,6 +277,7 @@ func Run(ctx context.Context, c *fetch.Client, rawurl string, opts Options) find
 	res.Findings = append(res.Findings, checkEncryption(rends)...)
 	res.Findings = append(res.Findings, checkDRM(rends)...)
 	res.Findings = append(res.Findings, checkScheme(rends)...)
+	res.Findings = append(res.Findings, checkClear(rends, opts)...)
 	res.Findings = append(res.Findings, checkAlignment(rends, opts)...)
 	res.Findings = append(res.Findings, checkAvailability(*pl, rends, clock, probes, opts)...)
 	res.Findings = append(res.Findings, checkDVR(dvr)...)

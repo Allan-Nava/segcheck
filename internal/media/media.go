@@ -147,6 +147,16 @@ type Track struct {
 	SkipByteBlock  int `json:"skip_byte_block,omitempty"`
 	// HasCryptPattern distinguishes a stated 0:0 from a box that stated nothing.
 	HasCryptPattern bool `json:"has_crypt_pattern,omitempty"`
+	// ClearSamples and EncryptedSamples are how many of this fragment's samples
+	// carry no encryption information and how many do, from `saiz`.
+	// LeadingClearSamples counts the run at the very start, which is what a clear
+	// lead is. SampleStateKnown is false when the fragment stated none of it, and
+	// a caller must check it: "nobody looked" and "nothing is encrypted" are the
+	// same zero, and only one of them is a defect worth reporting.
+	ClearSamples        int  `json:"clear_samples,omitempty"`
+	EncryptedSamples    int  `json:"encrypted_samples,omitempty"`
+	LeadingClearSamples int  `json:"leading_clear_samples,omitempty"`
+	SampleStateKnown    bool `json:"sample_state_known,omitempty"`
 	// SamplesEncrypted marks a track whose *samples* are protected while its
 	// container is not. This is the opposite shape of trouble from full-segment
 	// AES-128: nothing fails, so the bitstream readers succeed and find nothing —
@@ -250,6 +260,15 @@ func (t Track) StartsOnKeyframe() (bool, bool) {
 		return false, false
 	}
 	return t.OpensOnKeyframe, t.KeyframeKnown
+}
+
+// SampleEncryption is how many of the track's samples are in the clear and how
+// many are encrypted, and whether the fragment stated it at all.
+func (t Track) SampleEncryption() (clear, encrypted int, known bool) {
+	if !t.SampleStateKnown {
+		return 0, 0, false
+	}
+	return t.ClearSamples, t.EncryptedSamples, true
 }
 
 // CryptPattern is the encryption pattern the track states, and whether it

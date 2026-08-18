@@ -62,6 +62,31 @@ type fragTrack struct {
 	// absence of the flag is not the absence of a keyframe.
 	firstFlags     uint32
 	haveFirstFlags bool
+	// clearSamples and encryptedSamples are the per-sample encryption state a
+	// `saiz` box states: a sample carrying no encryption information carries
+	// none because there is none. leadingClear counts the run of clear samples
+	// at the very start, which is what a clear lead is.
+	clearSamples     int
+	encryptedSamples int
+	leadingClear     int
+	sampleStateKnown bool
+	// sawEncrypted latches once any sample in the fragment is encrypted, so the
+	// leading run stops being counted where it really stops.
+	sawEncrypted bool
+}
+
+// noteSampleEncryption records one sample's encryption state, in order.
+func (f *fragTrack) noteSampleEncryption(encrypted bool) {
+	f.sampleStateKnown = true
+	if encrypted {
+		f.encryptedSamples++
+		f.sawEncrypted = true
+		return
+	}
+	f.clearSamples++
+	if !f.sawEncrypted {
+		f.leadingClear++
+	}
 }
 
 // noteFirstFlags records the sample_flags of the fragment's first sample, and
@@ -154,6 +179,8 @@ func ParseMP4(data, init []byte) (SegmentInfo, error) {
 		}
 		t.ID = id
 		t.Samples = f.samples
+		t.ClearSamples, t.EncryptedSamples = f.clearSamples, f.encryptedSamples
+		t.LeadingClearSamples, t.SampleStateKnown = f.leadingClear, f.sampleStateKnown
 		t.StatedDur = f.sumDuration
 		if f.haveFirstFlags {
 			// The flag describes the first sample only, so it settles whether the
@@ -705,6 +732,46 @@ func parseTenc(b []byte) tencDefaults {
 	return out
 }
 
+// parseSaiz reads the SampleAuxiliaryInformationSizes box.
+//
+// A non-zero default_sample_info_size means every sample carries that much and
+// every sample is encrypted. A zero default means the sizes follow one per
+// sample, and a zero there means that sample carries no encryption information
+// at all — which is a sample in the clear.
+func parseSaiz(b []byte, f *fragTrack) {
+	if len(b) < 4 {
+		return
+	}
+	off := 4
+	if be32(b[:4])&0x000001 != 0 {
+		off += 8 // aux_info_type and its parameter
+	}
+	if len(b) < off+5 {
+		return
+	}
+	defaultSize := b[off]
+	count := int(be32(b[off+1:]))
+	off += 5
+	if count < 0 {
+		return
+	}
+	if defaultSize != 0 {
+		for i := 0; i < count; i++ {
+			f.noteSampleEncryption(true)
+		}
+		return
+	}
+	if len(b) < off+count {
+		// The sizes are supposed to be here and they are not. Reading a short
+		// buffer as a run of clear samples would report unprotected content on a
+		// truncated box, which is the one direction this must never be wrong in.
+		return
+	}
+	for i := 0; i < count; i++ {
+		f.noteSampleEncryption(b[off+i] != 0)
+	}
+}
+
 // nalLengthSizeFrom reads how many bytes prefix each NAL unit in the samples,
 // from the avcC or hvcC box inside a VisualSampleEntry. Both state it as a
 // two-bit field one less than the real size, and both put it in a different
@@ -844,6 +911,13 @@ func parseTraf(traf []byte, out map[uint32]*fragTrack, defaults map[uint32]fragD
 	if f == nil {
 		f = &fragTrack{id: trackID}
 		out[trackID] = f
+	}
+
+	// saiz states, per sample, how much encryption information it carries. Zero
+	// means none, which means the sample is in the clear — the only place a
+	// clear lead, or media that is not protected at all, is written down.
+	if saiz, ok := findBox(traf, "saiz"); ok {
+		parseSaiz(saiz, f)
 	}
 
 	if tfdt, ok := findBox(traf, "tfdt"); ok && len(tfdt) >= 8 {
