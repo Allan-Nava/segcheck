@@ -130,10 +130,15 @@ homebrew_casks:
     # because it exits 0 when the attribute is already absent — a reinstall, or
     # HOMEBREW_NO_QUARANTINE — whereas `-d` exits 1 with "No such xattr", and a
     # postflight that fails on a clean install is worse than the problem it fixes.
+    #
+    # `.exit_status.zero?` rather than `== 0`: `brew style` runs RuboCop over the tap
+    # and Style/NumericPredicate fails the audit on the comparison. The cask is
+    # generated from here, so correcting it in the tap by hand lasts until the next
+    # release overwrites it.
     hooks:
       post:
         install: |
-          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status.zero?
             system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/segcheck"]
           end
 

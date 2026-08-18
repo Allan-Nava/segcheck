@@ -7,6 +7,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- The Homebrew cask's `postflight` used `exit_status == 0`, which fails `brew style`'s
+  `Style/NumericPredicate` and so fails the tap's own audit. It is `.exit_status.zero?`
+  now. The cask is generated from `.goreleaser.yaml`, so correcting it in the tap by hand
+  lasts only until the next release overwrites it. Six further offences in the generated
+  cask come from goreleaser's own template and are SC-98.
+
 ## [0.3.0] - 2026-08-18
 
 The release M4 was for: everything in a stream that is not the video track. Four new

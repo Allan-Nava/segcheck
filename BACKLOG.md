@@ -997,3 +997,14 @@ checks roadmap and blocks nothing.
   postflight. It needs a paid Apple Developer account and two more release
   secrets, which is why it is not part of SC-65.
   <!-- sc: prio=med size=M labels=release -->
+- [ ] **SC-98 — The generated cask fails `brew style`**: goreleaser's cask template emits
+  six RuboCop offences — four `Cask/StanzaOrder` on the `on_intel`/`on_arm` blocks, one
+  `Cask/StanzaGrouping` and one `Layout/EmptyLinesAroundBlockBody` — so
+  `Allan-Nava/homebrew-tap` fails its own audit after every release and someone
+  autocorrects it by hand. None of those six is ours to fix from `.goreleaser.yaml`; the
+  seventh, `Style/NumericPredicate`, was, and is fixed. Either a goreleaser version that
+  emits a compliant cask or a `brew style --fix` step in the tap. Adding a `zap` stanza
+  would silence one of them and would be a lie: segcheck is a static binary with no
+  configuration, cache or preferences to remove, which is exactly why the template writes
+  "No zap stanza required".
+  <!-- sc: prio=low size=S labels=release -->

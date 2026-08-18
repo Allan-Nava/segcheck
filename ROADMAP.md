@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**97 items · 55 shipped · 42 open · 13 milestones.**
+**98 items · 55 shipped · 43 open · 13 milestones.**
 
 ## At a glance
 
@@ -24,7 +24,7 @@
 | **M12** — Colour, HDR and the codec string | `v0.7.0` | later | `..........` 0% | 6 | 0 |
 | **M13** — Audio, past the sanity check | `v0.8.0` | later | `..........` 0% | 6 | 0 |
 | **M8** — Container image and supply chain | `v0.1.1` | shipped | `##########` 100% | 0 | 5 |
-| **M7** — Project and release | `ongoing` | ongoing | `########..` 81% | 3 | 13 |
+| **M7** — Project and release | `ongoing` | ongoing | `########..` 76% | 4 | 13 |
 
 ## Next up
 
@@ -208,13 +208,14 @@ Target `v0.1.1` · shipped · 0 open · 5 shipped · `##########` 100%
 
 ### M7 — Project and release
 
-Target `ongoing` · ongoing · 3 open · 13 shipped · `########..` 81%
+Target `ongoing` · ongoing · 4 open · 13 shipped · `########..` 76%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
 | **SC-64** — `scripts/backlog.sh` has no tests | med | S | tests,project | open |
 | **SC-94** — Developer ID signing and notarisation | med | M | release | open |
 | **SC-49** — Per-check reference pages | low | M | docs | open |
+| **SC-98** — The generated cask fails `brew style` | low | S | release | open |
 | **SC-36** — Real-stream smoke suite | high | S | tests,release | shipped `0.2.0` |
 | **SC-57** — `internal/fetch` tests | high | M | tests | shipped `0.1.1` |
 | **SC-58** — `cmd/segcheck` tests | high | M | tests,cli | shipped `0.1.1` |
@@ -239,7 +240,7 @@ Target `ongoing` · ongoing · 3 open · 13 shipped · `########..` 81%
 | `delivery` | 5 | 4 |
 | `integration` | 4 | 4 |
 | `output` | 4 | 3 |
+| `release` | 10 | 2 |
 | `docs` | 5 | 1 |
 | `project` | 5 | 1 |
-| `release` | 9 | 1 |
 | `tests` | 11 | 1 |
