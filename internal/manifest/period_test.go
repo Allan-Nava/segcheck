@@ -287,3 +287,86 @@ func TestParseDASH_APeriodAfterAnXlinkOneHasNoDerivableStart(t *testing.T) {
 			third.PeriodStart)
 	}
 }
+
+// A Period after a remote one that states no `@duration` either. Its start is
+// underivable, so its extent is too: nothing in the document says where it
+// begins, and a duration measured from an unknown start is not a duration. The
+// Period is still parsed and its segments still checked — only its position and
+// its extent are left unstated, because the alternative is a number segcheck
+// made up.
+func TestParseDASH_APeriodWithNoDerivableStartGetsNoDuration(t *testing.T) {
+	mpd := `<?xml version="1.0"?>
+<MPD xmlns:xlink="http://www.w3.org/1999/xlink" type="static" mediaPresentationDuration="PT30S">
+  <Period id="a" duration="PT10S">
+    <AdaptationSet mimeType="video/mp4">
+      <SegmentTemplate timescale="90000" duration="180000" media="a/$Number$.m4s" startNumber="1"/>
+      <Representation id="v" bandwidth="800000" width="1280" height="720" codecs="avc1.640028"/>
+    </AdaptationSet>
+  </Period>
+  <Period xlink:href="https://cdn.example/ad.period" xlink:actuate="onLoad"></Period>
+  <Period id="c">
+    <AdaptationSet mimeType="video/mp4">
+      <SegmentTemplate timescale="90000" media="c/$Number$.m4s" startNumber="1">
+        <SegmentTimeline><S t="0" d="180000" r="1"/></SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="v" bandwidth="800000" width="1280" height="720" codecs="avc1.640028"/>
+    </AdaptationSet>
+  </Period>
+</MPD>`
+	pl, err := ParseDASH([]byte(mpd), "https://cdn.example/m.mpd", time.Now())
+	if err != nil {
+		t.Fatalf("ParseDASH: %v", err)
+	}
+	if len(pl.Renditions) != 2 {
+		t.Fatalf("parsed %d renditions, want 2: the remote Period contributes none", len(pl.Renditions))
+	}
+	last := pl.Renditions[len(pl.Renditions)-1]
+	if last.PeriodStartKnown {
+		t.Errorf("the period after a remote one claims a start of %v", last.PeriodStart)
+	}
+	if last.PeriodDuration != 0 {
+		t.Errorf("a period whose start nothing determines was given a duration of %vs; "+
+			"mediaPresentationDuration measures to the end of the presentation, and the "+
+			"distance from an unknown start is not a length", last.PeriodDuration)
+	}
+	// The media itself is still there to be checked.
+	if len(last.Segments) == 0 {
+		t.Error("the period was dropped entirely; only its position is unknown, not its content")
+	}
+}
+
+// `start="10s"` is not an xs:duration — a packager writing plain seconds where
+// the schema wants PnYnMnDTnHnMnS. An attribute segcheck cannot parse is an
+// attribute that said nothing, not one that said zero: treating it as zero puts
+// the Period at the beginning of the presentation, which is the same wrong
+// answer as omitting it used to give.
+func TestParseDASH_AnUnparseablePeriodStartIsNotAStartOfZero(t *testing.T) {
+	mpd := `<?xml version="1.0"?>
+<MPD type="static" mediaPresentationDuration="PT20S">
+  <Period id="a" start="PT0S" duration="PT10S">
+    <AdaptationSet mimeType="video/mp4">
+      <SegmentTemplate timescale="90000" duration="180000" media="a/$Number$.m4s" startNumber="1"/>
+      <Representation id="v" bandwidth="800000" width="1280" height="720" codecs="avc1.640028"/>
+    </AdaptationSet>
+  </Period>
+  <Period id="b" start="10s" duration="PT10S">
+    <AdaptationSet mimeType="video/mp4">
+      <SegmentTemplate timescale="90000" duration="180000" media="b/$Number$.m4s" startNumber="1"/>
+      <Representation id="v" bandwidth="800000" width="1280" height="720" codecs="avc1.640028"/>
+    </AdaptationSet>
+  </Period>
+</MPD>`
+	pl, err := ParseDASH([]byte(mpd), "https://cdn.example/m.mpd", time.Now())
+	if err != nil {
+		t.Fatalf("ParseDASH: %v", err)
+	}
+	second := pl.Renditions[len(pl.Renditions)-1]
+	if !second.PeriodStartKnown {
+		t.Fatalf("the period's start was reported as underivable, but the one before it states both a start and a duration")
+	}
+	if second.PeriodStart != 10 {
+		t.Errorf("a period whose @start does not parse starts at %vs, want 10s — "+
+			"the previous period's start plus its duration, which is what an absent @start means",
+			second.PeriodStart)
+	}
+}
