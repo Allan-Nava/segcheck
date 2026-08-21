@@ -368,7 +368,7 @@ stream that break in production and that no manifest-only checker can see.
   three false findings fixed alongside it.
   <!-- sc: prio=med size=S labels=tests ver=0.3.0 -->
 
-## M5 — Live and delivery <!-- ms: target=v0.4.0 phase=now -->
+## M5 — Live and delivery <!-- ms: target=v0.4.0 phase=shipped -->
 
 A live edge and a CDN are the two things a single-shot check cannot see. These
 items are what turn segcheck from "check this stream once" into "check this
@@ -445,7 +445,7 @@ stream the way a viewer receives it".
   extra request. `byterange` is in every smoke stream's must-not-fall-silent list.
   <!-- sc: prio=low size=S labels=delivery,check ver=0.4.0 -->
 
-## M9 — Wallclock and DVR correctness <!-- ms: target=v0.4.0 phase=next -->
+## M9 — Wallclock and DVR correctness <!-- ms: target=v0.4.0 phase=shipped -->
 
 A manifest does not only claim structure, it claims **time in the real world**:
 this segment starts at 14:03:22 UTC, this window is sixty seconds deep, this
@@ -590,7 +590,7 @@ manifest-only reader would call fine.
   between revisions and a citation against the wrong one is worse than none, so the
   requirement is quoted in the message instead. `dash-if` is accepted and says
   plainly that nothing ran (SC-62) rather than reporting a pass it never made.
-  <!-- sc: prio=high size=S labels=cli ver=0.5.0 -->
+  <!-- sc: prio=high size=S labels=cli ver=0.4.0 -->
 - [x] **SC-59 — Apple HLS Authoring Spec, the measurable subset**: five rules under
   `--profile apple`, each quoting the requirement in words and putting the measured
   value beside the limit. Where the specification states a number — 200% peak to
@@ -601,7 +601,7 @@ manifest-only reader would call fine.
   on a keyframe" is an assertion in fMP4 and an inference in MPEG-TS, and escalating
   the inference reported bipbop as non-conformant — `media.Track.KeyframeStated`
   separates them now.
-  <!-- sc: prio=high size=L labels=check ver=0.5.0 -->
+  <!-- sc: prio=high size=L labels=check ver=0.4.0 -->
 - [x] **SC-60 — I-frame playlists**: the `iframe` check fetches the ranges
   `EXT-X-I-FRAME-STREAM-INF` declares and reads them — each must resolve to a
   keyframe and to nothing else, and the rung must sit on the video's own timeline.
@@ -612,7 +612,7 @@ manifest-only reader would call fine.
   and fMP4 trick-play fragments state nothing about sync at all, so the keyframe is
   read out of the length-prefixed samples instead — an inference, marked as one. An
   MPEG-TS range carries no PAT or PMT and stays honestly unverified.
-  <!-- sc: prio=high size=M labels=check,parser ver=0.5.0 -->
+  <!-- sc: prio=high size=M labels=check,parser ver=0.4.0 -->
 - [ ] **SC-62 — DASH-IF IOP, the measurable subset**: `@codecs` against the
   sample entry the segments actually carry, timescales consistent across the
   representations of one adaptation set, `@segmentAlignment="true"` that is
@@ -654,7 +654,7 @@ item here that would is out of scope.
   systems. A declared system is reported missing only when the init is demonstrably
   the acquisition path — it carries `pssh` for other systems and nothing else supplies
   this one.
-  <!-- sc: prio=high size=M labels=check,parser ver=0.6.0 -->
+  <!-- sc: prio=high size=M labels=check,parser ver=0.4.0 -->
 - [x] **SC-67 — Encryption scheme**: the `scheme` check compares the `schm` scheme
   with the one the manifest declares, reports a ladder that mixes schemes, and quotes
   the `tenc` `default_KID` so a rung can be matched against a key server. It also
@@ -662,7 +662,7 @@ item here that would is out of scope.
   pattern belongs to cbcs and cens and cannot appear under cenc or cbc1. Axinom's cbcs
   vector corrected that rule — common encryption gives video a pattern and audio
   full-sample encryption, so cbcs audio states none and is right not to.
-  <!-- sc: prio=high size=M labels=check,parser ver=0.6.0 -->
+  <!-- sc: prio=high size=M labels=check,parser ver=0.4.0 -->
 - [x] **SC-69 — Clear lead, and media that is not protected at all**: the `clear`
   check reads the per-sample encryption state from `saiz` and reports a rendition the
   manifest declares protected whose samples are all in the clear — the defect that
@@ -673,7 +673,7 @@ item here that would is out of scope.
   claim to check in both directions. A truncated `saiz` reports nothing rather than a
   run of clear samples: unprotected content is the one direction this must never be
   wrong in.
-  <!-- sc: prio=high size=L labels=check,parser ver=0.6.0 -->
+  <!-- sc: prio=high size=L labels=check,parser ver=0.4.0 -->
 - [ ] **SC-68 — Key rotation integrity**: where the manifest rotates keys — a
   new `EXT-X-KEY`, a DASH period or KID change — the KID carried by the segments
   must actually change at that boundary, and no segment may reference a KID that
@@ -724,7 +724,7 @@ not checking, and stays out.
   colour rather than failing, so every value is checked against the assigned ranges and
   a rejected read reports "unstated"; an unstated colour is never read as BT.709, since
   code point 0 is reserved. An ICC `colr` profile states no code points and is declined.
-  <!-- sc: prio=high size=L labels=parser ver=0.7.0 -->
+  <!-- sc: prio=high size=L labels=parser ver=0.4.0 -->
 - [x] **SC-73 — `VIDEO-RANGE` against the transfer function**: the `videorange` check
   compares HLS `VIDEO-RANGE` — parsed for the first time — and DASH's CICP transfer
   descriptor against what SC-72 reads, in both directions. An absent `VIDEO-RANGE` is
@@ -732,7 +732,7 @@ not checking, and stays out.
   Apple's Dolby Vision example corrected the reader: most real fMP4 carries no `colr`
   box and states its colour only in the VUI of the parameter set inside `avcC`/`hvcC`,
   so looking for a `colr` and giving up found nothing on the majority of content.
-  <!-- sc: prio=high size=M labels=check,parser ver=0.7.0 -->
+  <!-- sc: prio=high size=M labels=check,parser ver=0.4.0 -->
 - [x] **SC-74 — Codec string profile and level** (includes the `av1C`/`vpcC`
   configuration boxes, moved here from SC-42): the whole string, decomposed per
   grammar — `avc1.PPCCLL` in hex and its older dotted decimal form, `hvc1.P.C.LX.B`
@@ -743,7 +743,7 @@ not checking, and stays out.
   string is OK-level "not verifiable". Apple's bipbop confirmed the check on its first
   run — a 1080p rung declaring level 3.1 — and fourteen of segcheck's own fixtures
   turned out to declare a profile and level their media did not carry.
-  <!-- sc: prio=high size=L labels=check,parser ver=0.7.0 -->
+  <!-- sc: prio=high size=L labels=check,parser ver=0.4.0 -->
 
 - [ ] **SC-75 — HDR10 static metadata**: a rendition that declares PQ should
   carry mastering-display colour volume and content light level — SEI 137 and
@@ -802,7 +802,7 @@ which is why SC-18 already rules it out and why nothing here reintroduces it.
   round trip agrees with the standard rather than with itself. `AudioConfig` carries the
   *coded* rate and channel count and records SBR and PS, because the sample entry
   describes the rendered output and for HE-AAC those are deliberately different.
-  <!-- sc: prio=high size=L labels=parser ver=0.8.0 -->
+  <!-- sc: prio=high size=L labels=parser ver=0.4.0 -->
 - [x] **SC-82 — `CHANNELS` against the real channel count**: the comparison itself
   shipped with SC-18; what SC-81 made possible was getting the Parametric Stereo
   exemption right. HE-AAC v2 codes one channel and renders two, so a declared 2 over a
@@ -811,7 +811,7 @@ which is why SC-18 already rules it out and why nothing here reintroduces it.
   that merely claimed to be HE-AAC v2. The AudioSpecificConfig states PS outright, so
   where the media says, the media decides, and the codec string is the fallback only
   for media that states nothing.
-  <!-- sc: prio=high size=M labels=check,parser ver=0.8.0 -->
+  <!-- sc: prio=high size=M labels=check,parser ver=0.4.0 -->
 - [x] **SC-83 — Audio codec string against the configuration**: `mp4a.40.2` declared
   over a configuration that explicitly states object type 5 or 29, and `ec-3` declared
   over an `ac-3` sample entry — a different decoder rather than a different
@@ -821,7 +821,7 @@ which is why SC-18 already rules it out and why nothing here reintroduces it.
   way HE-AAC is carried and the configuration alone can neither confirm nor deny it.
   segcheck says so rather than reporting it. Unparseable strings are OK-level "not
   verifiable".
-  <!-- sc: prio=high size=M labels=check ver=0.8.0 -->
+  <!-- sc: prio=high size=M labels=check ver=0.4.0 -->
 - [ ] **SC-84 — Loudness metadata**: `dialnorm` in the AC-3/E-AC-3 bitstream and
   the `ludt`/`loud` box where it is present, reported per rendition and compared
   across the ladder. A ladder whose rungs disagree on dialnorm steps in volume

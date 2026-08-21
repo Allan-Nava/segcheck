@@ -7,6 +7,45 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-21
+
+Seventeen new checks, taking the set from 19 to 36, and the through-line is time and
+delivery — everything about a stream that a single snapshot of it cannot show.
+
+A live edge has to advance at 1x real time, which is not the same claim as "it advanced":
+a packager publishing two seconds of media every three moves every time it is looked at
+and still loses a second of ground per three, until the viewer's buffer is gone. A DVR
+window is a promise, so it is collected rather than believed, and when it turns out short
+the finding says how much the origin really holds. `EXT-X-PROGRAM-DATE-TIME` is the only
+thing tying media to a wall clock, so it is compared against the media instead of trusted.
+A dynamic MPD is checked against the `UTCTiming` source it names. An `EXT-X-DISCONTINUITY`
+is checked against the reset it promises, in both directions. A multi-period MPD is read
+as one presentation, because a defect at a period boundary is invisible from either side.
+
+Delivery got the same treatment: whether the CDN is really caching the live edge, whether
+two POPs serve the same bytes for the same URL, and whether the origin honours a `Range`
+request at all. The findings now also render as Prometheus or OTLP metrics, so the run
+that happens on a timer feeds a dashboard rather than a log nobody reads.
+
+Depth everywhere else: DRM systems and the encryption scheme against the manifest and
+against each other, whether protected media is actually encrypted, the whole `CODECS`
+string rather than its first component, `VIDEO-RANGE` against the transfer function, the
+audio configuration boxes against `CHANNELS` and against the audio codec string,
+trick-play rungs, and `--profile apple|dash-if` for the measurable subset of two authoring
+specifications.
+
+The recurring lesson is the one this project keeps relearning. A number a manifest states
+and a number a container states are often both right about different things, and the
+distance between "no" and "unknown" is most of the product. A Period's `@start` is
+optional and an absent one is not zero. `Accept-Ranges: bytes` is a claim and answering a
+Range request is the fact. A `Target` that names a segment is what makes a report readable
+and exactly what makes it poison as a metric label.
+
+Most of it was found by pointing the binary at real streams rather than by a unit test.
+That pass is automated now, and it carries a multi-period reference stream plus two served
+from `mediatest` over a loopback origin for the two features no public stream declares —
+LL-HLS parts and `EXT-X-DISCONTINUITY`.
+
 ### Added
 
 - **`--output prometheus` and `--output otlp`: the same findings as metrics** (SC-27), for
@@ -1344,6 +1383,7 @@ compares the media against the manifest's claims.
   stream: all three come back clean, with durations matching to +0.00% and coded
   resolutions read from the bitstream.
 
+[0.4.0]: https://github.com/Allan-Nava/segcheck/releases/tag/v0.4.0
 [0.3.0]: https://github.com/Allan-Nava/segcheck/releases/tag/v0.3.0
 [0.2.0]: https://github.com/Allan-Nava/segcheck/releases/tag/v0.2.0
 [0.1.1]: https://github.com/Allan-Nava/segcheck/releases/tag/v0.1.1

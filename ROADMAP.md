@@ -16,8 +16,8 @@
 | **M2** — The checks | `v0.1.0` | shipped | `##########` 100% | 0 | 8 |
 | **M3** — Codec and timing depth | `v0.2.0` | shipped | `##########` 100% | 0 | 9 |
 | **M4** — Everything that is not the video track | `v0.3.0` | shipped | `##########` 100% | 0 | 14 |
-| **M5** — Live and delivery | `v0.4.0` | **now** | `##########` 100% | 0 | 6 |
-| **M9** — Wallclock and DVR correctness | `v0.4.0` | next | `##########` 100% | 0 | 5 |
+| **M5** — Live and delivery | `v0.4.0` | shipped | `##########` 100% | 0 | 6 |
+| **M9** — Wallclock and DVR correctness | `v0.4.0` | shipped | `##########` 100% | 0 | 5 |
 | **M6** — Integration | `v0.5.0` | later | `##........` 17% | 5 | 1 |
 | **M10** — Authoring-spec conformance | `v0.5.0` | later | `######....` 60% | 2 | 3 |
 | **M11** — Content protection, in depth | `v0.6.0` | later | `######....` 60% | 2 | 3 |
@@ -104,7 +104,7 @@ Target `v0.3.0` · shipped · 0 open · 14 shipped · `##########` 100%
 
 ### M5 — Live and delivery
 
-Target `v0.4.0` · **now** · 0 open · 6 shipped · `##########` 100%
+Target `v0.4.0` · shipped · 0 open · 6 shipped · `##########` 100%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
@@ -117,7 +117,7 @@ Target `v0.4.0` · **now** · 0 open · 6 shipped · `##########` 100%
 
 ### M9 — Wallclock and DVR correctness
 
-Target `v0.4.0` · next · 0 open · 5 shipped · `##########` 100%
+Target `v0.4.0` · shipped · 0 open · 5 shipped · `##########` 100%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
@@ -148,9 +148,9 @@ Target `v0.5.0` · later · 2 open · 3 shipped · `######....` 60%
 |---|---|---|---|---|
 | **SC-62** — DASH-IF IOP, the measurable subset | med | L | check | open |
 | **SC-61** — Trick-play thumbnails | low | M | check,parser | open |
-| **SC-59** — Apple HLS Authoring Spec, the measurable subset | high | L | check | shipped `0.5.0` |
-| **SC-60** — I-frame playlists | high | M | check,parser | shipped `0.5.0` |
-| **SC-63** — `--profile apple\|dash-if\|none` | high | S | cli | shipped `0.5.0` |
+| **SC-59** — Apple HLS Authoring Spec, the measurable subset | high | L | check | shipped `0.4.0` |
+| **SC-60** — I-frame playlists | high | M | check,parser | shipped `0.4.0` |
+| **SC-63** — `--profile apple\|dash-if\|none` | high | S | cli | shipped `0.4.0` |
 
 ### M11 — Content protection, in depth
 
@@ -160,9 +160,9 @@ Target `v0.6.0` · later · 2 open · 3 shipped · `######....` 60%
 |---|---|---|---|---|
 | **SC-68** — Key rotation integrity | med | L | check,parser | open |
 | **SC-70** — HLS `METHOD` against the payload | med | M | check,parser | open |
-| **SC-66** — DRM systems present against declared | high | M | check,parser | shipped `0.6.0` |
-| **SC-67** — Encryption scheme | high | M | check,parser | shipped `0.6.0` |
-| **SC-69** — Clear lead, and media that is not protected at all | high | L | check,parser | shipped `0.6.0` |
+| **SC-66** — DRM systems present against declared | high | M | check,parser | shipped `0.4.0` |
+| **SC-67** — Encryption scheme | high | M | check,parser | shipped `0.4.0` |
+| **SC-69** — Clear lead, and media that is not protected at all | high | L | check,parser | shipped `0.4.0` |
 
 ### M12 — Colour, HDR and the codec string
 
@@ -173,9 +173,9 @@ Target `v0.7.0` · later · 3 open · 3 shipped · `#####.....` 50%
 | **SC-75** — HDR10 static metadata | med | M | check,parser | open |
 | **SC-76** — Dolby Vision | med | L | check,parser | open |
 | **SC-77** — Colour consistency across the ladder | med | M | check | open |
-| **SC-72** — Colour description readers | high | L | parser | shipped `0.7.0` |
-| **SC-73** — `VIDEO-RANGE` against the transfer function | high | M | check,parser | shipped `0.7.0` |
-| **SC-74** — Codec string profile and level | high | L | check,parser | shipped `0.7.0` |
+| **SC-72** — Colour description readers | high | L | parser | shipped `0.4.0` |
+| **SC-73** — `VIDEO-RANGE` against the transfer function | high | M | check,parser | shipped `0.4.0` |
+| **SC-74** — Codec string profile and level | high | L | check,parser | shipped `0.4.0` |
 
 ### M13 — Audio, past the sanity check
 
@@ -186,9 +186,9 @@ Target `v0.8.0` · later · 3 open · 3 shipped · `#####.....` 50%
 | **SC-84** — Loudness metadata | med | M | check,parser | open |
 | **SC-85** — Immersive audio against the badge | med | M | check,parser | open |
 | **SC-86** — Encoder delay and priming | med | L | check,parser | open |
-| **SC-81** — Audio configuration boxes | high | L | parser | shipped `0.8.0` |
-| **SC-82** — `CHANNELS` against the real channel count | high | M | check,parser | shipped `0.8.0` |
-| **SC-83** — Audio codec string against the configuration | high | M | check | shipped `0.8.0` |
+| **SC-81** — Audio configuration boxes | high | L | parser | shipped `0.4.0` |
+| **SC-82** — `CHANNELS` against the real channel count | high | M | check,parser | shipped `0.4.0` |
+| **SC-83** — Audio codec string against the configuration | high | M | check | shipped `0.4.0` |
 
 ### M8 — Container image and supply chain
 
