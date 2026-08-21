@@ -9,6 +9,30 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **`--output prometheus` and `--output otlp`: the same findings as metrics** (SC-27), for
+  the run that happens on a timer rather than in front of a person — a cron job writing
+  into a node_exporter textfile collector, a Pushgateway, an OTLP/HTTP ingest. The
+  decision that shapes both is what they leave out. A finding's `Target` names the exact
+  thing looked at, which is what makes the text report useful and what makes it poison as
+  a label: a live stream has different segments every run, so a `target` label would mint
+  a new series every tick and never retire one, and a minutely job would bury an
+  operator's Prometheus in dead series inside a week. Neither format carries a target, and
+  a test asserts it. What they carry is the aggregate, whose shape is fixed by the check
+  set rather than by the stream: `segcheck_findings{check,status}`,
+  `segcheck_check_severity{check}`, `segcheck_worst_severity`, and the run itself —
+  `segcheck_up`, segments, bytes, duration, start timestamp. Every check present states
+  all four statuses including the zeros, so an alert is `> 0` instead of a question about
+  a series that does not exist yet; a check that falls silent disappears, so catching that
+  needs `absent()` and the `# HELP` text says so. The severity scale is the project's own,
+  so 3 is ERROR — the check could not run — above 2, a defect it did find. OTLP puts the
+  stream on the resource rather than on every point, and quotes `timeUnixNano` because the
+  value outruns what a JSON number carries intact. `OTLP` returns no error where `JSON`
+  does, for a real reason: `JSON` marshals the findings, whose `*float64` Value a future
+  check could set to NaN, and this payload holds no finding Value at all. The exposition
+  writer was checked against the reference `prometheus_client` parser rather than only
+  against itself — a real run plus bodies carrying a quote, a backslash, a newline and
+  non-ASCII in the stream URL, all accepted and round-tripped byte for byte.
+
 - **`byterange`: whether the origin honours a Range request, once per host** (SC-26). The
   fact is a property of the host, and it was being reported once per segment from inside
   `fetch` — four identical notes on a four-segment sample, buried among the media findings

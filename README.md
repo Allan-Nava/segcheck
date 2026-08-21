@@ -121,6 +121,13 @@ segcheck check https://cdn.example/master.m3u8 --renditions 3 --segments 4
 # A report to paste into an incident doc
 segcheck check https://cdn.example/master.m3u8 --output markdown > report.md
 
+# Metrics for the run that happens on a timer instead of in front of a person
+segcheck check https://cdn.example/master.m3u8 --output prometheus \
+  > /var/lib/node_exporter/textfile_collector/segcheck.prom
+segcheck check https://cdn.example/master.m3u8 --output otlp \
+  | curl -sS -H 'Content-Type: application/json' --data-binary @- \
+      "$OTLP_ENDPOINT/v1/metrics"
+
 # Gate CI on the result
 segcheck check https://cdn.example/master.m3u8 --exit-on bad
 
@@ -140,6 +147,8 @@ process list and in every CI log that echoes its own invocation, and unlike a
 password it cannot be rotated without re-encrypting the content. The same rule
 governs credentials, which go in `--header` values the caller reads from the
 environment.
+
+`--output prometheus` and `--output otlp` are for the cron job rather than the operator, and what they leave out is the design. A finding's target names the exact thing that was looked at — `720p seg 38` — which is what makes the text report useful and what makes it poison as a metric label: a live stream has different segments every run, so a `target` label would mint a new series every tick and never retire one, and a minutely job would bury the operator's Prometheus in dead series within a week. Neither format carries a target. What they carry is the aggregate, whose shape is fixed by the check set instead of by the stream: a count per check per status, the worst severity per check, the worst overall, and the facts of the run itself. That answers the two questions a dashboard is for — did this stream go bad, and which check said so — and the detail behind an alert is one `--output json` away. Every check present in a run states all four statuses including the zeros, so an alert reads `segcheck_findings{status="BAD"} > 0` rather than having to reason about a series that does not exist yet; a check that falls silent disappears entirely, so catching *that* needs `absent()`, and the `# HELP` text says so. The severity scale is this project's own order, so 3 is `ERROR` — a check that could not run — ranking above 2, a defect it did find.
 
 **Exit status is 0 whenever the check ran**, findings or not — a check that ran *is* a success. Use `--exit-on warn|bad|error` when you want a non-zero exit for CI.
 

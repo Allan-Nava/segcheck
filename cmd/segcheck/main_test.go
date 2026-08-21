@@ -235,6 +235,25 @@ func TestRun_OutputFormats(t *testing.T) {
 		t.Errorf("--output markdown is not the report shape:\n%.200s", mdOut)
 	}
 
+	// The metrics formats go to a timer, not to a person: a textfile collector
+	// or an OTLP ingest. Both are never coloured and both have to carry the run
+	// itself, or a dashboard cannot tell a healthy stream from a dead cron job.
+	_, promOut, _ := exec(t, "check", url, "--output", "prometheus")
+	if !strings.Contains(promOut, "# TYPE segcheck_up gauge") {
+		t.Errorf("--output prometheus is not the exposition format:\n%.300s", promOut)
+	}
+	if !strings.Contains(promOut, `stream="`+url+`"`) {
+		t.Errorf("--output prometheus does not label the stream it checked:\n%.300s", promOut)
+	}
+	if strings.Contains(promOut, "\x1b[") {
+		t.Errorf("--output prometheus emitted ANSI escapes")
+	}
+
+	_, otlpOut, _ := exec(t, "check", url, "--output", "otlp")
+	if !strings.HasPrefix(strings.TrimSpace(otlpOut), `{"resourceMetrics"`) {
+		t.Errorf("--output otlp is not an ExportMetricsServiceRequest: %.80q", otlpOut)
+	}
+
 	_, textOut, _ := exec(t, "check", url, "--no-color")
 	if strings.Contains(textOut, "\x1b[") {
 		t.Errorf("--no-color still emitted ANSI escapes")

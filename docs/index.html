@@ -437,6 +437,8 @@ segcheck check https://cdn.example/master.m3u8 --renditions 3 --segments 4
 
 # A report to paste into an incident doc
 segcheck check https://cdn.example/master.m3u8 --output markdown &gt; report.md
+segcheck check https://cdn.example/master.m3u8 --output prometheus \
+  &gt; /var/lib/node_exporter/textfile_collector/segcheck.prom
 
 # Gate CI on the result
 segcheck check https://cdn.example/master.m3u8 --exit-on bad</pre></div>
@@ -467,7 +469,7 @@ segcheck check https://cdn.example/master.m3u8 --exit-on bad</pre></div>
           <tr><td><code>--max-bytes N</code></td><td>Cap on a single response body</td><td><code>67108864</code></td></tr>
           <tr><td><code>--pop ADDR</code></td><td>Also fetch every sampled segment through this edge address and compare the bytes, repeatable</td><td>none</td></tr>
           <tr><td><code>--insecure</code></td><td>Skip TLS verification</td><td>off</td></tr>
-          <tr><td><code>--output FORMAT</code></td><td><code>text|json|markdown</code></td><td><code>text</code></td></tr>
+          <tr><td><code>--output FORMAT</code></td><td><code>text|json|markdown|prometheus|otlp</code></td><td><code>text</code></td></tr>
           <tr><td><code>--no-color</code></td><td>Plain text even on a TTY (<code>NO_COLOR</code> is honoured too)</td><td>off</td></tr>
           <tr><td><code>--exit-on STATUS</code></td><td>Exit 1 when a finding reaches <code>warn|bad|error</code></td><td>never</td></tr>
           <tr><td><code>--key-file PATH</code></td><td>Read the AES-128 content key from a file (16 raw bytes or 32 hex digits)</td><td>—</td></tr>

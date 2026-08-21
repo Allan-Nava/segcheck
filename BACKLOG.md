@@ -524,9 +524,29 @@ wrong place, an ad splices two frames late, or a scrub back into the DVR window
 
 ## M6 — Integration <!-- ms: target=v0.5.0 phase=later -->
 
-- [ ] **SC-27 — Prometheus/OTLP output**: the same findings as metrics, so a
-  cron run feeds existing dashboards.
-  <!-- sc: prio=med size=M labels=output,integration -->
+- [x] **SC-27 — Prometheus/OTLP output**: `--output prometheus` renders the text
+  exposition format and `--output otlp` an OTLP/HTTP `ExportMetricsServiceRequest`, both
+  from one shared metric set so the two can never drift. The design is in what they leave
+  out: a finding's `Target` is `720p seg 38`, a different value every run on a live
+  stream, so a `target` label would mint a new series every tick and never retire one and
+  a minutely cron would bury the operator's Prometheus within a week. Neither format
+  carries a target and a test asserts no target reaches the output. The aggregate is what
+  ships — count per check per status, worst severity per check, worst overall, and the run
+  itself — because it answers the two questions a dashboard is for and the detail behind
+  an alert is one `--output json` away. Every check present states all four statuses
+  including zeros, so an alert is `> 0` rather than a question about a series that does
+  not exist; a silent check disappears entirely, so catching *that* needs `absent()` and
+  the `# HELP` says so. ERROR is 3 and outranks BAD at 2, the project's own order. OTLP
+  puts the stream on the resource, not on every point, and quotes `timeUnixNano` because
+  the value outruns an exact JSON number. `OTLP` returns no error where `JSON` does, and
+  the reason is real rather than convenient: `JSON` marshals findings, whose `*float64`
+  Value a future check could set to NaN, and this payload carries no finding Value at all.
+  A round trip against our own writer could not catch a shared misreading of the
+  exposition format, so it was checked against the reference `prometheus_client` parser —
+  a real run plus bodies with a quote, a backslash, a newline and non-ASCII in the URL,
+  all accepted and round-tripped byte for byte. That check stays out of CI: a Python
+  dependency is not worth it and the zero-dependency rule covers the tooling too.
+  <!-- sc: prio=med size=M labels=output,integration ver=0.4.0 -->
 - [ ] **SC-28 — Slack output** (Block Kit), webhook from the environment, never
   on the command line. <!-- sc: prio=med size=S labels=output,integration -->
 - [ ] **SC-41 — Baseline diff**: `--baseline run.json` compares this run against

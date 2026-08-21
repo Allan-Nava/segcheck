@@ -104,17 +104,26 @@ is off by default because pointing a checker at a key server is a request to a
 system that logs, rate-limits and sometimes bills.
 
 Output:
-  --output FORMAT     text|json|markdown (default text)
+  --output FORMAT     text|json|markdown|prometheus|otlp (default text)
   --no-color          plain text even on a TTY
   --exit-on STATUS    exit 1 when a finding reaches warn|bad|error (default: never)
 
 Exit status is 0 whenever the check ran, findings or not — a check that ran is a
 success. Use --exit-on to gate CI on the result.
 
+prometheus and otlp are for the run that happens on a timer rather than in
+front of a person — a cron job feeding a textfile collector, or an OTLP/HTTP
+ingest. They expose the aggregate and deliberately carry no per-segment label:
+a live stream has different segments every run, so a target label would mint a
+new series every tick and never retire one. Counts per check per status, the
+worst severity per check and the facts of the run are what a dashboard needs;
+the detail behind an alert is in --output json.
+
 Examples:
   segcheck check https://cdn.example/master.m3u8
   segcheck check https://cdn.example/manifest.mpd --segments 12 --from edge
   segcheck check https://cdn.example/master.m3u8 --output markdown > report.md
+  segcheck check https://cdn.example/master.m3u8 --output prometheus > /var/lib/node_exporter/textfile_collector/segcheck.prom
   segcheck check https://cdn.example/master.m3u8 --exit-on bad
   segcheck check https://cdn.example/live.m3u8 --watch 2m --exit-on bad
   segcheck check https://cdn.example/ll.m3u8 --parts 2
@@ -267,6 +276,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprint(stdout, s)
 	case "markdown", "md":
 		fmt.Fprint(stdout, output.Markdown(res))
+	case "prometheus", "prom":
+		fmt.Fprint(stdout, output.Prometheus(res))
+	case "otlp":
+		fmt.Fprint(stdout, output.OTLP(res))
 	default:
 		fmt.Fprint(stdout, output.Text(res, useColor(*noColor)))
 	}
@@ -303,9 +316,9 @@ func validate(opts analyze.Options, format, exitOn string) error {
 		return fmt.Errorf("--from must be auto, edge or start, got %q", opts.From)
 	}
 	switch format {
-	case "text", "json", "markdown", "md":
+	case "text", "json", "markdown", "md", "prometheus", "prom", "otlp":
 	default:
-		return fmt.Errorf("--output must be text, json or markdown, got %q", format)
+		return fmt.Errorf("--output must be text, json, markdown, prometheus or otlp, got %q", format)
 	}
 	switch strings.ToUpper(exitOn) {
 	case "", "WARN", "BAD", "ERROR":
