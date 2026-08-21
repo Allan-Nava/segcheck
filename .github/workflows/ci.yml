@@ -115,7 +115,22 @@ jobs:
           echo "fuzzing: $(echo $targets)"
           for target in $targets; do
             echo "::group::$target"
-            go test ./internal/media/ -run "^$target$" -fuzz "^$target$" -fuzztime=60s
+            # A count, not a duration. `-fuzztime=60s` gives the coordinator a
+            # context deadline, and when it expires while a worker is still
+            # inside an execution the run fails with a bare "context deadline
+            # exceeded" and no crashing input — a red build that says nothing
+            # about the parsers. On a two-core runner that happened on roughly
+            # half of all pushes, which is worse than no gate: a job that cries
+            # wolf every other time is a job people stop reading. `Nx` counts
+            # executions instead and sets no deadline, so there is nothing to
+            # race.
+            #
+            # 500k is about 18s for the slowest target on a GitHub runner and
+            # well under that for the rest. It also states the guarantee in the
+            # terms the gate is actually for: every parser survives half a
+            # million mutations, rather than however many a loaded runner
+            # happened to manage.
+            go test ./internal/media/ -run "^$target$" -fuzz "^$target$" -fuzztime=500000x
             echo "::endgroup::"
           done
       - name: Show any crashing input

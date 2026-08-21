@@ -70,6 +70,7 @@ var smokeStreams = []smokeStream{
 		name: "apple-fmp4",
 		url:  "https://devstreaming-cdn.apple.com/videos/streaming/examples/adv_dv_atmos/main.m3u8",
 		allowed: map[string]string{
+			"cache":   "a fresh runner is a cold edge: nobody in its region had asked for these segments, so every one is a miss. On VOD that is where the request came from, not what the stream is",
 			"bitrate": "the example over-declares BANDWIDTH by about 2x on several rungs",
 			"ladder":  "the example ships rungs where more bandwidth buys fewer pixels",
 		},
@@ -81,6 +82,7 @@ var smokeStreams = []smokeStream{
 		// Byte-range segments off one main.ts, which is what made the first
 		// keyframe rule report this stream three times over.
 		allowed: map[string]string{
+			"cache": "a fresh runner is a cold edge: nobody in its region had asked for these segments, so every one is a miss. On VOD that is where the request came from, not what the stream is",
 			// A real finding, checked by hand: the 1080p rung declares
 			// avc1.4d401f — Main profile, level 3.1 — and its SPS codes level 4.0.
 			// Level 3.1 tops out at 1280x720, so a device that honours the
@@ -91,10 +93,12 @@ var smokeStreams = []smokeStream{
 		expect: []string{"container", "resolution", "keyframe", "framerate", "continuity", "audio", "captions", "subtitles", "codecstring", "byterange"},
 	},
 	{
-		name:    "dash-segment-template",
-		url:     "https://dash.akamaized.net/akamai/bbb_30fps/bbb_30fps.mpd",
-		allowed: map[string]string{},
-		expect:  []string{"container", "resolution", "keyframe", "framerate", "continuity", "audio", "byterange"},
+		name: "dash-segment-template",
+		url:  "https://dash.akamaized.net/akamai/bbb_30fps/bbb_30fps.mpd",
+		allowed: map[string]string{
+			"cache": "a fresh runner is a cold edge: nobody in its region had asked for these segments, so every one is a miss. On VOD that is where the request came from, not what the stream is",
+		},
+		expect: []string{"container", "resolution", "keyframe", "framerate", "continuity", "audio", "byterange"},
 	},
 	{
 		name: "dash-single-file",
@@ -102,8 +106,10 @@ var smokeStreams = []smokeStream{
 		// The on-demand profile: no SegmentBase, a hierarchical index, and
 		// fragments that state no durations at all. Until SC-19 and SC-87 this
 		// stream produced three ERRORs and sampled nothing.
-		allowed: map[string]string{},
-		expect:  []string{"container", "resolution", "keyframe", "continuity", "byterange"},
+		allowed: map[string]string{
+			"cache": "a fresh runner is a cold edge: nobody in its region had asked for these segments, so every one is a miss. On VOD that is where the request came from, not what the stream is",
+		},
+		expect: []string{"container", "resolution", "keyframe", "continuity", "byterange"},
 	},
 	{
 		name: "dash-representation-attrs",
@@ -114,6 +120,7 @@ var smokeStreams = []smokeStream{
 		// in the manifest" and `resolution`, `framerate` and `keyframe` went silent
 		// on the whole stream. Those four checks in `expect` are the point of it.
 		allowed: map[string]string{
+			"cache":   "a fresh runner is a cold edge: nobody in its region had asked for these segments, so every one is a miss. On VOD that is where the request came from, not what the stream is",
 			"bitrate": "a segment peak exceeds the declared BANDWIDTH by about 20%",
 		},
 		expect: []string{"container", "resolution", "keyframe", "framerate", "continuity", "audio", "ladder", "byterange"},
@@ -128,6 +135,7 @@ var smokeStreams = []smokeStream{
 		// also the only multi-period stream in this suite, which is why the
 		// arithmetic SC-40 added went five months without a real-stream reading.
 		allowed: map[string]string{
+			"cache":   "a fresh runner is a cold edge: nobody in its region had asked for these segments, so every one is a miss. On VOD that is where the request came from, not what the stream is",
 			"bitrate": "several rungs peak 20-40% above the BANDWIDTH they declare",
 		},
 		expect: []string{"container", "resolution", "keyframe", "framerate", "continuity", "audio", "period", "byterange"},
@@ -140,6 +148,7 @@ var smokeStreams = []smokeStream{
 		// twin at v7-Clear produces the same findings minus the encryption notes, which
 		// is what says the protected stream is checked as well as an unprotected one.
 		allowed: map[string]string{
+			"cache":   "a fresh runner is a cold edge: nobody in its region had asked for these segments, so every one is a miss. On VOD that is where the request came from, not what the stream is",
 			"bitrate": "the vectors under-declare one segment's peak and over-declare the audio average",
 		},
 		expect: []string{"container", "resolution", "keyframe", "framerate", "continuity", "encryption", "byterange"},
