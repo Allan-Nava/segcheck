@@ -426,9 +426,24 @@ stream the way a viewer receives it".
   edge that could not be reached, which is a coverage hole rather than a verdict.
   Verified against two real Akamai edges of `dash.akamaized.net`.
   <!-- sc: prio=med size=L labels=delivery,cli ver=0.4.0 -->
-- [ ] **SC-26 — Byte-range support probe**: whether the origin honours `Range`
-  at all, reported once per host rather than per segment.
-  <!-- sc: prio=low size=S labels=delivery,check -->
+- [x] **SC-26 — Byte-range support probe**: the `byterange` check reports whether a host
+  honours `Range`, once per host. `fetch` was already saying it once per byte-range
+  *segment* — the same host-level sentence four times on a four-segment sample, and said
+  underneath the media findings the misconfiguration causes rather than above them. A
+  stream addressed in ranges (HLS `EXT-X-BYTERANGE`, DASH `SegmentBase` with an
+  `indexRange`) does not degrade when support is off, it fails wearing a media defect's
+  clothes: the fixture built for this produced twelve continuity-counter breaks, three
+  overlapping segments and a duration 300% long, eight findings about content for one
+  setting on one host. Severity belongs to the stream, not the origin — BAD when the
+  stream needs ranges, WARN when `Accept-Ranges: bytes` advertises what the origin will
+  not do (a claim against a fact, which is the whole brief applied to delivery), OK when
+  the stream addresses whole resources and only the seek gets dearer. A probe that never
+  completed is an ERROR naming the hole, never a verdict — an origin reconfigured on the
+  strength of a dropped connection was fine. It costs nothing on a stream already using
+  ranges, because the sample asked the question: Apple's MPEG-TS reference and Sony's
+  single-file DASH are measured from their own 326744- and 285730-byte asks, with no
+  extra request. `byterange` is in every smoke stream's must-not-fall-silent list.
+  <!-- sc: prio=low size=S labels=delivery,check ver=0.4.0 -->
 
 ## M9 — Wallclock and DVR correctness <!-- ms: target=v0.4.0 phase=next -->
 

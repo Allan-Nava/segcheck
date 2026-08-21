@@ -48,13 +48,6 @@ func checkFetch(rends []*renditionData) []finding.Finding {
 				continue
 			}
 			bytes += int64(len(sd.res.Body))
-			if sd.seg.ByteRange != nil && sd.res.Status == 200 {
-				out = append(out, finding.Finding{
-					Check: "fetch", Target: segLabel(rd, sd), Status: finding.WARN,
-					Message: fmt.Sprintf("origin ignored the Range request (%s): answered 200 with the whole resource", sd.seg.ByteRange.Header()),
-					Hint:    "byte-range segments need a 206; behind a CDN this usually means range support is off",
-				})
-			}
 			if sd.res.Truncated {
 				out = append(out, finding.Finding{
 					Check: "fetch", Target: segLabel(rd, sd), Status: finding.WARN,

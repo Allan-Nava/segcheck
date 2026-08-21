@@ -269,6 +269,7 @@ func Run(ctx context.Context, c *fetch.Client, rawurl string, opts Options) find
 	}
 
 	res.Findings = append(res.Findings, checkFetch(rends)...)
+	res.Findings = append(res.Findings, checkByteRange(probeByteRanges(ctx, c, rends))...)
 	res.Findings = append(res.Findings, checkCache(rends)...)
 	res.Findings = append(res.Findings, checkPOP(rends, comparePOPs(ctx, c, rends, opts))...)
 	res.Findings = append(res.Findings, checkInit(rends)...)

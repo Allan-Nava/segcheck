@@ -73,7 +73,7 @@ var smokeStreams = []smokeStream{
 			"bitrate": "the example over-declares BANDWIDTH by about 2x on several rungs",
 			"ladder":  "the example ships rungs where more bandwidth buys fewer pixels",
 		},
-		expect: []string{"container", "resolution", "keyframe", "framerate", "continuity", "audio", "captions"},
+		expect: []string{"container", "resolution", "keyframe", "framerate", "continuity", "audio", "captions", "byterange"},
 	},
 	{
 		name: "apple-mpeg-ts",
@@ -88,13 +88,13 @@ var smokeStreams = []smokeStream{
 			// asset is from 2016 and over-declares BANDWIDTH too.
 			"codecstring": "the 1080p rung declares level 3.1 for level-4.0 media",
 		},
-		expect: []string{"container", "resolution", "keyframe", "framerate", "continuity", "audio", "captions", "subtitles", "codecstring"},
+		expect: []string{"container", "resolution", "keyframe", "framerate", "continuity", "audio", "captions", "subtitles", "codecstring", "byterange"},
 	},
 	{
 		name:    "dash-segment-template",
 		url:     "https://dash.akamaized.net/akamai/bbb_30fps/bbb_30fps.mpd",
 		allowed: map[string]string{},
-		expect:  []string{"container", "resolution", "keyframe", "framerate", "continuity", "audio"},
+		expect:  []string{"container", "resolution", "keyframe", "framerate", "continuity", "audio", "byterange"},
 	},
 	{
 		name: "dash-single-file",
@@ -103,7 +103,7 @@ var smokeStreams = []smokeStream{
 		// fragments that state no durations at all. Until SC-19 and SC-87 this
 		// stream produced three ERRORs and sampled nothing.
 		allowed: map[string]string{},
-		expect:  []string{"container", "resolution", "keyframe", "continuity"},
+		expect:  []string{"container", "resolution", "keyframe", "continuity", "byterange"},
 	},
 	{
 		name: "dash-representation-attrs",
@@ -116,7 +116,7 @@ var smokeStreams = []smokeStream{
 		allowed: map[string]string{
 			"bitrate": "a segment peak exceeds the declared BANDWIDTH by about 20%",
 		},
-		expect: []string{"container", "resolution", "keyframe", "framerate", "continuity", "audio", "ladder"},
+		expect: []string{"container", "resolution", "keyframe", "framerate", "continuity", "audio", "ladder", "byterange"},
 	},
 	{
 		name: "dash-multi-period",
@@ -130,7 +130,7 @@ var smokeStreams = []smokeStream{
 		allowed: map[string]string{
 			"bitrate": "several rungs peak 20-40% above the BANDWIDTH they declare",
 		},
-		expect: []string{"container", "resolution", "keyframe", "framerate", "continuity", "audio", "period"},
+		expect: []string{"container", "resolution", "keyframe", "framerate", "continuity", "audio", "period", "byterange"},
 	},
 	{
 		name: "dash-cenc",
@@ -142,7 +142,7 @@ var smokeStreams = []smokeStream{
 		allowed: map[string]string{
 			"bitrate": "the vectors under-declare one segment's peak and over-declare the audio average",
 		},
-		expect: []string{"container", "resolution", "keyframe", "framerate", "continuity", "encryption"},
+		expect: []string{"container", "resolution", "keyframe", "framerate", "continuity", "encryption", "byterange"},
 	},
 	{
 		// SC-103. Nothing public declares EXT-X-DISCONTINUITY, so this one is
@@ -166,7 +166,7 @@ var smokeStreams = []smokeStream{
 			}}).URL + "/master.m3u8"
 		},
 		allowed: map[string]string{},
-		expect:  []string{"container", "resolution", "keyframe", "framerate", "continuity", "discontinuity"},
+		expect:  []string{"container", "resolution", "keyframe", "framerate", "continuity", "discontinuity", "byterange"},
 	},
 	{
 		// SC-99. Same reason: no public LL-HLS endpoint was reachable when
@@ -186,7 +186,7 @@ var smokeStreams = []smokeStream{
 		// playlist directly, and with no master there is no RESOLUTION attribute
 		// for the media to be checked against. A check with nothing to compare
 		// staying quiet is the contract, not a gap.
-		expect: []string{"container", "keyframe", "continuity", "parts"},
+		expect: []string{"container", "keyframe", "continuity", "parts", "byterange"},
 	},
 }
 

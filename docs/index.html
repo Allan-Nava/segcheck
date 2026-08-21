@@ -265,7 +265,7 @@ footer{border-top:1px solid var(--border);padding:34px 0;color:var(--muted);font
                        rendition their connection cannot sustain</span>
 <span class="t-ok">🟢 OK  </span>   <span class="t-key">alignment</span>   <span class="t-b">ladder</span>           renditions aligned at 6 shared segment indexes (tolerance 100ms)
 
-<span class="t-dim">21 checks: 17 OK, 1 WARN, 3 BAD, 0 ERROR — 18 segments, 24.5 MiB in 4.1s</span></div>
+<span class="t-dim">22 checks: 18 OK, 1 WARN, 3 BAD, 0 ERROR — 18 segments, 24.5 MiB in 4.1s</span></div>
     </div>
   </div>
 </section>
@@ -307,7 +307,7 @@ footer{border-top:1px solid var(--border);padding:34px 0;color:var(--muted);font
         <thead><tr><th>Check</th><th>What it compares</th><th>Worst status</th></tr></thead>
         <tbody>
           <tr><td><code>manifest</code></td><td>The manifest parses, and what shape it is</td><td><span class="pill p-bad">BAD</span></td></tr>
-          <tr><td><code>fetch</code></td><td>Every sampled segment is reachable; <code>Range</code> requests are honoured</td><td><span class="pill p-err">ERROR</span></td></tr>
+          <tr><td><code>fetch</code></td><td>Every sampled segment is reachable, and none was truncated by the byte cap</td><td><span class="pill p-err">ERROR</span></td></tr>
           <tr><td><code>init</code></td><td>The <code>EXT-X-MAP</code> / DASH initialisation segment is available</td><td><span class="pill p-err">ERROR</span></td></tr>
           <tr><td><code>container</code></td><td>The bytes are the media they claim to be — an origin error page served with a 200 lands here</td><td><span class="pill p-bad">BAD</span></td></tr>
           <tr><td><code>continuity</code></td><td>Each segment starts where the previous one ended; MPEG-TS continuity-counter breaks (packet loss)</td><td><span class="pill p-bad">BAD</span></td></tr>
@@ -327,6 +327,7 @@ footer{border-top:1px solid var(--border);padding:34px 0;color:var(--muted);font
           <tr><td><code>encryption</code></td><td>Declared protection against what the segments carry, whether a supplied key actually decrypts them, and — for SAMPLE-AES and CENC, which protect the samples and not the container — which half of the tool could run at all</td><td><span class="pill p-bad">BAD</span></td></tr>
           <tr><td><code>pop</code></td><td>With <code>--pop</code>, the same segment URLs fetched through several CDN edges and compared byte for byte — a stale edge plays perfectly and plays the wrong content</td><td><span class="pill p-bad">BAD</span></td></tr>
           <tr><td><code>cache</code></td><td>Whether the CDN is actually caching: <code>X-Cache</code>, <code>CF-Cache-Status</code>, <code>Age</code> and their vendor spellings per segment, a live edge served entirely from the origin, and segments the origin tells caches not to store</td><td><span class="pill p-bad">BAD</span></td></tr>
+          <tr><td><code>byterange</code></td><td>Whether the origin honours an HTTP <code>Range</code> request, measured once per host rather than once per segment: fatal to a stream addressed in byte ranges, free to one that is not, and a warning either way when <code>Accept-Ranges: bytes</code> claims support the origin does not have</td><td><span class="pill p-bad">BAD</span></td></tr>
           <tr><td><code>ladder</code></td><td>Duplicate rungs, inverted rungs, dangling <code>AUDIO</code> groups, missing <code>CODECS</code></td><td><span class="pill p-bad">BAD</span></td></tr>
           <tr><td><code>codecstring</code></td><td>The whole <code>CODECS</code> string, not just its first component: video profile, level and tier against <code>avcC</code>/<code>hvcC</code>/<code>av1C</code>/<code>vpcC</code> or the parameter set, and the audio object type against the <code>esds</code> configuration — reported in both directions, because declaring below the media hides a rung and declaring above it hides viewers</td><td><span class="pill p-bad">BAD</span></td></tr>
           <tr><td><code>videorange</code></td><td><code>VIDEO-RANGE=SDR|HLG|PQ</code> and DASH's CICP transfer descriptor against the transfer characteristic the media really codes — the difference between an HDR delivery and one the audience sees two different ways</td><td><span class="pill p-bad">BAD</span></td></tr>

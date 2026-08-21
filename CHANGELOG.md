@@ -9,6 +9,27 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **`byterange`: whether the origin honours a Range request, once per host** (SC-26). The
+  fact is a property of the host, and it was being reported once per segment from inside
+  `fetch` — four identical notes on a four-segment sample, buried among the media findings
+  the same misconfiguration causes. A stream packaged as byte ranges of one resource (HLS
+  `EXT-X-BYTERANGE`, DASH `SegmentBase` with an `indexRange`) does not degrade when range
+  support is off: it fails, and it fails looking like a media defect, because every
+  segment arrives as the whole file. segcheck reported that as twelve continuity-counter
+  breaks, three overlapping segments and a duration 300% long — eight findings about the
+  content for one setting on one host. `byterange` names the cause once, above the
+  symptoms, and says in its hint that the rest follow from it. Severity is a property of
+  the stream rather than of the origin: BAD when the stream is addressed in ranges, WARN
+  when `Accept-Ranges: bytes` advertises support the origin does not have — a claim
+  against a fact, which is this tool's whole job pointed at delivery — and OK when the
+  stream addresses whole resources and never sends a `Range`, because then nothing is
+  broken and only the seek is dearer. A probe that never completed is an ERROR naming the
+  hole, never a verdict. It costs no extra request on a stream that already uses byte
+  ranges, because the sample itself asked the question: verified against Apple's MPEG-TS
+  reference and Sony's single-file DASH, which are measured from their own 326744- and
+  285730-byte ranges. The `fetch` row in the README no longer claims the Range check that
+  moved out of it.
+
 - **The smoke suite covers the two features no public stream declares** (SC-99, SC-103).
   `parts` and `discontinuity` both shipped without the real-stream pass that has caught
   every false positive this project has had, because no reachable endpoint carries an

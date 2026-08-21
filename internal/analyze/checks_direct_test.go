@@ -92,27 +92,6 @@ func TestCheckFetch_EmptyPlaylist(t *testing.T) {
 	}
 }
 
-// A byte-range segment needs a 206. An origin that answers 200 has sent the whole
-// resource, so the bytes analysed are not the segment that was asked for — every
-// measurement taken from them is about something else.
-func TestCheckFetch_OriginIgnoredTheRangeRequest(t *testing.T) {
-	sd := okSeg(1, media.ContainerTS, videoTrack())
-	sd.seg.ByteRange = &manifest.ByteRange{Offset: 1000, Length: 500}
-	sd.res.Status = http.StatusOK // a 206 was required
-
-	got := checkFetch([]*renditionData{rend("720p", withSegs(sd))})
-	f, ok := findIn(got, "fetch", finding.WARN)
-	if !ok {
-		t.Fatalf("no WARN for an ignored Range:\n%s", dumpFindings(got))
-	}
-	if !strings.Contains(f.Message, "ignored the Range request") {
-		t.Errorf("message = %q", f.Message)
-	}
-	if !strings.Contains(f.Message, "bytes=1000-1499") {
-		t.Errorf("message = %q, want it to quote the Range header sent", f.Message)
-	}
-}
-
 // A segment past the byte cap was only partly downloaded, so every measurement
 // from it is partial. That is a limit of the tool, and it has to say so rather
 // than report the short duration it measured as a defect.
