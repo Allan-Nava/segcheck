@@ -84,6 +84,37 @@ non-root, and the same build as the release archive for that version.
 [docs/running-in-containers.md](docs/running-in-containers.md) has Compose and
 Kubernetes `CronJob` recipes.
 
+### In GitHub Actions
+
+```yaml
+- uses: Allan-Nava/segcheck@v0.4.0
+  with:
+    manifest: https://cdn.example/master.m3u8
+    args: --renditions 3 --segments 4 --profile apple
+    exit-on: bad          # fail the job on a BAD finding; omit to only report
+```
+
+A composite action, so it costs a download rather than an image pull, and runs on
+Linux and macOS runners. It installs the release archive, **verifies it against the
+published `checksums.txt`**, writes the report to the job summary and leaves it in a
+file the next step can read:
+
+| | |
+|---|---|
+| `manifest` | the URL to check (required) |
+| `args` | any segcheck flags, verbatim |
+| `exit-on` | `warn`, `bad` or `error` — the gate. Empty by default, because a check that ran is a success |
+| `output` | `markdown` by default, which the job summary renders |
+| `summary` | write the report to the job summary (default `true`) |
+| `version` | a tag like `v0.4.0`, or `latest`. Pin it for a reproducible job |
+| → `report` | path to the report file |
+| → `exit-code` | segcheck's exit code |
+
+There is one passthrough input rather than one input per flag on purpose: a second
+copy of the CLI's surface in `action.yml` would go stale the first time a flag
+changed, and a passthrough cannot. `--exit-on` is segcheck's own gate, not
+something the action invents.
+
 ## Usage
 
 ```bash

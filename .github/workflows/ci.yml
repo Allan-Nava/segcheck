@@ -138,6 +138,59 @@ jobs:
         run: |
           find internal/media/testdata -type f -print -exec cat {} \; 2>/dev/null || true
 
+  # SC-29: the action is part of how segcheck is delivered too, and an action
+  # nothing runs is an action that has already rotted — a renamed release asset or
+  # a changed flag breaks it and the first person to find out is whoever tried to
+  # use it. Not on pull requests: it downloads a published release and reaches a
+  # CDN, neither of which a contributor's PR should depend on.
+  #
+  # It deliberately tests the action, not the binary in this tree: what it
+  # installs is the last release, which is what a repository using the action
+  # actually gets.
+  action:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The action, on a reference stream
+        id: check
+        uses: ./
+        with:
+          manifest: https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8
+          args: --renditions 1 --segments 2
+
+      - name: It produced a report and said nothing failed
+        run: |
+          set -euo pipefail
+          test -s "${{ steps.check.outputs.report }}" || {
+            echo "::error::the action set no report, or wrote an empty one"; exit 1; }
+          grep -q "segcheck" "${{ steps.check.outputs.report }}" || {
+            echo "::error::the report does not look like a segcheck report"; exit 1; }
+          [ "${{ steps.check.outputs.exit-code }}" = "0" ] || {
+            echo "::error::exit-code was ${{ steps.check.outputs.exit-code }} with no --exit-on set"; exit 1; }
+
+      # The gate is the whole point of the item, so it is asserted rather than
+      # assumed. This rung declares a level its media exceeds (a real finding,
+      # checked by hand), so --exit-on bad has to fail the step — and
+      # continue-on-error is what lets the job then assert that it did.
+      - name: The gate fires on a stream with a defect
+        id: gate
+        continue-on-error: true
+        uses: ./
+        with:
+          manifest: https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8
+          args: --renditions 3 --segments 2
+          exit-on: bad
+
+      - name: ...and the step really did fail
+        run: |
+          if [ "${{ steps.gate.outcome }}" != "failure" ]; then
+            echo "::error::--exit-on bad did not fail the step: the gate does not gate"
+            exit 1
+          fi
+          echo "the gate fired, as it should"
+
   # SC-45: the image is part of how segcheck is delivered, so it gets tested
   # like anything else. An image that cannot reach an origin over TLS, or that
   # ships a shell, or that runs as root, is a defect even when every unit test

@@ -1,0 +1,178 @@
+name: segcheck
+description: Check what an HLS/DASH stream's segments really contain, not just what the manifest says.
+author: Allan Nava
+
+branding:
+  icon: film
+  color: purple
+
+# SC-29. A composite action rather than a Docker one: a Docker action only runs
+# on Linux runners and pays for an image pull on every job, and segcheck is a
+# single static binary with no dependencies — downloading it is the whole install.
+#
+# The inputs are deliberately few. `manifest`, and then `args` verbatim. Mirroring
+# each of segcheck's twenty-odd flags as an input would put a second copy of the
+# CLI's surface in this file, and the copy would go stale the first time a flag
+# changed — the same reason the README table and `--help` are kept in step with
+# every check in one commit. One passthrough cannot drift.
+#
+# Gating is segcheck's own `--exit-on`, not something this action invents: the
+# exit contract is that a check which ran is a success, and only `--exit-on`
+# turns findings into a failure. Pass it through `args` or use the input below.
+
+inputs:
+  manifest:
+    description: The HLS or DASH manifest URL to check.
+    required: true
+  args:
+    description: >-
+      Extra segcheck flags, verbatim — e.g. "--renditions 3 --segments 4 --profile apple".
+      Everything the CLI accepts is available here; run `segcheck --help` for the list.
+    required: false
+    default: ""
+  exit-on:
+    description: >-
+      Fail the job when a finding reaches this level: warn, bad or error.
+      Empty (the default) means the job passes whatever the findings are, which is
+      segcheck's own contract — a check that ran is a success.
+    required: false
+    default: ""
+  output:
+    description: text|json|markdown|prometheus|otlp|slack (default markdown, which the job summary can render).
+    required: false
+    default: markdown
+  summary:
+    description: Write the report to the job summary. Only meaningful for markdown and text.
+    required: false
+    default: "true"
+  version:
+    description: >-
+      Release to install — a tag like "v0.4.0", or "latest". Pin it for a
+      reproducible job; "latest" is convenient and moves under you.
+    required: false
+    default: latest
+
+outputs:
+  report:
+    description: Path to the file the report was written to.
+    value: ${{ steps.check.outputs.report }}
+  exit-code:
+    description: segcheck's exit code. 0 unless --exit-on fired, or the run itself failed.
+    value: ${{ steps.check.outputs.exit-code }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install segcheck
+      shell: bash
+      env:
+        SEGCHECK_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+
+        case "$RUNNER_OS" in
+          Linux) os=linux ;;
+          macOS) os=darwin ;;
+          *)
+            # Said plainly rather than half-working: the Windows archive is a zip
+            # and the extraction path differs, so claiming support without a job
+            # that exercises it would be a promise nothing holds up.
+            echo "::error::the segcheck action supports Linux and macOS runners; $RUNNER_OS is not supported yet"
+            exit 1
+            ;;
+        esac
+        case "$RUNNER_ARCH" in
+          X64) arch=amd64 ;;
+          ARM64) arch=arm64 ;;
+          *) echo "::error::no segcheck build for $RUNNER_ARCH"; exit 1 ;;
+        esac
+
+        repo=Allan-Nava/segcheck
+        tag="$SEGCHECK_VERSION"
+        if [ "$tag" = "latest" ]; then
+          # The redirect on /releases/latest names the tag, so resolving it needs
+          # no token and no API quota.
+          tag=$(basename "$(curl -sSLo /dev/null -w '%{url_effective}' "https://github.com/$repo/releases/latest")")
+          echo "resolved latest to $tag"
+        fi
+        # The archives are named without the leading v: segcheck_0.4.0_linux_amd64.
+        ver="${tag#v}"
+        archive="segcheck_${ver}_${os}_${arch}.tar.gz"
+        base="https://github.com/$repo/releases/download/$tag"
+
+        dir="${RUNNER_TEMP}/segcheck-install"
+        mkdir -p "$dir"
+        curl -sSfL -o "$dir/$archive" "$base/$archive"
+        curl -sSfL -o "$dir/checksums.txt" "$base/checksums.txt"
+
+        # An unverified binary is not worth the convenience of not verifying it.
+        # goreleaser publishes one checksums.txt covering every archive, so the
+        # check is scoped to the one that was downloaded.
+        cd "$dir"
+        if command -v sha256sum >/dev/null 2>&1; then
+          grep " ${archive}\$" checksums.txt | sha256sum --check --strict -
+        else
+          grep " ${archive}\$" checksums.txt | shasum -a 256 --check --strict -
+        fi
+
+        tar -xzf "$archive" segcheck
+        install -m 0755 segcheck "${RUNNER_TEMP}/segcheck"
+        "${RUNNER_TEMP}/segcheck" version
+
+    - name: Check the stream
+      id: check
+      shell: bash
+      env:
+        # Through the environment, not interpolated into the run script: an input
+        # is attacker-controlled on a fork PR, and `${{ }}` inside a shell body is
+        # a script injection. This is the one that matters most — a manifest URL
+        # comes from outside.
+        SEGCHECK_MANIFEST: ${{ inputs.manifest }}
+        SEGCHECK_ARGS: ${{ inputs.args }}
+        SEGCHECK_EXIT_ON: ${{ inputs.exit-on }}
+        SEGCHECK_OUTPUT: ${{ inputs.output }}
+        SEGCHECK_SUMMARY: ${{ inputs.summary }}
+      run: |
+        set -uo pipefail
+
+        ext=txt
+        case "$SEGCHECK_OUTPUT" in
+          json) ext=json ;;
+          markdown|md) ext=md ;;
+          prometheus|prom) ext=prom ;;
+          slack) ext=json ;;
+        esac
+        report="${RUNNER_TEMP}/segcheck-report.${ext}"
+        echo "report=$report" >> "$GITHUB_OUTPUT"
+
+        set -- check "$SEGCHECK_MANIFEST" --output "$SEGCHECK_OUTPUT" --no-color
+        if [ -n "$SEGCHECK_EXIT_ON" ]; then
+          set -- "$@" --exit-on "$SEGCHECK_EXIT_ON"
+        fi
+        # Unquoted on purpose: args is a flag string, and the caller wrote it to be
+        # split into words the way a shell would.
+        # shellcheck disable=SC2086
+        set -- "$@" $SEGCHECK_ARGS
+
+        # The report goes to the log and to a file in one pass. `|| true` on the
+        # pipeline would swallow the exit code, so it is read from PIPESTATUS.
+        "${RUNNER_TEMP}/segcheck" "$@" | tee "$report"
+        code=${PIPESTATUS[0]}
+        echo "exit-code=$code" >> "$GITHUB_OUTPUT"
+
+        if [ "$SEGCHECK_SUMMARY" = "true" ]; then
+          case "$SEGCHECK_OUTPUT" in
+            markdown|md)
+              cat "$report" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            text)
+              # Fenced, or the terminal alignment collapses into one paragraph.
+              { echo '```'; cat "$report"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            *)
+              echo "::notice::summary skipped: $SEGCHECK_OUTPUT is a machine format, and a job summary is for a person"
+              ;;
+          esac
+        fi
+
+        exit "$code"

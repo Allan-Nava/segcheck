@@ -570,9 +570,23 @@ wrong place, an ad splices two frames late, or a scrub back into the DVR window
   resolution that moved, a rendition that disappeared. Turns segcheck into a
   regression gate rather than a snapshot.
   <!-- sc: prio=med size=M labels=cli,output -->
-- [ ] **SC-29 — GitHub Action**: a composite action wrapping the binary, so a
-  repository can gate on a stream.
-  <!-- sc: prio=med size=S labels=integration -->
+- [x] **SC-29 — GitHub Action**: `action.yml`, composite rather than Docker — a Docker
+  action only runs on Linux runners and pays for an image pull every job, while segcheck
+  is one static binary with no dependencies, so the download *is* the install. It
+  resolves `latest` through the releases redirect (no token, no API quota), verifies the
+  archive against the published `checksums.txt` before running it, writes the report into
+  the job summary and leaves it in a file the next step reads through the `report`
+  output. One `args` passthrough rather than an input per flag: a second copy of the
+  CLI's surface here would go stale the first time a flag changed, and a passthrough
+  cannot. Gating is segcheck's own `--exit-on`, not something the action invents. Inputs
+  reach the shell through the environment and are never interpolated into a `run:` body,
+  because a manifest URL comes from outside and `${{ }}` in a script is an injection.
+  Linux and macOS; Windows is refused with a message rather than half-supported, its
+  archive being a zip that no job exercises. A CI job runs the action on every push to
+  main — against the last release rather than the tree, which is what a repository using
+  it actually gets — and asserts that `--exit-on bad` really fails a step, because an
+  action nothing runs has already rotted.
+  <!-- sc: prio=med size=S labels=integration ver=0.5.0 -->
 - [ ] **SC-30 — checkfleet module**: expose these analyses as a `stream-deep`
   module in [checkfleet](https://github.com/Allan-Nava/checkfleet), sharing this
   parser rather than reimplementing it.

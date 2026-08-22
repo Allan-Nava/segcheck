@@ -9,6 +9,24 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **A GitHub Action, so a repository can gate on a stream** (SC-29). `uses:
+  Allan-Nava/segcheck@vX.Y.Z` with a `manifest` and, optionally, `exit-on`. Composite
+  rather than Docker: a Docker action only runs on Linux runners and pays for an image
+  pull every job, while segcheck is one static binary with no dependencies, so
+  downloading it *is* the install. It resolves `latest` through the releases redirect (no
+  token, no API quota), **verifies the archive against the published `checksums.txt`**
+  before running it, writes the report into the job summary and leaves it in a file the
+  next step can read via the `report` output. There is one `args` passthrough instead of
+  an input per flag, because a second copy of the CLI's surface in `action.yml` would go
+  stale the first time a flag changed and a passthrough cannot; gating is segcheck's own
+  `--exit-on` rather than something the action invents. Inputs reach the shell through the
+  environment, never interpolated into a `run:` body — a manifest URL comes from outside,
+  and `${{ }}` inside a script is an injection. Linux and macOS runners; Windows says so
+  plainly rather than half-working, since its archive is a zip and no job exercises it. A
+  new CI job runs the action on every push to main, against the last release rather than
+  the tree, because an action nothing runs has already rotted — and it asserts the gate
+  actually fails a step, not just that the happy path is quiet.
+
 - **`--output slack` posts the report to a Slack incoming webhook** (SC-28). A cron run
   writing text to a log is a report nobody reads until they go looking, which is the
   opposite of what checking a live stream is for. The payload is Block Kit, worst finding
