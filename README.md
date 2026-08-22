@@ -128,6 +128,10 @@ segcheck check https://cdn.example/master.m3u8 --output otlp \
   | curl -sS -H 'Content-Type: application/json' --data-binary @- \
       "$OTLP_ENDPOINT/v1/metrics"
 
+# The run that has to be read rather than queried. The webhook is never a flag
+export SEGCHECK_SLACK_WEBHOOK=...
+segcheck check https://cdn.example/live.m3u8 --output slack
+
 # Gate CI on the result
 segcheck check https://cdn.example/master.m3u8 --exit-on bad
 
@@ -147,6 +151,8 @@ process list and in every CI log that echoes its own invocation, and unlike a
 password it cannot be rotated without re-encrypting the content. The same rule
 governs credentials, which go in `--header` values the caller reads from the
 environment.
+
+`--output slack` is for the run that has to be *read* rather than queried: a Block Kit message, worst finding first, with each problem's hint under it. Set `SEGCHECK_SLACK_WEBHOOK` and segcheck posts it; leave it unset and the payload goes to stdout to be inspected or piped somewhere else. The webhook is only ever read from the environment — it is a credential, and a flag lands in shell history and in the log of every CI run that used it, which is the same rule `--key-env` exists for. A delivery that fails exits non-zero and quotes what Slack said, because a report that never arrived is segcheck failing to do what it was told rather than a finding about the stream; the URL never appears in that message. Three of Slack's limits are enforced rather than discovered — a 150-character `plain_text` header, 3000 characters per text field, 50 blocks — since exceeding any of them is a bare 400 that names no block, and the message is bounded to fifteen findings with the count of what it left out, because a report silently showing the first fifteen of two hundred problems reads as fifteen problems. Slack's mrkdwn reserves `&`, `<` and `>`, and a `container` finding on an origin that served an HTML error page with a 200 quotes `<html>`, so everything is escaped: unescaped, the finding arrives mangled in exactly the situation that produced it.
 
 `--output prometheus` and `--output otlp` are for the cron job rather than the operator, and what they leave out is the design. A finding's target names the exact thing that was looked at — `720p seg 38` — which is what makes the text report useful and what makes it poison as a metric label: a live stream has different segments every run, so a `target` label would mint a new series every tick and never retire one, and a minutely job would bury the operator's Prometheus in dead series within a week. Neither format carries a target. What they carry is the aggregate, whose shape is fixed by the check set instead of by the stream: a count per check per status, the worst severity per check, the worst overall, and the facts of the run itself. That answers the two questions a dashboard is for — did this stream go bad, and which check said so — and the detail behind an alert is one `--output json` away. Every check present in a run states all four statuses including the zeros, so an alert reads `segcheck_findings{status="BAD"} > 0` rather than having to reason about a series that does not exist yet; a check that falls silent disappears entirely, so catching *that* needs `absent()`, and the `# HELP` text says so. The severity scale is this project's own order, so 3 is `ERROR` — a check that could not run — ranking above 2, a defect it did find.
 

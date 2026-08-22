@@ -5,9 +5,12 @@ package main
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -104,7 +107,7 @@ is off by default because pointing a checker at a key server is a request to a
 system that logs, rate-limits and sometimes bills.
 
 Output:
-  --output FORMAT     text|json|markdown|prometheus|otlp (default text)
+  --output FORMAT     text|json|markdown|prometheus|otlp|slack (default text)
   --no-color          plain text even on a TTY
   --exit-on STATUS    exit 1 when a finding reaches warn|bad|error (default: never)
 
@@ -119,11 +122,18 @@ new series every tick and never retire one. Counts per check per status, the
 worst severity per check and the facts of the run are what a dashboard needs;
 the detail behind an alert is in --output json.
 
+slack renders a Block Kit message, worst finding first, for the run that has to
+be read rather than queried. Set SEGCHECK_SLACK_WEBHOOK and segcheck posts it;
+leave it unset and the payload goes to stdout, so it can be inspected or piped
+somewhere else. The webhook is never a flag: it is a credential, and a flag lands
+in shell history and in the CI log of every run.
+
 Examples:
   segcheck check https://cdn.example/master.m3u8
   segcheck check https://cdn.example/manifest.mpd --segments 12 --from edge
   segcheck check https://cdn.example/master.m3u8 --output markdown > report.md
   segcheck check https://cdn.example/master.m3u8 --output prometheus > /var/lib/node_exporter/textfile_collector/segcheck.prom
+  SEGCHECK_SLACK_WEBHOOK=$HOOK segcheck check https://cdn.example/live.m3u8 --output slack
   segcheck check https://cdn.example/master.m3u8 --exit-on bad
   segcheck check https://cdn.example/live.m3u8 --watch 2m --exit-on bad
   segcheck check https://cdn.example/ll.m3u8 --parts 2
@@ -280,6 +290,26 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprint(stdout, output.Prometheus(res))
 	case "otlp":
 		fmt.Fprint(stdout, output.OTLP(res))
+	case "slack":
+		payload := output.Slack(res)
+		// The webhook is a credential, so it is only ever read from the
+		// environment — a flag lands in shell history and in the CI log of every
+		// run. Its presence is also what says "deliver this": without one there
+		// is nothing to deliver to, and the payload goes to stdout like every
+		// other format so it can be inspected or piped.
+		hook := os.Getenv(slackWebhookEnv)
+		if hook == "" {
+			fmt.Fprint(stdout, payload)
+			break
+		}
+		if err := postSlack(ctx, hook, payload); err != nil {
+			// Not a finding: the check ran. This is segcheck failing to do what it
+			// was told, which is the one other thing that earns a non-zero exit.
+			fmt.Fprintf(stderr, "segcheck: %v\n", err)
+			return 1
+		}
+		fmt.Fprintf(stdout, "segcheck: posted the %s report to Slack (%d findings)\n",
+			finding.Worst(res.Findings), len(res.Findings))
 	default:
 		fmt.Fprint(stdout, output.Text(res, useColor(*noColor)))
 	}
@@ -291,6 +321,61 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 	return 0
+}
+
+// slackWebhookEnv is the only way a webhook URL reaches segcheck. It is a
+// credential: a flag would put it in shell history and in the log of every CI
+// run that used it, which is the same rule --key-env exists for.
+const slackWebhookEnv = "SEGCHECK_SLACK_WEBHOOK"
+
+// postSlack delivers a Block Kit payload to an incoming webhook.
+//
+// It uses its own client rather than the media one on purpose. That client
+// carries --insecure, the byte cap, and the --pop address override that pins a
+// host to a chosen edge — all correct for fetching a segment from a CDN and all
+// wrong for talking to Slack, and the last would silently send the report to
+// whatever address was being probed.
+//
+// A webhook answers 200 with "ok"; anything else carries the reason in the body
+// and nowhere else, so the body is what the error quotes. The URL never appears
+// in an error: it is the secret, and an error goes to a log.
+func postSlack(ctx context.Context, hook, payload string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, hook, strings.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("posting to Slack: the webhook in %s is not a usable URL", slackWebhookEnv)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "segcheck/"+version)
+
+	resp, err := (&http.Client{Timeout: 20 * time.Second}).Do(req)
+	if err != nil {
+		// A transport error names the host, which for a webhook URL is
+		// hooks.slack.com and not the secret path. url.Error stringifies the whole
+		// URL though, so only the message is kept.
+		return fmt.Errorf("posting to Slack: the request did not complete (%s)", transportReason(err))
+	}
+	defer func() {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
+		_ = resp.Body.Close()
+	}()
+
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("posting to Slack: HTTP %d, %q — the report was not delivered",
+			resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	return nil
+}
+
+// transportReason is the tail of a transport error, without the URL a *url.Error
+// prints. "dial tcp 1.2.3.4:443: connect: connection refused" is the diagnostic;
+// the webhook path in front of it is the credential.
+func transportReason(err error) string {
+	var ue *url.Error
+	if errors.As(err, &ue) && ue.Err != nil {
+		return ue.Err.Error()
+	}
+	return err.Error()
 }
 
 // parseInterspersed parses flags that may appear before and after the
@@ -316,9 +401,9 @@ func validate(opts analyze.Options, format, exitOn string) error {
 		return fmt.Errorf("--from must be auto, edge or start, got %q", opts.From)
 	}
 	switch format {
-	case "text", "json", "markdown", "md", "prometheus", "prom", "otlp":
+	case "text", "json", "markdown", "md", "prometheus", "prom", "otlp", "slack":
 	default:
-		return fmt.Errorf("--output must be text, json, markdown, prometheus or otlp, got %q", format)
+		return fmt.Errorf("--output must be text, json, markdown, prometheus, otlp or slack, got %q", format)
 	}
 	switch strings.ToUpper(exitOn) {
 	case "", "WARN", "BAD", "ERROR":

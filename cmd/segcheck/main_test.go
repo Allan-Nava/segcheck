@@ -3,9 +3,12 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -381,5 +384,150 @@ func TestPOPFlag(t *testing.T) {
 	}
 	if p.String() != "" {
 		t.Errorf("String() = %q, want empty: it exists only to satisfy flag.Value", p.String())
+	}
+}
+
+// ---------- Slack (SC-28) ----------
+
+// Without a webhook configured, `--output slack` is a renderer like every other
+// one: the payload goes to stdout, where it can be inspected or piped.
+func TestRun_OutputSlackPrintsThePayloadWhenNoWebhookIsSet(t *testing.T) {
+	t.Setenv(slackWebhookEnv, "")
+	code, out, errOut := exec(t, "check", origin(t, 4, 0), "--output", "slack", "--segments", "1")
+
+	if code != 0 {
+		t.Fatalf("exit %d, want 0: %s", code, errOut)
+	}
+	var payload struct {
+		Blocks []map[string]any `json:"blocks"`
+	}
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatalf("stdout is not the Block Kit payload (%v):\n%s", err, out)
+	}
+	if len(payload.Blocks) == 0 {
+		t.Error("the payload carries no blocks")
+	}
+}
+
+// With one configured, segcheck delivers it. The URL is a credential and is
+// never a flag, so the environment is the only way in.
+func TestRun_OutputSlackPostsToTheWebhookFromTheEnvironment(t *testing.T) {
+	var gotBody, gotType, gotAgent string
+	hook := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		gotBody, gotType, gotAgent = string(b), r.Header.Get("Content-Type"), r.Header.Get("User-Agent")
+		_, _ = w.Write([]byte("ok"))
+	}))
+	t.Cleanup(hook.Close)
+	t.Setenv(slackWebhookEnv, hook.URL)
+
+	code, out, errOut := exec(t, "check", origin(t, 4, 0), "--output", "slack", "--segments", "1")
+
+	if code != 0 {
+		t.Fatalf("exit %d, want 0: %s", code, errOut)
+	}
+	if gotType != "application/json" {
+		t.Errorf("Content-Type = %q, want application/json", gotType)
+	}
+	if !strings.Contains(gotAgent, "segcheck/") {
+		t.Errorf("User-Agent = %q, want it to identify segcheck", gotAgent)
+	}
+	if !strings.Contains(gotBody, "\"blocks\"") {
+		t.Errorf("the webhook did not receive a Block Kit payload:\n%s", gotBody)
+	}
+	// The payload went to Slack, so stdout says what happened rather than
+	// repeating it: a CI log holding the whole message twice is noise.
+	if strings.Contains(out, "\"blocks\"") {
+		t.Errorf("the payload was printed as well as posted:\n%s", out)
+	}
+	if !strings.Contains(out, "Slack") {
+		t.Errorf("stdout does not say the report was delivered:\n%s", out)
+	}
+}
+
+// A webhook that rejects the payload means the report never arrived, which is
+// segcheck failing to do what it was told rather than a finding about the
+// stream — so it exits non-zero and says what Slack said. What it must never
+// print is the URL: that is the credential, and stderr is a CI log.
+func TestRun_AFailedSlackPostIsReportedWithoutEchoingTheURL(t *testing.T) {
+	hook := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte("invalid_payload"))
+	}))
+	t.Cleanup(hook.Close)
+	t.Setenv(slackWebhookEnv, hook.URL+"/services/T000/B000/xoxb-secret")
+
+	code, _, errOut := exec(t, "check", origin(t, 4, 0), "--output", "slack", "--segments", "1")
+
+	if code == 0 {
+		t.Error("a rejected webhook exited 0: nothing says the report never arrived")
+	}
+	if !strings.Contains(errOut, "invalid_payload") {
+		t.Errorf("stderr does not carry what Slack said:\n%s", errOut)
+	}
+	if strings.Contains(errOut, "xoxb-secret") {
+		t.Errorf("the webhook URL was echoed into stderr:\n%s", errOut)
+	}
+}
+
+// A webhook that is not a URL at all is a configuration mistake, and the message
+// has to name the variable to look at without printing what is in it.
+func TestRun_AnUnusableSlackWebhookNamesTheVariableNotTheValue(t *testing.T) {
+	t.Setenv(slackWebhookEnv, "http://\x7f-secret-control-char/")
+
+	code, _, errOut := exec(t, "check", origin(t, 4, 0), "--output", "slack", "--segments", "1")
+
+	if code == 0 {
+		t.Error("an unusable webhook exited 0")
+	}
+	if !strings.Contains(errOut, slackWebhookEnv) {
+		t.Errorf("stderr does not name the variable to fix:\n%s", errOut)
+	}
+	if strings.Contains(errOut, "secret-control-char") {
+		t.Errorf("the value was echoed into stderr:\n%s", errOut)
+	}
+}
+
+// Nothing listening. The report never arrived, so it exits non-zero and says
+// why — with the transport's reason, not the URL in front of it.
+func TestRun_ASlackPostThatNeverCompletesIsReported(t *testing.T) {
+	dead := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	url := dead.URL
+	dead.Close()
+	t.Setenv(slackWebhookEnv, url+"/services/T000/B000/xoxb-secret")
+
+	code, _, errOut := exec(t, "check", origin(t, 4, 0), "--output", "slack", "--segments", "1")
+
+	if code == 0 {
+		t.Error("a webhook nothing answered exited 0")
+	}
+	if !strings.Contains(errOut, "did not complete") {
+		t.Errorf("stderr does not say the request failed:\n%s", errOut)
+	}
+	if strings.Contains(errOut, "xoxb-secret") {
+		t.Errorf("the webhook URL was echoed into stderr:\n%s", errOut)
+	}
+}
+
+// transportReason exists to strip the URL a *url.Error prints. Both arms matter:
+// the wrapped case is what actually happens, and the bare case is what keeps a
+// future error type from returning nothing.
+func TestTransportReason(t *testing.T) {
+	inner := errors.New("connect: connection refused")
+	wrapped := &url.Error{Op: "Post", URL: "https://hooks.slack.com/services/T/B/xoxb-secret", Err: inner}
+	if got := transportReason(wrapped); got != inner.Error() {
+		t.Errorf("transportReason(url.Error) = %q, want %q", got, inner.Error())
+	}
+	if got := transportReason(wrapped); strings.Contains(got, "xoxb-secret") {
+		t.Errorf("the URL survived into the reason: %q", got)
+	}
+	if got := transportReason(inner); got != inner.Error() {
+		t.Errorf("transportReason(plain) = %q, want it unchanged", got)
+	}
+	// A *url.Error with nothing wrapped falls through to the whole message
+	// rather than to an empty string.
+	empty := &url.Error{Op: "Post", URL: "https://hooks.slack.com/x"}
+	if got := transportReason(empty); got == "" {
+		t.Error("a url.Error with no inner error produced an empty reason")
 	}
 }

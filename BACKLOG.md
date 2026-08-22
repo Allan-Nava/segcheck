@@ -547,8 +547,24 @@ wrong place, an ad splices two frames late, or a scrub back into the DVR window
   all accepted and round-tripped byte for byte. That check stays out of CI: a Python
   dependency is not worth it and the zero-dependency rule covers the tooling too.
   <!-- sc: prio=med size=M labels=output,integration ver=0.4.0 -->
-- [ ] **SC-28 — Slack output** (Block Kit), webhook from the environment, never
-  on the command line. <!-- sc: prio=med size=S labels=output,integration -->
+- [x] **SC-28 — Slack output**: `--output slack` renders a Block Kit message, worst
+  finding first, and posts it when `SEGCHECK_SLACK_WEBHOOK` is set — unset, the payload
+  goes to stdout to be inspected or piped. The webhook is only ever read from the
+  environment, the rule `--key-env` already exists for, and it appears in no error
+  message: not the configuration one, and not the transport one either, where
+  `*url.Error` would otherwise print the whole URL. A failed delivery exits non-zero,
+  because a report that never arrived is segcheck failing at what it was told to do
+  rather than a finding about the stream. Three of Slack's limits are enforced rather
+  than discovered, since exceeding any is a bare 400 that names no block: the
+  150-character `plain_text` header (cut from the left, so the tail that names the
+  stream survives), 3000 characters per text field, 50 blocks. Bounded to fifteen
+  findings, always stating how many were left out. `&`, `<` and `>` are escaped in that
+  order — Slack's mrkdwn reserves all three and a `container` finding quotes `<html>`
+  when an origin serves an error page with a 200, so unescaped it arrives mangled in
+  exactly the situation that produced it. Go's HTML escaping is off so the bytes on the
+  wire are the bytes Slack renders; with it on, a payload that forgot to escape would
+  still look escaped and the distinction would be untestable.
+  <!-- sc: prio=med size=S labels=output,integration ver=0.5.0 -->
 - [ ] **SC-41 — Baseline diff**: `--baseline run.json` compares this run against
   a saved one and reports what changed — a rung that lost 30% of its bitrate, a
   resolution that moved, a rendition that disappeared. Turns segcheck into a

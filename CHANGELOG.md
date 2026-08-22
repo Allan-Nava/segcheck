@@ -7,6 +7,30 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **`--output slack` posts the report to a Slack incoming webhook** (SC-28). A cron run
+  writing text to a log is a report nobody reads until they go looking, which is the
+  opposite of what checking a live stream is for. The payload is Block Kit, worst finding
+  first, each problem's hint under it. The webhook is only ever read from
+  `SEGCHECK_SLACK_WEBHOOK`: it is a credential, and a flag lands in shell history and in
+  the log of every CI run that used it — the rule `--key-env` already exists for. Its
+  presence is also what says "deliver this"; unset, the payload goes to stdout to be
+  inspected or piped. A failed delivery exits non-zero and quotes what Slack said, because
+  a report that never arrived is segcheck failing to do what it was told rather than a
+  finding about the stream, and the URL never appears in that message — nor does a
+  transport error's, which `*url.Error` would otherwise print in full. Three of Slack's
+  limits are enforced rather than discovered, since exceeding any is a bare 400 naming no
+  block: a 150-character `plain_text` header (a manifest URL alone is routinely longer, so
+  it is cut from the left to keep the tail that names the stream), 3000 characters per text
+  field, and 50 blocks. The message is bounded to fifteen findings and always states how
+  many it left out. `&`, `<` and `>` are escaped, in that order: Slack's mrkdwn reserves
+  all three, and a `container` finding on an origin that served an HTML error page with a
+  200 quotes `<html>`, so unescaped it arrives mangled in exactly the situation that
+  produced it. Go's own HTML escaping is turned off so that the bytes on the wire are the
+  bytes Slack renders — with it on, a payload that forgot to escape would still look
+  escaped and the distinction would be untestable.
+
 ## [0.4.0] - 2026-08-21
 
 Seventeen new checks, taking the set from 19 to 36, and the through-line is time and
