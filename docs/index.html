@@ -472,6 +472,7 @@ segcheck check https://cdn.example/master.m3u8 --exit-on bad</pre></div>
           <tr><td><code>--output FORMAT</code></td><td><code>text|json|markdown|prometheus|otlp|slack</code></td><td><code>text</code></td></tr>
           <tr><td><code>--no-color</code></td><td>Plain text even on a TTY (<code>NO_COLOR</code> is honoured too)</td><td>off</td></tr>
           <tr><td><code>--exit-on STATUS</code></td><td>Exit 1 when a finding reaches <code>warn|bad|error</code></td><td>never</td></tr>
+          <tr><td><code>--baseline FILE</code></td><td>Compare against a saved <code>--output json</code> run and report what changed</td><td>off</td></tr>
           <tr><td><code>--key-file PATH</code></td><td>Read the AES-128 content key from a file (16 raw bytes or 32 hex digits)</td><td>—</td></tr>
           <tr><td><code>--key-env NAME</code></td><td>Read it from an environment variable, as hex</td><td>—</td></tr>
           <tr><td><code>--clear-lead DUR</code></td><td>The unencrypted lead-in you asked your packager for, so the measured one can be checked against it</td><td>report only</td></tr>

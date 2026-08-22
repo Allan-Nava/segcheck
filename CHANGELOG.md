@@ -9,6 +9,34 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **`--baseline run.json` turns segcheck into a regression gate** (SC-41). A single run
+  says whether a stream is bad; it cannot say whether it got worse, and most of what an
+  operator wants to know is the change — a rung that lost a third of its bitrate, a
+  rendition that stopped being published, a check that was clean last week. The diff
+  arrives as ordinary findings on a `baseline` check, so it sorts worst-first with
+  everything else, renders in every format, and `--exit-on bad` gates on a regression
+  without knowing it came from a comparison. What gets compared is decided by what is
+  stable across two runs: a rendition is, one of its segments is not, and pairing segment
+  targets would report the whole sample as vanished on every live stream — the same
+  reasoning that keeps a target label out of the metric renderers. So a check is compared
+  *per rendition*, folding in what it said about that rendition's segments, because
+  otherwise a breaking stream goes unreported: the rendition-level OK is replaced by a
+  segment-level BAD and the exact pair looks deleted rather than worse. That case was
+  found by a CLI test after the unit tests passed, which is the second time this shape of
+  bug has come from pairing on prose. A measurement must move more than 10% to count and
+  is only ever compared against the same unit; a baseline of zero is reported as an
+  absolute move, because anything over nothing is not a percentage. A message is compared
+  only for findings that carry no measurement, where the message *is* the observation —
+  that is how a resolution that moved is caught when both runs agree with their own
+  manifest and neither is a defect. A check that reported before and reports nothing now
+  is an ERROR, not a BAD: the stream is not known to be broken, the coverage is known to
+  have a hole. New `finding.Result.Renditions` names what was sampled, because a Target is
+  prose and nothing else distinguishes a rung from one of its segments; `output.ParseJSON`
+  reads a report back through the same shape that wrote it, so the reader cannot drift
+  from the writer. Verified against a real stream: two runs of Akamai's bbb_30fps produce
+  no diff at all, and a run sampling one rung instead of three correctly reports two
+  renditions gone plus `alignment` falling silent, which needs two rungs to compare.
+
 - **A GitHub Action, so a repository can gate on a stream** (SC-29). `uses:
   Allan-Nava/segcheck@vX.Y.Z` with a `manifest` and, optionally, `exit-on`. Composite
   rather than Docker: a Docker action only runs on Linux runners and pays for an image

@@ -565,11 +565,25 @@ wrong place, an ad splices two frames late, or a scrub back into the DVR window
   wire are the bytes Slack renders; with it on, a payload that forgot to escape would
   still look escaped and the distinction would be untestable.
   <!-- sc: prio=med size=S labels=output,integration ver=0.5.0 -->
-- [ ] **SC-41 — Baseline diff**: `--baseline run.json` compares this run against
-  a saved one and reports what changed — a rung that lost 30% of its bitrate, a
-  resolution that moved, a rendition that disappeared. Turns segcheck into a
-  regression gate rather than a snapshot.
-  <!-- sc: prio=med size=M labels=cli,output -->
+- [x] **SC-41 — Baseline diff**: `--baseline run.json` compares against a saved
+  `--output json` run. The diff is ordinary findings on a `baseline` check, so it sorts
+  worst-first, renders in every format and `--exit-on` gates on it without knowing it
+  came from a comparison. The design is all in what is stable between two runs: a
+  rendition is, one of its segments is not, so a check is compared *per rendition* with
+  its segment findings folded in. Pairing exact targets loses the very regression the
+  gate exists for — a breaking stream replaces the rendition-level OK with a
+  segment-level BAD, and the pair then looks deleted rather than worse; found by a CLI
+  test after the unit tests were green, the second time pairing on prose has cost this
+  project a bug. A measurement must move 10% and match units, and a baseline of zero is
+  an absolute move because anything over nothing is not a percentage. A message is
+  compared only where there is no measurement, which is how a moved resolution is caught
+  when both runs agree with their own manifest. A check that fell silent is an ERROR, not
+  a BAD. `finding.Result.Renditions` is the new seam — a Target is prose and nothing else
+  tells a rung from its segments — and `output.ParseJSON` reads a report back through the
+  same shape that wrote it so the two cannot drift. Two runs of Akamai's bbb_30fps
+  produce no diff; sampling one rung instead of three reports two renditions gone and
+  `alignment` silent, which needs two rungs to compare.
+  <!-- sc: prio=med size=M labels=cli,output ver=0.5.0 -->
 - [x] **SC-29 — GitHub Action**: `action.yml`, composite rather than Docker — a Docker
   action only runs on Linux runners and pays for an image pull every job, while segcheck
   is one static binary with no dependencies, so the download *is* the install. It

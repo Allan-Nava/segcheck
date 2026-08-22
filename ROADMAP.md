@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**104 items · 87 shipped · 17 open · 13 milestones.**
+**104 items · 88 shipped · 16 open · 13 milestones.**
 
 ## At a glance
 
@@ -18,7 +18,7 @@
 | **M4** — Everything that is not the video track | `v0.3.0` | shipped | `##########` 100% | 0 | 14 |
 | **M5** — Live and delivery | `v0.4.0` | shipped | `##########` 100% | 0 | 6 |
 | **M9** — Wallclock and DVR correctness | `v0.4.0` | shipped | `##########` 100% | 0 | 5 |
-| **M6** — Integration | `v0.5.0` | later | `#####.....` 50% | 3 | 3 |
+| **M6** — Integration | `v0.5.0` | later | `#######...` 67% | 2 | 4 |
 | **M10** — Authoring-spec conformance | `v0.5.0` | later | `######....` 60% | 2 | 3 |
 | **M11** — Content protection, in depth | `v0.6.0` | later | `######....` 60% | 2 | 3 |
 | **M12** — Colour, HDR and the codec string | `v0.7.0` | later | `#####.....` 50% | 3 | 3 |
@@ -129,16 +129,16 @@ Target `v0.4.0` · shipped · 0 open · 5 shipped · `##########` 100%
 
 ### M6 — Integration
 
-Target `v0.5.0` · later · 3 open · 3 shipped · `#####.....` 50%
+Target `v0.5.0` · later · 2 open · 4 shipped · `#######...` 67%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
 | **SC-30** — checkfleet module | med | L | integration | open |
-| **SC-41** — Baseline diff | med | M | cli,output | open |
 | **SC-31** — Config file | low | M | cli | open |
 | **SC-27** — Prometheus/OTLP output | med | M | output,integration | shipped `0.4.0` |
 | **SC-28** — Slack output | med | S | output,integration | shipped `0.5.0` |
 | **SC-29** — GitHub Action | med | S | integration | shipped `0.5.0` |
+| **SC-41** — Baseline diff | med | M | cli,output | shipped `0.5.0` |
 
 ### M10 — Authoring-spec conformance
 
@@ -238,11 +238,11 @@ Target `ongoing` · ongoing · 4 open · 19 shipped · `########..` 83%
 |---|---|---|
 | `check` | 47 | 10 |
 | `parser` | 45 | 8 |
-| `cli` | 8 | 2 |
 | `release` | 10 | 2 |
+| `cli` | 8 | 1 |
 | `docs` | 5 | 1 |
 | `integration` | 4 | 1 |
-| `output` | 5 | 1 |
 | `tests` | 14 | 1 |
 | `delivery` | 6 | 0 |
+| `output` | 5 | 0 |
 | `project` | 5 | 0 |

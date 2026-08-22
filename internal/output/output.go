@@ -70,31 +70,63 @@ func SummaryLine(res finding.Result) string {
 		res.Segments, humanBytes(res.Bytes), res.Duration.Round(time.Millisecond))
 }
 
+// wire is the JSON shape, named once so that reading it back cannot drift from
+// writing it. A baseline is a file segcheck itself produced with --output json
+// (SC-41), so the reader has to accept exactly what the writer emits —
+// TestJSON_RoundTripsThroughParseJSON is what holds that together.
+//
+// It is not finding.Result: the duration goes out in seconds because that is
+// what a consumer wants, while the model keeps nanoseconds, and Worst and
+// Summary are derived rather than stored.
+type wire struct {
+	Source     string            `json:"source"`
+	Worst      finding.Status    `json:"worst"`
+	Summary    map[string]int    `json:"summary"`
+	Renditions []string          `json:"renditions,omitempty"`
+	Segments   int               `json:"segments"`
+	Bytes      int64             `json:"bytes"`
+	Started    time.Time         `json:"started"`
+	Duration   float64           `json:"duration_seconds"`
+	Findings   []finding.Finding `json:"findings"`
+}
+
+// ParseJSON reads back what JSON wrote, for --baseline.
+//
+// Worst and Summary are dropped rather than trusted: both are derived from the
+// findings, and a file whose summary disagrees with its own findings would
+// otherwise get to decide which of the two is true.
+func ParseJSON(b []byte) (finding.Result, error) {
+	var w wire
+	if err := json.Unmarshal(b, &w); err != nil {
+		return finding.Result{}, err
+	}
+	return finding.Result{
+		Source:     w.Source,
+		Findings:   w.Findings,
+		Renditions: w.Renditions,
+		Started:    w.Started,
+		Duration:   time.Duration(w.Duration * float64(time.Second)),
+		Segments:   w.Segments,
+		Bytes:      w.Bytes,
+	}, nil
+}
+
 // JSON renders the whole result, for a pipeline to consume.
 func JSON(res finding.Result) (string, error) {
-	type wire struct {
-		Source   string            `json:"source"`
-		Worst    finding.Status    `json:"worst"`
-		Summary  map[string]int    `json:"summary"`
-		Segments int               `json:"segments"`
-		Bytes    int64             `json:"bytes"`
-		Started  time.Time         `json:"started"`
-		Duration float64           `json:"duration_seconds"`
-		Findings []finding.Finding `json:"findings"`
-	}
 	summary := map[string]int{}
 	for k, v := range finding.Summarize(res.Findings) {
 		summary[string(k)] = v
 	}
 	b, err := json.MarshalIndent(wire{
-		Source:   res.Source,
-		Worst:    finding.Worst(res.Findings),
-		Summary:  summary,
-		Segments: res.Segments,
-		Bytes:    res.Bytes,
-		Started:  res.Started,
-		Duration: res.Duration.Seconds(),
-		Findings: res.Findings,
+		Source:     res.Source,
+		Worst:      finding.Worst(res.Findings),
+		Summary:    summary,
+		Renditions: res.Renditions,
+		Segments:   res.Segments,
+		Bytes:      res.Bytes,
+		Started:    res.Started,
+		Duration:   res.Duration.Seconds(),
+		Findings:   res.Findings,
 	}, "", "  ")
 	if err != nil {
 		return "", err

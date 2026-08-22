@@ -2,6 +2,7 @@ package output
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -161,5 +162,51 @@ func TestRenderers_NameTheRuleAFindingComesFrom(t *testing.T) {
 	}
 	if !strings.Contains(js, `"rule": "apple:peak-vs-average"`) {
 		t.Errorf("the rule is not a field of its own in JSON, so a consumer has to parse prose:\n%s", js)
+	}
+}
+
+// A baseline is a file segcheck produced with --output json and reads back
+// later (SC-41), so the reader has to accept exactly what the writer emits.
+// Without this, the two drift the first time a field is added to one and not the
+// other, and the symptom is a diff that quietly compares against zeroes.
+func TestJSON_RoundTripsThroughParseJSON(t *testing.T) {
+	want := sample()
+	want.Renditions = []string{"1080p", "720p", "360p"}
+
+	s, err := JSON(want)
+	if err != nil {
+		t.Fatalf("JSON: %v", err)
+	}
+	got, err := ParseJSON([]byte(s))
+	if err != nil {
+		t.Fatalf("ParseJSON: %v", err)
+	}
+
+	if got.Source != want.Source {
+		t.Errorf("source = %q, want %q", got.Source, want.Source)
+	}
+	if !reflect.DeepEqual(got.Renditions, want.Renditions) {
+		t.Errorf("renditions = %v, want %v", got.Renditions, want.Renditions)
+	}
+	if got.Segments != want.Segments || got.Bytes != want.Bytes {
+		t.Errorf("segments/bytes = %d/%d, want %d/%d", got.Segments, got.Bytes, want.Segments, want.Bytes)
+	}
+	if !got.Started.Equal(want.Started) {
+		t.Errorf("started = %v, want %v", got.Started, want.Started)
+	}
+	if got.Duration != want.Duration {
+		t.Errorf("duration = %v, want %v", got.Duration, want.Duration)
+	}
+	if !reflect.DeepEqual(got.Findings, want.Findings) {
+		t.Errorf("findings did not survive:\n got %+v\nwant %+v", got.Findings, want.Findings)
+	}
+}
+
+// A baseline file that is not JSON at all — a truncated write, or the text
+// report saved by mistake — has to fail rather than compare against an empty
+// run, which would report every check as newly appeared.
+func TestParseJSON_RefusesWhatIsNotAReport(t *testing.T) {
+	if _, err := ParseJSON([]byte("🟢 OK  ladder  master  4 renditions\n")); err == nil {
+		t.Error("a text report parsed as JSON")
 	}
 }

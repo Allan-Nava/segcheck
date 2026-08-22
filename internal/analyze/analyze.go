@@ -310,6 +310,13 @@ func Run(ctx context.Context, c *fetch.Client, rawurl string, opts Options) find
 		res.Findings = append(res.Findings, watchLiveEdge(ctx, c, rawurl, *pl, opts)...)
 	}
 
+	// What was sampled, named the way every finding names it. A baseline diff
+	// needs this to tell a rung from one of its segments: both are Targets, and
+	// only a convention in the prose distinguishes them.
+	for _, rd := range rends {
+		res.Renditions = append(res.Renditions, rendLabel(rd.r))
+	}
+
 	res.Duration = wall().Sub(started)
 	finding.SortWorstFirst(res.Findings)
 	return res

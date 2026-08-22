@@ -531,3 +531,98 @@ func TestTransportReason(t *testing.T) {
 		t.Error("a url.Error with no inner error produced an empty reason")
 	}
 }
+
+// ---------- --baseline (SC-41) ----------
+
+// The gate the item is for: save a run, break the stream, and the second run
+// says what changed rather than only what is wrong.
+func TestRun_BaselineReportsWhatChanged(t *testing.T) {
+	clean := origin(t, 4, 0)
+	dir := t.TempDir()
+	saved := filepath.Join(dir, "baseline.json")
+
+	code, out, errOut := exec(t, "check", clean, "--output", "json", "--segments", "4")
+	if code != 0 {
+		t.Fatalf("the baseline run exited %d: %s", code, errOut)
+	}
+	if err := os.WriteFile(saved, []byte(out), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// The same origin, now with an undeclared gap from segment 2 on.
+	dirty := origin(t, 4, 2)
+	code, out, errOut = exec(t, "check", dirty, "--segments", "4", "--baseline", saved)
+	if code != 0 {
+		t.Fatalf("exit %d, want 0 without --exit-on: %s", code, errOut)
+	}
+	if !strings.Contains(out, "baseline") {
+		t.Fatalf("no baseline finding in the report:\n%s", out)
+	}
+	if !strings.Contains(out, "continuity") {
+		t.Errorf("the diff does not name the check that regressed:\n%s", out)
+	}
+}
+
+// Comparing a run against itself must say nothing, or every scheduled job grows
+// a permanent baseline finding and stops meaning anything.
+func TestRun_BaselineAgainstAnIdenticalRunIsQuiet(t *testing.T) {
+	url := origin(t, 4, 0)
+	dir := t.TempDir()
+	saved := filepath.Join(dir, "baseline.json")
+
+	_, out, _ := exec(t, "check", url, "--output", "json", "--segments", "4")
+	if err := os.WriteFile(saved, []byte(out), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, out, _ = exec(t, "check", url, "--segments", "4", "--baseline", saved)
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, " baseline ") {
+			t.Errorf("an unchanged run produced a baseline finding: %q", line)
+		}
+	}
+}
+
+// The whole value of merging the diff into the findings: --exit-on gates on a
+// regression without needing to know it came from a comparison.
+func TestRun_BaselineRegressionCanGateTheBuild(t *testing.T) {
+	dir := t.TempDir()
+	saved := filepath.Join(dir, "baseline.json")
+
+	_, out, _ := exec(t, "check", origin(t, 4, 0), "--output", "json", "--segments", "4")
+	if err := os.WriteFile(saved, []byte(out), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	code, _, _ := exec(t, "check", origin(t, 4, 2), "--segments", "4", "--baseline", saved, "--exit-on", "bad")
+	if code == 0 {
+		t.Error("a regression against the baseline did not gate the build")
+	}
+}
+
+// A baseline that cannot be read is a usage error, not a finding: proceeding
+// would compare against an empty run and report every check as newly appeared,
+// which is a wall of noise that looks like the stream changed completely.
+func TestRun_AnUnreadableBaselineIsAUsageError(t *testing.T) {
+	dir := t.TempDir()
+	bad := filepath.Join(dir, "not-json.txt")
+	if err := os.WriteFile(bad, []byte("🟢 OK ladder master\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	code, _, errOut := exec(t, "check", origin(t, 4, 0), "--segments", "1", "--baseline", bad)
+	if code == 0 {
+		t.Error("an unreadable baseline exited 0")
+	}
+	if !strings.Contains(errOut, "--baseline") {
+		t.Errorf("stderr does not name the flag to fix:\n%s", errOut)
+	}
+
+	code, _, errOut = exec(t, "check", origin(t, 4, 0), "--segments", "1", "--baseline", filepath.Join(dir, "absent.json"))
+	if code == 0 {
+		t.Error("a missing baseline file exited 0")
+	}
+	if !strings.Contains(errOut, "--baseline") {
+		t.Errorf("stderr does not name the flag to fix:\n%s", errOut)
+	}
+}

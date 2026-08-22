@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/Allan-Nava/segcheck/internal/analyze"
+	"github.com/Allan-Nava/segcheck/internal/baseline"
 	"github.com/Allan-Nava/segcheck/internal/fetch"
 	"github.com/Allan-Nava/segcheck/internal/finding"
 	"github.com/Allan-Nava/segcheck/internal/output"
@@ -110,6 +111,9 @@ Output:
   --output FORMAT     text|json|markdown|prometheus|otlp|slack (default text)
   --no-color          plain text even on a TTY
   --exit-on STATUS    exit 1 when a finding reaches warn|bad|error (default: never)
+  --baseline FILE     compare against a saved --output json run and report what
+                      changed: a rung that lost bitrate, a rendition that went
+                      away, a check that was clean before
 
 Exit status is 0 whenever the check ran, findings or not — a check that ran is a
 success. Use --exit-on to gate CI on the result.
@@ -128,12 +132,21 @@ leave it unset and the payload goes to stdout, so it can be inspected or piped
 somewhere else. The webhook is never a flag: it is a credential, and a flag lands
 in shell history and in the CI log of every run.
 
+A single run says whether a stream is bad; it cannot say whether it got worse.
+--baseline turns segcheck into a regression gate: the diff arrives as ordinary
+findings on a "baseline" check, so it renders in every format and --exit-on gates
+on it. Only what is stable between two runs is compared — a rendition is, one of
+its segments is not, since a live stream has different segments every run — and a
+measurement has to move more than 10% to count, because a measured number wobbles.
+
 Examples:
   segcheck check https://cdn.example/master.m3u8
   segcheck check https://cdn.example/manifest.mpd --segments 12 --from edge
   segcheck check https://cdn.example/master.m3u8 --output markdown > report.md
   segcheck check https://cdn.example/master.m3u8 --output prometheus > /var/lib/node_exporter/textfile_collector/segcheck.prom
   SEGCHECK_SLACK_WEBHOOK=$HOOK segcheck check https://cdn.example/live.m3u8 --output slack
+  segcheck check https://cdn.example/master.m3u8 --output json > baseline.json
+  segcheck check https://cdn.example/master.m3u8 --baseline baseline.json --exit-on bad
   segcheck check https://cdn.example/master.m3u8 --exit-on bad
   segcheck check https://cdn.example/live.m3u8 --watch 2m --exit-on bad
   segcheck check https://cdn.example/ll.m3u8 --parts 2
@@ -226,6 +239,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	format := fs.String("output", "text", "")
 	noColor := fs.Bool("no-color", false, "")
 	exitOn := fs.String("exit-on", "", "")
+	baselineFile := fs.String("baseline", "", "")
 	fs.Var(headers, "header", "")
 	fs.Var((*popFlag)(&opts.POPs), "pop", "")
 
@@ -276,6 +290,23 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 	res := analyze.Run(ctx, client, target, opts)
 
+	// The diff is merged into the findings rather than reported beside them, so
+	// it sorts worst-first with everything else, renders in every format, and
+	// --exit-on gates on a regression without knowing it came from a comparison.
+	if *baselineFile != "" {
+		diff, err := compareToBaseline(*baselineFile, res)
+		if err != nil {
+			// A usage error, not a finding. Comparing against a baseline that could
+			// not be read would compare against an empty run and report every check
+			// as newly appeared — a wall of noise that reads as the stream having
+			// changed completely.
+			fmt.Fprintf(stderr, "segcheck: %v\n", err)
+			return 1
+		}
+		res.Findings = append(res.Findings, diff...)
+		finding.SortWorstFirst(res.Findings)
+	}
+
 	switch *format {
 	case "json":
 		s, err := output.JSON(res)
@@ -321,6 +352,22 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 	return 0
+}
+
+// compareToBaseline reads a saved run and reports what changed since it.
+//
+// The file is whatever `--output json` wrote, read back through the same shape
+// that wrote it, so the two cannot drift.
+func compareToBaseline(path string, cur finding.Result) ([]finding.Finding, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("--baseline %s: %w", path, err)
+	}
+	base, err := output.ParseJSON(b)
+	if err != nil {
+		return nil, fmt.Errorf("--baseline %s is not a segcheck --output json report: %w", path, err)
+	}
+	return baseline.Compare(base, cur), nil
 }
 
 // slackWebhookEnv is the only way a webhook URL reaches segcheck. It is a

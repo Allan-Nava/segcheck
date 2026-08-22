@@ -59,6 +59,15 @@ type Result struct {
 	Findings []Finding     `json:"findings"`
 	Started  time.Time     `json:"started"`
 	Duration time.Duration `json:"duration_ns"`
+	// Renditions names what was sampled, in the order the ladder is sorted.
+	//
+	// It is here rather than derivable from the findings because a Target is
+	// prose: `720p` is a rendition and `720p seg 38` is one of its segments, and
+	// nothing but a convention tells them apart. A baseline diff needs to know
+	// which targets are stable across runs — a rung is, a segment is not — and
+	// guessing from the string is how it would report the whole sample as
+	// vanished on every live stream.
+	Renditions []string `json:"renditions,omitempty"`
 	// Segments is how many media segments were actually downloaded and parsed.
 	Segments int `json:"segments"`
 	// Bytes is how much media was downloaded.
