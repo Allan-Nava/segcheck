@@ -6,7 +6,7 @@
 > of truth for planned work. Regenerate it with `scripts/backlog.sh roadmap`
 > after editing the backlog — CI fails when the two disagree.
 
-**104 items · 88 shipped · 16 open · 13 milestones.**
+**105 items · 89 shipped · 16 open · 13 milestones.**
 
 ## At a glance
 
@@ -24,7 +24,7 @@
 | **M12** — Colour, HDR and the codec string | `v0.7.0` | later | `#####.....` 50% | 3 | 3 |
 | **M13** — Audio, past the sanity check | `v0.8.0` | later | `#####.....` 50% | 3 | 3 |
 | **M8** — Container image and supply chain | `v0.1.1` | shipped | `##########` 100% | 0 | 5 |
-| **M7** — Project and release | `ongoing` | ongoing | `########..` 83% | 4 | 19 |
+| **M7** — Project and release | `ongoing` | ongoing | `########..` 83% | 4 | 20 |
 
 ## Next up
 
@@ -204,7 +204,7 @@ Target `v0.1.1` · shipped · 0 open · 5 shipped · `##########` 100%
 
 ### M7 — Project and release
 
-Target `ongoing` · ongoing · 4 open · 19 shipped · `########..` 83%
+Target `ongoing` · ongoing · 4 open · 20 shipped · `########..` 83%
 
 | Item | Priority | Size | Labels | Status |
 |---|---|---|---|---|
@@ -229,6 +229,7 @@ Target `ongoing` · ongoing · 4 open · 19 shipped · `########..` 83%
 | **SC-101** — A failed DVR window reports the claim, not the truth | med | M | check,delivery | shipped `0.4.0` |
 | **SC-102** — A Period behind an `xlink:href` swallows the periods after it | med | M | parser | shipped `0.4.0` |
 | **SC-103** — No reference stream carrying a discontinuity | med | M | tests | shipped `0.4.0` |
+| **SC-105** — SEO for the published page | med | S | project,docs | done, unreleased |
 | **SC-33** — Docs site | low | M | docs | shipped `0.1.1` |
 | **SC-50** — Brand assets | low | S | docs | shipped `0.1.1` |
 
@@ -240,9 +241,9 @@ Target `ongoing` · ongoing · 4 open · 19 shipped · `########..` 83%
 | `parser` | 45 | 8 |
 | `release` | 10 | 2 |
 | `cli` | 8 | 1 |
-| `docs` | 5 | 1 |
+| `docs` | 6 | 1 |
 | `integration` | 4 | 1 |
 | `tests` | 14 | 1 |
 | `delivery` | 6 | 0 |
 | `output` | 5 | 0 |
-| `project` | 5 | 0 |
+| `project` | 6 | 0 |

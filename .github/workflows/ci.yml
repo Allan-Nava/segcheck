@@ -222,6 +222,20 @@ jobs:
   # BACKLOG.md is the single source of truth for planned work and ROADMAP.md is
   # generated from it. A stale roadmap is a lie about what is planned, so the
   # generator runs here rather than on trust.
+  # SC-105: the crawler-facing half of the docs site. Every failure here is
+  # silent — a canonical that drifted, a sitemap naming a URL that 404s, JSON-LD
+  # truncated by an edit — and the only symptom is a page that stops being
+  # found. The host root's robots.txt lists project sitemaps that answer 200, so
+  # this is also what keeps segcheck in it.
+  seo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: The site's SEO files agree with the page
+        run: sh scripts/seo.sh check
+      - name: The SEO gate itself
+        run: sh scripts/seo_test.sh
+
   backlog:
     runs-on: ubuntu-latest
     steps:

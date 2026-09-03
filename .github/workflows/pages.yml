@@ -33,6 +33,13 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+
+      # Never publish a site whose sitemap names a URL that is not there: the
+      # host root's robots.txt declares this sitemap, and a dead URL in it
+      # wastes crawl budget on every crawl.
+      - name: The SEO files agree with the page
+        run: sh scripts/seo.sh check
+
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -1,0 +1,50 @@
+# segcheck 0.4.0
+
+> segcheck downloads HLS and DASH media segments, parses their bytes and compares the media against the manifest's claims: timeline gaps, coded resolution, real duration, measured bitrate, rendition alignment. One static Go binary, zero dependencies.
+
+Documentation: https://allan-nava.github.io/segcheck/
+Source: https://github.com/Allan-Nava/segcheck
+
+## What it is
+
+segcheck downloads HLS and DASH media segments, parses their bytes, and
+compares the media against the manifest. Point it at an HLS master playlist or a
+DASH MPD and it reports the defects a manifest cannot express: segments that do not join up, a 1080p rung
+that codes 720p, declared durations that drift from the real ones, renditions
+that are not on a shared timeline. One static Go binary, zero dependencies.
+
+## What it checks
+
+Each check compares what the manifest declares against what the bytes contain:
+
+- manifest — the manifest parses, and what shape it is
+- fetch — every sampled segment is reachable, and none was truncated by the byte cap
+- init — the EXT-X-MAP / DASH initialisation segment is available
+- container — the bytes are the media they claim to be; an origin error page served with a 200 lands here
+- continuity — each segment starts where the previous one ended, and MPEG-TS continuity-counter breaks
+- duration — declared EXTINF / @d against the real media duration, per segment and accumulated
+- discontinuity — EXT-X-DISCONTINUITY against the timeline reset it promises, and the sequence across the ladder
+- timeline — a DASH SegmentTimeline @t against the fragment's tfdt
+- bitrate — measured peak and average against the declared BANDWIDTH, in both directions
+- resolution — the coded resolution in the bitstream against the declared RESOLUTION
+- keyframe — every segment carries a random access point, so it can be switched into at all
+- alignment, ladder, codecstring, encryption, captions, audio, dvr and more
+
+## Statuses
+
+OK, WARN, BAD and ERROR, worst first in every renderer. ERROR sorts above BAD:
+a check that could not run is not a check that passed.
+
+## Pages
+
+- https://allan-nava.github.io/segcheck/ — everything: what it checks, install, flags, output, sampling
+- https://allan-nava.github.io/segcheck/running-in-containers.html — running it from the image
+- https://github.com/Allan-Nava/segcheck/blob/main/BACKLOG.md — planned work, with stable SC-n ids
+- https://github.com/Allan-Nava/segcheck/blob/main/CHANGELOG.md — what changed, per tagged release
+
+## Not
+
+Not a player and not an encoder QC suite: it reads the bytes that are published
+and compares them with what the manifest says about them. Sibling tools:
+checkfleet (fleet and certificate checks), pqprobe (which classes of TLS client
+can still handshake with an endpoint), crowdsim (load, safely).

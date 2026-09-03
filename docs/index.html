@@ -7,7 +7,11 @@
 <meta name="description" content="segcheck downloads HLS and DASH media segments, parses their bytes and compares the media against the manifest's claims: timeline gaps, coded resolution, real duration, measured bitrate, rendition alignment. One static Go binary, zero dependencies.">
 <meta name="keywords" content="HLS validator, DASH validator, segment checker, CMAF, MPEG-TS, fMP4, ABR ladder, video CLI, Go binary, streaming QA">
 <meta name="author" content="Allan Nava">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="theme-color" content="#0b1120" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <link rel="canonical" href="https://allan-nava.github.io/segcheck/">
+<link rel="sitemap" type="application/xml" href="sitemap.xml">
 
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
@@ -20,6 +24,8 @@
 <meta property="og:image" content="https://allan-nava.github.io/segcheck/assets/og-card.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="segcheck — a terminal showing a rung whose coded resolution does not match the manifest">
+<meta property="og:locale" content="en_GB">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="segcheck — check what your HLS/DASH segments actually contain">
 <meta name="twitter:description" content="Downloads the segments, parses the bytes, and reports the defects a manifest cannot express. One static Go binary, zero dependencies.">
@@ -651,6 +657,11 @@ segcheck check https://cdn.example/master.m3u8 --exit-on bad</pre></div>
   "description": "segcheck downloads HLS and DASH media segments, parses their bytes and compares the media against the manifest's claims: timeline gaps, coded resolution, real duration, measured bitrate and rendition alignment. One static Go binary with zero dependencies.",
   "url": "https://allan-nava.github.io/segcheck/",
   "codeRepository": "https://github.com/Allan-Nava/segcheck",
+  "downloadUrl": "https://github.com/Allan-Nava/segcheck/releases",
+  "applicationSubCategory": "Command-line media diagnostic",
+  "softwareRequirements": "Go 1.25 or newer to build; no runtime dependencies",
+  "isAccessibleForFree": true,
+  "keywords": "HLS validator, DASH validator, segment checker, CMAF, MPEG-TS, fMP4, ABR ladder, streaming QA",
   "programmingLanguage": "Go",
   "license": "https://polyformproject.org/licenses/noncommercial/1.0.0/",
   "author": { "@type": "Person", "name": "Allan Nava", "url": "https://github.com/Allan-Nava" },

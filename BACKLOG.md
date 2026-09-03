@@ -942,6 +942,23 @@ checks roadmap and blocks nothing.
 
 ## M7 — Project and release <!-- ms: target=ongoing phase=ongoing -->
 
+- [x] **SC-105 — SEO for the published page**: the crawler-facing half of the
+  docs site, generated from the page rather than maintained beside it —
+  `sitemap.xml`, `robots.txt` and an `llms.txt` for the crawlers that read prose
+  — plus `robots`, `theme-color`, `og:locale` and `og:image:alt` meta and the
+  fields a search result is built from in the existing JSON-LD.
+  `scripts/seo.sh check` gates it in CI *and* before the Pages deploy, because
+  every failure here is silent: a canonical that drifted, a JSON-LD block
+  truncated by an edit, a sitemap naming a URL that is not there. That last one
+  is not hypothetical — the first sitemap this item shipped listed
+  `running-in-containers.html`, and Pages serves `docs/` as committed, so the
+  `.md` answers 200 and the `.html` 404s. The gate now refuses any `<loc>` with
+  no file behind it.
+  The reason it earns a place in M7 rather than being hygiene: crawlers read
+  `robots.txt` only from the host root, and `allan-nava.github.io`'s is generated
+  from a daily sync over the project sitemaps that answer **200**. A site that
+  ships none is simply absent — segcheck was one of 28.
+  <!-- sc: prio=med size=S labels=project,docs ver=unreleased -->
 - [x] **SC-34 — Backlog and roadmap tooling**: `scripts/backlog.sh` lints this
   file and regenerates [ROADMAP.md](ROADMAP.md) from it, with a CI gate that
   fails on a stale roadmap or a malformed item. Zero-dep, POSIX sh and awk.
