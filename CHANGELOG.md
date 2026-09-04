@@ -18,6 +18,21 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   from added to the JSON-LD that was already there (`downloadUrl`,
   `applicationSubCategory`, `softwareRequirements`, `keywords`).
 
+  A follow-up before it ships: `<lastmod>` was `date +%F`, the day the generator
+  ran, which is a claim about the clock and not about the page. It was wrong in
+  both directions — rendering during a release that touched only the CHANGELOG
+  moved the date on a page that had not changed, and editing the page without
+  re-rendering left a date saying it had not — and a crawler that catches a
+  lastmod lying once discounts the field for the whole site, which is the silent
+  failure this script exists to prevent. It is now the last commit that touched
+  `docs/index.html`, and `check` holds it there. Deliberately not the file mtime
+  inside a work tree: a checkout stamps every file with the moment it ran, so
+  mtime would date the page "today" on every CI build. Where the date cannot be
+  established at all — a shallow clone with no history for the page — the check
+  says so and skips, the same protocol the Go side uses for a measurement it
+  cannot take; the two jobs that run the gate now clone with full history so it
+  is not inert.
+
   `scripts/seo.sh check` gates it in CI **and** before the Pages deploy, because
   every failure here is silent: a canonical that drifted from the sitemap, a
   JSON-LD block truncated by an edit, a `<loc>` with no file behind it. The last

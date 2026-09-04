@@ -32,7 +32,13 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # Full history, not the default single commit. The lastmod check reads the
+      # last commit that touched docs/index.html, and a depth-1 clone has no
+      # history to read — the gate would skip silently and pass on a stale date,
+      # which is the failure it exists to catch.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       # Never publish a site whose sitemap names a URL that is not there: the
       # host root's robots.txt declares this sitemap, and a dead URL in it

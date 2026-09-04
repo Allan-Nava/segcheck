@@ -60,8 +60,38 @@ case "$canonical" in */) ;; *) canonical="$canonical/" ;; esac
 title=$(awk -F'[<>]' '/<title>/ { print $3; exit }' "$html")
 desc=$(attr 'name="description"')
 
+# page_date is the day the page last changed, which is what <lastmod> claims.
+#
+# `date +%F` was wrong in both directions. Rendering on a release that touched
+# only the CHANGELOG moved the date on a page that had not changed, and editing
+# the page without re-rendering left a date saying it had not — and a crawler
+# that catches a lastmod lying once discounts the field for the whole site,
+# which is the silent failure this script exists to prevent.
+#
+# Inside a git work tree the answer is the last commit that touched the page. It
+# is deliberately *not* mtime there: a checkout sets every mtime to the moment it
+# ran, so mtime in CI would date the page "today" on every single build. Outside
+# a work tree, mtime is the only signal there is and it is the right one.
+#
+# Empty means the date could not be established — a shallow clone whose one
+# commit did not touch the page has no history to read. That is the same
+# protocol the Go side uses for a measurement it cannot take: say so, and let
+# the caller decide, rather than invent a number.
+page_date() {
+	if git -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+		git -C "$dir" log -1 --format=%cs -- "$html" 2>/dev/null
+		return
+	fi
+	d=$(stat -c %y "$html" 2>/dev/null | cut -c1-10)
+	[ -n "$d" ] || d=$(stat -f %Sm -t %Y-%m-%d "$html" 2>/dev/null)
+	printf '%s' "$d"
+}
+
 render() {
-	today=$(date +%Y-%m-%d)
+	# Undeterminable only outside a repository with no usable stat, and render is
+	# a deliberate act taken while editing the page, so today is then honest.
+	today=$(page_date)
+	[ -n "$today" ] || today=$(date +%Y-%m-%d)
 
 	cat > "$dir/sitemap.xml" <<XML
 <?xml version="1.0" encoding="UTF-8"?>
@@ -199,6 +229,21 @@ check() {
 			done < "$dir/.seo-missing.$$"
 		fi
 		rm -f "$dir/.seo-missing.$$"
+	fi
+
+	# The lastmod has to still be true. A page edited without re-rendering leaves
+	# a sitemap telling crawlers nothing changed, and nothing about the page looks
+	# wrong. Skipped, not failed, when the date cannot be established: a shallow
+	# clone has no history to read, and failing on that would gate the build on
+	# how it was cloned rather than on what it contains.
+	if [ -f "$dir/sitemap.xml" ]; then
+		want=$(page_date)
+		have=$(awk -F'[<>]' '/<lastmod>/ { print $3; exit }' "$dir/sitemap.xml")
+		if [ -z "$want" ]; then
+			printf 'seo.sh: lastmod not checked — no commit history for the page here\n' >&2
+		elif [ "$want" != "$have" ]; then
+			err "sitemap.xml says the page last changed $have; it last changed $want — run scripts/seo.sh render"
+		fi
 	fi
 
 	[ -f "$dir/robots.txt" ] && { grep -q "Sitemap: ${canonical}sitemap.xml" "$dir/robots.txt" ||

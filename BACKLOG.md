@@ -958,6 +958,12 @@ checks roadmap and blocks nothing.
   `robots.txt` only from the host root, and `allan-nava.github.io`'s is generated
   from a daily sync over the project sitemaps that answer **200**. A site that
   ships none is simply absent — segcheck was one of 28.
+  `<lastmod>` is the last commit that touched the page, not the day the generator
+  ran: the clock version moved the date on a page that had not changed and left it
+  stale on one that had, and a lastmod caught lying once is discounted for the
+  whole site. Not mtime inside a work tree — a checkout stamps every file with the
+  moment it ran — and where no history exists the check says so and skips rather
+  than gating the build on how it was cloned.
   <!-- sc: prio=med size=S labels=project,docs ver=unreleased -->
 - [x] **SC-34 — Backlog and roadmap tooling**: `scripts/backlog.sh` lints this
   file and regenerates [ROADMAP.md](ROADMAP.md) from it, with a CI gate that

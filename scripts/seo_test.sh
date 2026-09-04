@@ -115,6 +115,40 @@ sed -i.bak 's|<loc>https://example.test/segcheck/</loc>|<loc>https://example.tes
 run "$tmp/ghost" check && notok "a sitemap URL with no file behind it passed" ||
 	ok "a sitemap URL with no file behind it fails"
 
+# lastmod is a claim about the page, and `date +%F` is a claim about the clock.
+# Google discounts a lastmod it finds unreliable, and rendering on a release that
+# touched only the CHANGELOG would move the date on a page that did not change —
+# which is exactly how a crawler learns to ignore it. The date has to come from
+# the page: its last commit inside a repository, its mtime outside one.
+printf '\nseo.sh — lastmod is dated from the page, not the clock:\n'
+
+fixture "$tmp/lastmod" "https://example.test/segcheck/"
+touch -t 202601150000 "$tmp/lastmod/index.html"
+run "$tmp/lastmod" render
+grep -q '<lastmod>2026-01-15</lastmod>' "$tmp/lastmod/sitemap.xml" 2>/dev/null &&
+	ok "lastmod is the date the page last changed" ||
+	notok "lastmod is $(awk -F'[<>]' '/lastmod/ { print $3 }' "$tmp/lastmod/sitemap.xml" 2>/dev/null), want 2026-01-15"
+
+# And the gate has to hold it there. A page edited without re-rendering leaves a
+# sitemap telling crawlers nothing changed, which is the silent half of this
+# whole script.
+fixture "$tmp/stale" "https://example.test/segcheck/"
+run "$tmp/stale" render
+touch -t 202612250000 "$tmp/stale/index.html"
+run "$tmp/stale" check && notok "a sitemap whose lastmod predates the page passed" ||
+	ok "a lastmod that no longer matches the page fails"
+
+# Inside a work tree with no commit for the page — a shallow clone whose single
+# commit did not touch it, which is what CI gets by default — the date cannot be
+# established. That has to skip rather than fail: gating the build on how it was
+# cloned would fail correct trees, and mtime is not a substitute because a
+# checkout stamps every file with the moment it ran.
+fixture "$tmp/nohist" "https://example.test/segcheck/"
+(cd "$tmp/nohist" && git init -q . && git -c user.email=t@t -c user.name=t commit -q --allow-empty -m empty) 2>/dev/null
+run "$tmp/nohist" render
+run "$tmp/nohist" check && ok "a page with no commit history skips the lastmod check" ||
+	notok "a page with no commit history failed the lastmod check instead of skipping"
+
 fixture "$tmp/real" "https://example.test/segcheck/"
 printf 'x' > "$tmp/real/extra.html"
 run "$tmp/real" render
