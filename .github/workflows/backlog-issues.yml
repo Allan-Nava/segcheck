@@ -45,7 +45,7 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The plan is printed before anything is applied, so the run's log says
       # what it was about to do even if a later step fails.
