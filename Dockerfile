@@ -12,7 +12,7 @@
 # cross-compiles to TARGETARCH. Without this, building linux/arm64 on an amd64
 # runner drags the whole compile through QEMU — minutes instead of seconds, for
 # a binary that has no cgo and nothing to emulate.
-FROM --platform=$BUILDPLATFORM golang:1.25 AS build
+FROM --platform=$BUILDPLATFORM golang:1.27 AS build
 
 WORKDIR /src
 
