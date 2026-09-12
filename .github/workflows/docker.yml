@@ -41,7 +41,7 @@ jobs:
       # No QEMU: the build stage is pinned to BUILDPLATFORM and Go
       # cross-compiles, so nothing is ever emulated.
       - name: Build the runner's own architecture
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           load: true
@@ -64,7 +64,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push multi-arch
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64
