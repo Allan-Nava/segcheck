@@ -965,6 +965,16 @@ checks roadmap and blocks nothing.
   moment it ran — and where no history exists the check says so and skips rather
   than gating the build on how it was cloned.
   <!-- sc: prio=med size=S labels=project,docs ver=unreleased -->
+- [x] **SC-106 — Point to latencyprobe for low-latency delivery**: segcheck parses
+  `EXT-X-SERVER-CONTROL`, `EXT-X-PART` and `EXT-X-PRELOAD-HINT` and compares the parts
+  with the segments, but never makes a delivery-directive request — `_HLS_msn`,
+  `_HLS_part`, `_HLS_skip` — and deliberately so: the preload hint is designed to block,
+  and a checker that blocked would hang. Whether the origin keeps that side of the
+  protocol is a question about requests, not bytes, and
+  [latencyprobe](https://github.com/Allan-Nava/latencyprobe) answers it. The README's
+  low-latency paragraph and "When not to use it", the page's limits and footer, and
+  `llms.txt`'s sibling list now say so, so neither tool grows the other's job.
+  <!-- sc: prio=low size=S labels=project,docs ver=unreleased -->
 - [x] **SC-34 — Backlog and roadmap tooling**: `scripts/backlog.sh` lints this
   file and regenerates [ROADMAP.md](ROADMAP.md) from it, with a CI gate that
   fails on a stale roadmap or a malformed item. Zero-dep, POSIX sh and awk.

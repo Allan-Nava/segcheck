@@ -9,6 +9,12 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **A pointer to latencyprobe for low-latency delivery** (SC-106). segcheck reads
+  the low-latency playlist tags and compares parts with segments, but never issues
+  `_HLS_msn`, `_HLS_part` or `_HLS_skip` requests. The README, the page and
+  `llms.txt` now name [latencyprobe](https://github.com/Allan-Nava/latencyprobe) for
+  that half: it acts as the player and checks how the origin answers.
+
 - **SEO for the published page** (SC-105). The crawler-facing half of the docs
   site, generated from the page rather than maintained beside it: `sitemap.xml`,
   `robots.txt`, and an `llms.txt` for the crawlers that read prose rather than
