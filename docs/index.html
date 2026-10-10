@@ -586,6 +586,7 @@ segcheck check https://cdn.example/master.m3u8 --exit-on bad</pre></div>
       <li><b>You want continuous monitoring with history and alerting.</b> Use Prometheus and friends; segcheck is a check you run, not a service. Pair it with <a href="https://github.com/Allan-Nava/checkfleet" rel="noopener">checkfleet</a> if you want its findings alongside the rest of your fleet.</li>
       <li><b>You need per-frame QoE or visual quality metrics</b> (VMAF, PSNR, artefact detection). segcheck reads structure and timing, never decoded pixels.</li>
       <li><b>Your segments are full-segment AES-128 encrypted and you cannot supply the key.</b> Those bytes are opaque by design; segcheck says so and skips the content checks rather than pretending.</li>
+      <li><b>You want to know whether your origin delivers low-latency HLS correctly</b> — blocking playlist reloads, delta updates, rendition reports, how soon a new part reaches a player. segcheck reads what is published; <a href="https://github.com/Allan-Nava/latencyprobe" rel="noopener">latencyprobe</a> acts as the player and checks how the server answers.</li>
       <li><b>You want to validate against every clause of RFC 8216.</b> segcheck checks what it can verify against the media, not the whole spec.</li>
     </ul>
     <div class="note">A limit of this tool is never reported as a defect in your stream. An unsupported container, an encrypted segment or a representation that cannot be expanded produces an honest <span class="pill p-err">ERROR</span> saying <em>segcheck</em> could not look — never a <span class="pill p-bad">BAD</span> that sends someone hunting a phantom.</div>
@@ -643,6 +644,7 @@ segcheck check https://cdn.example/master.m3u8 --exit-on bad</pre></div>
       <a href="https://github.com/Allan-Nava/segcheck/blob/main/CHANGELOG.md" rel="noopener">Changelog</a>
       <a href="https://github.com/Allan-Nava/segcheck/issues" rel="noopener">Issues</a>
       <a href="https://github.com/Allan-Nava/checkfleet" rel="noopener">checkfleet</a>
+      <a href="https://github.com/Allan-Nava/latencyprobe" rel="noopener">latencyprobe</a>
     </div>
   </div>
 </footer>

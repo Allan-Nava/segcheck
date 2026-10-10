@@ -171,7 +171,9 @@ a check that could not run is not a check that passed.
 Not a player and not an encoder QC suite: it reads the bytes that are published
 and compares them with what the manifest says about them. Sibling tools:
 checkfleet (fleet and certificate checks), pqprobe (which classes of TLS client
-can still handshake with an endpoint), crowdsim (load, safely).
+can still handshake with an endpoint), crowdsim (load, safely), latencyprobe (how
+an origin answers a low-latency HLS player: blocking reloads, delta updates,
+rendition reports).
 TXT
 
 	printf 'wrote sitemap.xml, robots.txt and llms.txt for %s\n' "$canonical"
